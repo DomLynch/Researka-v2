@@ -370,6 +370,10 @@ class WorkflowEngine:
         existing = repository.publication_for_target(submission.id)
         if existing is not None:
             return {"publication_id": existing.id, "deduped": True}
+        normalized_title = " ".join(str(submission.title or "").lower().split())
+        for pub in repository.list_objects(ObjectType.PUBLICATION):
+            if " ".join(str(pub.title or "").lower().split()) == normalized_title:
+                return {"publication_id": pub.id, "deduped": True}
         artifact = compile_publication(
             title=submission.title,
             abstract=str(submission.metadata.get("abstract", "")).strip(),

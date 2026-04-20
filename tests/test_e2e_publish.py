@@ -90,3 +90,29 @@ def test_leakage_submission_is_rejected_at_intake(client: TestClient) -> None:
     assert decision["decision"] == "reject"
     assert decision["gate_failures"]
     assert client.app.state.repository.list_objects("review") == []
+
+
+def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
+    _assert_publish_happy_path(client)
+    publications = client.app.state.repository.list_objects("publication")
+    assert len(publications) == 1
+    first_pub_id = publications[0].id
+
+    seed2 = client.post(
+        "/submissions",
+        json=_submission_payload(
+            "Databases searched include PubMed and review corpora, with a documented date window, explicit inclusion logic, and a stated narrowing rule that explains why these retained receipts best match the scoped research question."
+        ),
+    )
+    assert seed2.status_code == 200
+    submission2_id = seed2.json()["submission"]["id"]
+
+    for _ in range(12):
+        queue = client.get("/jobs/queue").json()["queued"]
+        if not queue:
+            break
+        client.post("/jobs/run-once")
+
+    publications = client.app.state.repository.list_objects("publication")
+    assert len(publications) == 1
+    assert publications[0].id == first_pub_id

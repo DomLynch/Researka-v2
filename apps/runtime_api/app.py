@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+import os
+
+from fastapi import FastAPI, HTTPException, Request
 
 from apps.worker.main import WorkerApp
 from contracts import ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
@@ -32,7 +34,12 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         }
 
     @app.post("/submissions")
-    def submit(payload: SubmissionPayload) -> dict:
+    def submit(payload: SubmissionPayload, request: Request) -> dict:
+        api_key = os.environ.get("RESEARKA_V2_API_KEY")
+        if api_key:
+            provided = request.headers.get("x-api-key", "")
+            if provided != api_key:
+                raise HTTPException(status_code=403, detail="invalid_api_key")
         submission = app.state.repository.create_object(
             ResearchObject(
                 object_type=ObjectType.SUBMISSION,
@@ -93,6 +100,25 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         if publication is None or publication.object_type != ObjectType.PUBLICATION:
             raise HTTPException(status_code=404, detail="publication_not_found")
         return publication.model_dump(mode="json")
+
+    @app.get("/submissions/{submission_id}/timeline")
+    def get_submission_timeline(submission_id: str) -> dict:
+        submission = app.state.repository.get_object(submission_id)
+        if submission is None or submission.object_type != ObjectType.SUBMISSION:
+            raise HTTPException(status_code=404, detail="submission_not_found")
+        reviews = app.state.repository.children_of(submission_id, ObjectType.REVIEW)
+        decisions = app.state.repository.children_of(submission_id, ObjectType.DECISION)
+        publications = app.state.repository.children_of(submission_id, ObjectType.PUBLICATION)
+        jobs = [j for j in app.state.repository.queued_jobs() if j.target_object_id == submission_id]
+        events = [e for e in app.state.repository.list_events() if e.target_object_id == submission_id]
+        return {
+            "submission": submission.model_dump(mode="json"),
+            "reviews": [r.model_dump(mode="json") for r in reviews],
+            "decisions": [d.model_dump(mode="json") for d in decisions],
+            "publications": [p.model_dump(mode="json") for p in publications],
+            "jobs": [j.model_dump(mode="json") for j in jobs],
+            "events": [e.model_dump(mode="json") for e in events],
+        }
 
     return app
 
