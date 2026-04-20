@@ -435,7 +435,7 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
             )
 
     panel = ReviewerPanel(
-        primary=BrokenProvider("minimax", "MiniMax-M2.7-highspeed", "<think>not json</think>"),
+        primary=BrokenProvider("minimax", "MiniMax-M2.7-highspeed", "<think>not json Think"),
         sparring=BrokenProvider(
             "mimo",
             "mimo-v2-pro",
