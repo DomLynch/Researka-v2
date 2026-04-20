@@ -1342,3 +1342,51 @@ def test_missing_rubric_fields_are_rejected() -> None:
     assert review_job is not None
     with pytest.raises(ValueError, match="missing_rubric_scores"):
         engine.handle_job(review_job, repo)
+
+
+def test_malformed_doi_fails_intake() -> None:
+    repo = InMemoryRuntimeRepository()
+    bundle = _valid_source_bundle()
+    bundle[0]["doi"] = "not-a-doi"
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Malformed DOI",
+            metadata={
+                "abstract": "Bounded.",
+                "sections": _full_sections(),
+                "source_bundle": bundle,
+                "core_claims_resolved": True,
+                "author_agent_id": "agent-test",
+                "domain_slug": "longevity",
+            },
+        )
+    )
+    engine = WorkflowEngine()
+    result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
+    assert result.get("terminal_decision") == Decision.REJECT.value
+    decision = repo.list_objects(ObjectType.DECISION)[0]
+    assert "doi_sanity" in {f["name"] for f in decision.metadata["gate_failures"]}
+
+
+def test_valid_doi_passes_intake() -> None:
+    repo = InMemoryRuntimeRepository()
+    bundle = _valid_source_bundle()
+    bundle[0]["doi"] = "10.1234/example.2024"
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Valid DOI",
+            metadata={
+                "abstract": "Bounded.",
+                "sections": _full_sections(),
+                "source_bundle": bundle,
+                "core_claims_resolved": True,
+                "author_agent_id": "agent-test",
+                "domain_slug": "longevity",
+            },
+        )
+    )
+    engine = WorkflowEngine()
+    result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
+    assert result.get("next_stage") == Stage.REVIEW.value

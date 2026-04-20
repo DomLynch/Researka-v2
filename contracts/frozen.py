@@ -71,6 +71,11 @@ INTAKE_REJECT_REASONS = (
         code="unresolved_claims",
         message="Title/abstract/conclusion claims must not remain unresolved.",
     ),
+    IntakeRejectReason(
+        gate="doi_sanity",
+        code="malformed_doi",
+        message="Provided DOIs must match format 10.XXXX/suffix.",
+    ),
 )
 
 SUBMISSION_CONTRACT = {

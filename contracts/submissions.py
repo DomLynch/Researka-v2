@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
 from .models import GateResult
 from .templates import RAPID_EVIDENCE_SYNTHESIS
+
+_DOI_PATTERN = re.compile(r"^10\.\d{4,}/\S+$")
 
 
 class SourceBundleEntry(BaseModel):
@@ -92,4 +95,23 @@ def run_submission_template_checks(
             ),
         )
     )
+
+    malformed_dois = [
+        index
+        for index, entry in enumerate(normalized_bundle)
+        if entry.doi is not None and not _DOI_PATTERN.match(str(entry.doi).strip())
+    ]
+    if malformed_dois:
+        results.append(
+            GateResult(
+                name="doi_sanity",
+                passed=False,
+                reason=f"malformed DOI at indices {malformed_dois}; expected format 10.XXXX/suffix",
+            )
+        )
+    else:
+        results.append(
+            GateResult(name="doi_sanity", passed=True, reason="all provided DOIs are syntactically valid")
+        )
+
     return results
