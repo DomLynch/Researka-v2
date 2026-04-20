@@ -4,12 +4,17 @@ from fastapi import FastAPI, HTTPException
 
 from apps.worker.main import WorkerApp
 from contracts import ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
-from runtime_core import InMemoryRuntimeRepository, WorkflowEngine
-from runtime_core.repos import RuntimeRepository
+from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
+from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 
 
 def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
-    repo = repository or InMemoryRuntimeRepository()
+    if repository is not None:
+        repo = repository
+    elif postgres_dsn_from_env():
+        repo = PostgresRuntimeRepository(postgres_dsn_from_env())
+    else:
+        repo = InMemoryRuntimeRepository()
     app = FastAPI(title="Researka v2 Runtime API")
     app.state.repository = repo
     app.state.engine = WorkflowEngine()
