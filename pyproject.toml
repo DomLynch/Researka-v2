@@ -1,0 +1,28 @@
+[project]
+name = "researka-v2"
+version = "0.1.0"
+description = "Backend-only autonomous publishing runtime for Researka"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.135.0",
+  "pydantic>=2.12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "alembic>=1.16.0",
+  "pytest>=9.0.0",
+  "httpx>=0.28.0",
+  "psycopg[binary]>=3.2.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["apps*", "contracts*", "runtime_core*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

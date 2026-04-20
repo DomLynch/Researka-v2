@@ -1,0 +1,4987 @@
+{
+  "summary": {
+    "overall": {
+      "total": 200,
+      "correct": 120,
+      "expected_reject": 120,
+      "actual_reject": 200,
+      "expected_revise": 40,
+      "expected_accept": 40,
+      "accuracy": 0.6,
+      "cost_usd_total": 0.0,
+      "elapsed_sec": 0.01
+    },
+    "by_category": {
+      "circular_reasoning": {
+        "total": 20,
+        "correct": 0,
+        "expected_revise": 20,
+        "actual_reject": 20,
+        "accuracy": 0.0
+      },
+      "fabricated_doi": {
+        "total": 20,
+        "correct": 20,
+        "expected_reject": 20,
+        "actual_reject": 20,
+        "accuracy": 1.0
+      },
+      "good_baseline": {
+        "total": 40,
+        "correct": 0,
+        "expected_accept": 40,
+        "actual_reject": 40,
+        "accuracy": 0.0
+      },
+      "missing_limitations": {
+        "total": 20,
+        "correct": 20,
+        "expected_reject": 20,
+        "actual_reject": 20,
+        "accuracy": 1.0
+      },
+      "out_of_bundle": {
+        "total": 20,
+        "correct": 20,
+        "expected_reject": 20,
+        "actual_reject": 20,
+        "accuracy": 1.0
+      },
+      "overclaim": {
+        "total": 20,
+        "correct": 20,
+        "expected_reject": 20,
+        "actual_reject": 20,
+        "accuracy": 1.0
+      },
+      "placeholder_tokens": {
+        "total": 20,
+        "correct": 20,
+        "expected_reject": 20,
+        "actual_reject": 20,
+        "accuracy": 1.0
+      },
+      "plagiarism": {
+        "total": 20,
+        "correct": 20,
+        "expected_reject": 20,
+        "actual_reject": 20,
+        "accuracy": 1.0
+      },
+      "scope_violation": {
+        "total": 20,
+        "correct": 0,
+        "expected_revise": 20,
+        "actual_reject": 20,
+        "accuracy": 0.0
+      }
+    },
+    "gate_failures": {
+      "research_question_word_budget": 200
+    },
+    "mismatches": [
+      {
+        "index": 6,
+        "title": "Rapid Evidence Synthesis: Constitutional AI and Value Alignment in LLMs (B1-1)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 7,
+        "title": "Rapid Evidence Synthesis: Constitutional AI and Value Alignment in LLMs (B1-2)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 8,
+        "title": "Rapid Evidence Synthesis: Constitutional AI and Value Alignment in LLMs (B1-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 9,
+        "title": "Rapid Evidence Synthesis: Constitutional AI and Value Alignment in LLMs (B1-4)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 10,
+        "title": "Rapid Evidence Synthesis: Constitutional AI and Value Alignment in LLMs (B1-5)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 31,
+        "title": "Rapid Evidence Synthesis: CAR-T Cell Therapy Efficacy in Solid Tumors (B1-1)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 32,
+        "title": "Rapid Evidence Synthesis: CAR-T Cell Therapy Efficacy in Solid Tumors (B1-2)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 33,
+        "title": "Rapid Evidence Synthesis: CAR-T Cell Therapy Efficacy in Solid Tumors (B1-3)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 34,
+        "title": "Rapid Evidence Synthesis: CAR-T Cell Therapy Efficacy in Solid Tumors (B1-4)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 35,
+        "title": "Rapid Evidence Synthesis: CAR-T Cell Therapy Efficacy in Solid Tumors (B1-5)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 37,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B2-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 42,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B2-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 44,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B2-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 49,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B2-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 51,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B2-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 56,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B2-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 58,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B2-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 63,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B2-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 65,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B2-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 70,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B2-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 72,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B3-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 77,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B3-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 79,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B3-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 84,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B3-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 86,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B3-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 91,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B3-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 93,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B3-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 98,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B3-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 100,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B3-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 105,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B3-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 107,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B4-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 112,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B4-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 114,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B4-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 119,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B4-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 121,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B4-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 126,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B4-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 128,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B4-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 133,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B4-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 135,
+        "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B4-3)",
+        "category": "circular_reasoning",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 140,
+        "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B4-8)",
+        "category": "scope_violation",
+        "expected": "revise",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 161,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-1)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 162,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-2)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 163,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-3)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 164,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-4)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 165,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-5)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 166,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-6)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 167,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-7)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 168,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-8)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 169,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-9)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 170,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-10)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 171,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-11)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 172,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-12)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 173,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-13)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 174,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-14)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 175,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-15)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 176,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-16)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 177,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-17)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 178,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-18)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 179,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-19)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 180,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-20)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 181,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-21)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 182,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-22)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 183,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-23)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 184,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-24)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 185,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-25)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 186,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-26)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 187,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-27)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 188,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-28)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 189,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-29)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 190,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-30)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 191,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-31)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 192,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-32)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 193,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-33)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 194,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-34)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 195,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-35)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 196,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-36)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 197,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-37)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 198,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-38)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 199,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-39)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      },
+      {
+        "index": 200,
+        "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-40)",
+        "category": "good_baseline",
+        "expected": "accept",
+        "actual": "reject",
+        "route": "intake_gate",
+        "stage": "intake",
+        "gate_failures": [
+          "research_question_word_budget"
+        ]
+      }
+    ]
+  },
+  "results": [
+    {
+      "index": 1,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition as Human Lifespan Extension Strategy (B1-1)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 2,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition as Human Lifespan Extension Strategy (B1-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 3,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition as Human Lifespan Extension Strategy (B1-3)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 4,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition as Human Lifespan Extension Strategy (B1-4)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 5,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition as Human Lifespan Extension Strategy (B1-5)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 6,
+      "title": "Rapid Evidence Synthesis: Constitutional AI and Value Alignment in LLMs (B1-1)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 7,
+      "title": "Rapid Evidence Synthesis: Constitutional AI and Value Alignment in LLMs (B1-2)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 8,
+      "title": "Rapid Evidence Synthesis: Constitutional AI and Value Alignment in LLMs (B1-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 9,
+      "title": "Rapid Evidence Synthesis: Constitutional AI and Value Alignment in LLMs (B1-4)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 10,
+      "title": "Rapid Evidence Synthesis: Constitutional AI and Value Alignment in LLMs (B1-5)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 11,
+      "title": "Rapid Evidence Synthesis: CO2 EOR Storage Potential in Depleted Gas Reservoirs (B1-1)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 12,
+      "title": "Rapid Evidence Synthesis: CO2 EOR Storage Potential in Depleted Gas Reservoirs (B1-2)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 13,
+      "title": "Rapid Evidence Synthesis: CO2 EOR Storage Potential in Depleted Gas Reservoirs (B1-3)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 14,
+      "title": "Rapid Evidence Synthesis: CO2 EOR Storage Potential in Depleted Gas Reservoirs (B1-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 15,
+      "title": "Rapid Evidence Synthesis: CO2 EOR Storage Potential in Depleted Gas Reservoirs (B1-5)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 16,
+      "title": "Rapid Evidence Synthesis: Gut Microbiome Modulation for IBD Remission (B1-1)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 17,
+      "title": "Rapid Evidence Synthesis: Gut Microbiome Modulation for IBD Remission (B1-2)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 18,
+      "title": "Rapid Evidence Synthesis: Gut Microbiome Modulation for IBD Remission (B1-3)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 19,
+      "title": "Rapid Evidence Synthesis: Gut Microbiome Modulation for IBD Remission (B1-4)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 20,
+      "title": "Rapid Evidence Synthesis: Gut Microbiome Modulation for IBD Remission (B1-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 21,
+      "title": "Rapid Evidence Synthesis: VRFB Deployment for Renewable Integration (B1-1)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 22,
+      "title": "Rapid Evidence Synthesis: VRFB Deployment for Renewable Integration (B1-2)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 23,
+      "title": "Rapid Evidence Synthesis: VRFB Deployment for Renewable Integration (B1-3)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 24,
+      "title": "Rapid Evidence Synthesis: VRFB Deployment for Renewable Integration (B1-4)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 25,
+      "title": "Rapid Evidence Synthesis: VRFB Deployment for Renewable Integration (B1-5)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 26,
+      "title": "Rapid Evidence Synthesis: LLM Alignment Techniques for Safe Deployment (B1-1)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 27,
+      "title": "Rapid Evidence Synthesis: LLM Alignment Techniques for Safe Deployment (B1-2)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 28,
+      "title": "Rapid Evidence Synthesis: LLM Alignment Techniques for Safe Deployment (B1-3)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 29,
+      "title": "Rapid Evidence Synthesis: LLM Alignment Techniques for Safe Deployment (B1-4)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 30,
+      "title": "Rapid Evidence Synthesis: LLM Alignment Techniques for Safe Deployment (B1-5)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 31,
+      "title": "Rapid Evidence Synthesis: CAR-T Cell Therapy Efficacy in Solid Tumors (B1-1)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 32,
+      "title": "Rapid Evidence Synthesis: CAR-T Cell Therapy Efficacy in Solid Tumors (B1-2)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 33,
+      "title": "Rapid Evidence Synthesis: CAR-T Cell Therapy Efficacy in Solid Tumors (B1-3)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 34,
+      "title": "Rapid Evidence Synthesis: CAR-T Cell Therapy Efficacy in Solid Tumors (B1-4)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 35,
+      "title": "Rapid Evidence Synthesis: CAR-T Cell Therapy Efficacy in Solid Tumors (B1-5)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 36,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B2-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 37,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B2-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 38,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B2-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 39,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B2-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 40,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B2-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 41,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B2-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 42,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B2-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 43,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B2-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 44,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B2-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 45,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B2-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 46,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B2-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 47,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B2-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 48,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B2-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 49,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B2-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 50,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B2-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 51,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B2-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 52,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B2-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 53,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B2-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 54,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B2-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 55,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B2-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 56,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B2-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 57,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B2-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 58,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B2-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 59,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B2-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 60,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B2-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 61,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B2-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 62,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B2-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 63,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B2-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 64,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B2-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 65,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B2-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 66,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B2-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 67,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B2-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 68,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B2-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 69,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B2-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 70,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B2-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 71,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B3-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 72,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B3-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 73,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B3-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 74,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B3-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 75,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B3-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 76,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B3-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 77,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B3-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 78,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B3-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 79,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B3-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 80,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B3-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 81,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B3-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 82,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B3-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 83,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B3-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 84,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B3-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 85,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B3-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 86,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B3-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 87,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B3-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 88,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B3-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 89,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B3-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 90,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B3-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 91,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B3-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 92,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B3-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 93,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B3-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 94,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B3-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 95,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B3-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 96,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B3-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 97,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B3-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 98,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B3-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 99,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B3-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 100,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B3-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 101,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B3-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 102,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B3-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 103,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B3-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 104,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B3-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 105,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B3-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 106,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B4-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 107,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B4-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 108,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B4-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 109,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B4-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 110,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B4-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 111,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B4-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 112,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B4-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 113,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B4-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 114,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B4-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 115,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B4-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 116,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B4-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 117,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B4-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 118,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B4-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 119,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B4-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 120,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B4-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 121,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B4-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 122,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B4-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 123,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B4-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 124,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B4-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 125,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B4-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 126,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B4-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 127,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B4-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 128,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B4-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 129,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B4-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 130,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B4-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 131,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B4-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 132,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B4-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 133,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B4-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 134,
+      "title": "Rapid Evidence Synthesis: NAD+ Replenishment as Universal Human Anti-Aging Therapy (B4-2)",
+      "category": "overclaim",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "claim_evidence_alignment",
+        "overclaim_verdict"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 135,
+      "title": "Rapid Evidence Synthesis: Sirtuin Activation and Longevity Extension in Mammals (B4-3)",
+      "category": "circular_reasoning",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "circular_source_reference"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 136,
+      "title": "Rapid Evidence Synthesis: Autophagy Induction and Age-Related Disease Prevention (B4-4)",
+      "category": "out_of_bundle",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "citation_out_of_bundle"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 137,
+      "title": "Rapid Evidence Synthesis: Senolytics and Age-Related Functional Decline (B4-5)",
+      "category": "plagiarism",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "text_similarity_high"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 138,
+      "title": "Rapid Evidence Synthesis: Epigenetic Reprogramming and Biological Age Reversal (B4-6)",
+      "category": "missing_limitations",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "structure_gate"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 139,
+      "title": "Rapid Evidence Synthesis: Telomere Extension and Age-Related Disease Prevention (B4-7)",
+      "category": "placeholder_tokens",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "sanitizer_placeholder_detected"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 140,
+      "title": "Rapid Evidence Synthesis: Young Blood Factors and Tissue Rejuvenation in Aging Humans (B4-8)",
+      "category": "scope_violation",
+      "expected_decision": "revise",
+      "expected_gate_failures": [
+        "scope_reach_mouse_to_human"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 141,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-1)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 142,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-2)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 143,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-3)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 144,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-4)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 145,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-5)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 146,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-6)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 147,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-7)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 148,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-8)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 149,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-9)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 150,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-10)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 151,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-11)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 152,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-12)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 153,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-13)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 154,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-14)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 155,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-15)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 156,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-16)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 157,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-17)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 158,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-18)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 159,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-19)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 160,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Lifespan Extension in Mammalian Aging (FIX-20)",
+      "category": "fabricated_doi",
+      "expected_decision": "reject",
+      "expected_gate_failures": [
+        "source_bundle_doi_verification"
+      ],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": true
+    },
+    {
+      "index": 161,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-1)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 162,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-2)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 163,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-3)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 164,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-4)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 165,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-5)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 166,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-6)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 167,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-7)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 168,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-8)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 169,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-9)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 170,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-10)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 171,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-11)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 172,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-12)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 173,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-13)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 174,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-14)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 175,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-15)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 176,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-16)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 177,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-17)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 178,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-18)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 179,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-19)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 180,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-20)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 181,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-21)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 182,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-22)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 183,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-23)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 184,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-24)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 185,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-25)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 186,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-26)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 187,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-27)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 188,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-28)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 189,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-29)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 190,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-30)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 191,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-31)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 192,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-32)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 193,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-33)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 194,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-34)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 195,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-35)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 196,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-36)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 197,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-37)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 198,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-38)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 199,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-39)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    },
+    {
+      "index": 200,
+      "title": "Rapid Evidence Synthesis: mTOR Inhibition and Healthspan Extension in Mammalian Organisms (GOOD-40)",
+      "category": "good_baseline",
+      "expected_decision": "accept",
+      "expected_gate_failures": [],
+      "actual_decision": "reject",
+      "stage": "intake",
+      "route": "intake_gate",
+      "gate_failures": [
+        "research_question_word_budget"
+      ],
+      "decision_notes": [
+        "intake gate rejection"
+      ],
+      "cost_usd": 0.0,
+      "correct": false
+    }
+  ]
+}

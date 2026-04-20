@@ -1,0 +1,457 @@
+from __future__ import annotations
+
+import json
+import os
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+from typing import Protocol
+
+from contracts import FailureClass, EventType, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob
+
+
+class RuntimeRepository(Protocol):
+    def reset(self) -> None: ...
+    def create_object(self, obj: ResearchObject) -> ResearchObject: ...
+    def get_object(self, object_id: str) -> ResearchObject | None: ...
+    def list_objects(self, object_type: ObjectType | str | None = None) -> list[ResearchObject]: ...
+    def children_of(self, parent_object_id: str, object_type: ObjectType | str | None = None) -> list[ResearchObject]: ...
+    def publication_for_target(self, target_object_id: str) -> ResearchObject | None: ...
+    def enqueue_job(self, job: RuntimeJob) -> RuntimeJob: ...
+    def get_job(self, job_id: str) -> RuntimeJob | None: ...
+    def queued_jobs(self, stage: str | None = None) -> list[RuntimeJob]: ...
+    def claim_next_job(self) -> RuntimeJob | None: ...
+    def complete_job(self, job_id: str) -> None: ...
+    def fail_job(self, job_id: str, *, reason: str, failure_class: FailureClass | None = None) -> None: ...
+    def record_event(self, event: RuntimeEvent) -> None: ...
+    def list_events(self) -> list[RuntimeEvent]: ...
+
+
+class InMemoryRuntimeRepository:
+    def __init__(self, *, lease_ttl_seconds: int = 300) -> None:
+        self.objects: dict[str, ResearchObject] = {}
+        self.jobs: dict[str, RuntimeJob] = {}
+        self.events: list[RuntimeEvent] = []
+        self.jobs_by_target: dict[str, list[str]] = defaultdict(list)
+        self.objects_by_parent: dict[str, list[str]] = defaultdict(list)
+        self.publication_by_target: dict[str, str] = {}
+        self.lease_ttl_seconds = lease_ttl_seconds
+
+    def reset(self) -> None:
+        self.objects.clear()
+        self.jobs.clear()
+        self.events.clear()
+        self.jobs_by_target.clear()
+        self.objects_by_parent.clear()
+        self.publication_by_target.clear()
+
+    def create_object(self, obj: ResearchObject) -> ResearchObject:
+        self.objects[obj.id] = obj
+        if obj.parent_object_id:
+            self.objects_by_parent[obj.parent_object_id].append(obj.id)
+        if obj.object_type == ObjectType.PUBLICATION and obj.parent_object_id:
+            self.publication_by_target[obj.parent_object_id] = obj.id
+        return obj
+
+    def get_object(self, object_id: str) -> ResearchObject | None:
+        return self.objects.get(object_id)
+
+    def list_objects(self, object_type: ObjectType | str | None = None) -> list[ResearchObject]:
+        objects = list(self.objects.values())
+        if object_type is None:
+            return objects
+        return [obj for obj in objects if obj.object_type == object_type]
+
+    def children_of(self, parent_object_id: str, object_type: ObjectType | str | None = None) -> list[ResearchObject]:
+        children = [self.objects[obj_id] for obj_id in self.objects_by_parent.get(parent_object_id, [])]
+        if object_type is None:
+            return children
+        return [obj for obj in children if obj.object_type == object_type]
+
+    def publication_for_target(self, target_object_id: str) -> ResearchObject | None:
+        publication_id = self.publication_by_target.get(target_object_id)
+        if publication_id is None:
+            return None
+        return self.objects.get(publication_id)
+
+    def enqueue_job(self, job: RuntimeJob) -> RuntimeJob:
+        if job.stage.value == "autonomous_publish":
+            existing_publication = self.publication_for_target(job.target_object_id)
+            if existing_publication is not None:
+                completed = RuntimeJob(
+                    target_object_id=job.target_object_id,
+                    stage=job.stage,
+                    status=JobStatus.COMPLETED,
+                    payload={"deduped_to_existing_publication": True},
+                )
+                self.jobs[completed.id] = completed
+                self.jobs_by_target[completed.target_object_id].append(completed.id)
+                return completed
+            for existing_id in self.jobs_by_target[job.target_object_id]:
+                existing = self.jobs[existing_id]
+                if existing.stage == job.stage and existing.status in {
+                    JobStatus.QUEUED,
+                    JobStatus.LEASED,
+                    JobStatus.COMPLETED,
+                }:
+                    return existing
+        self.jobs[job.id] = job
+        self.jobs_by_target[job.target_object_id].append(job.id)
+        return job
+
+    def get_job(self, job_id: str) -> RuntimeJob | None:
+        return self.jobs.get(job_id)
+
+    def queued_jobs(self, stage: str | None = None) -> list[RuntimeJob]:
+        jobs = [job for job in self.jobs.values() if job.status == JobStatus.QUEUED]
+        if stage is None:
+            return jobs
+        return [job for job in jobs if job.stage.value == stage]
+
+    def claim_next_job(self) -> RuntimeJob | None:
+        now = datetime.now(timezone.utc)
+        for job in self.jobs.values():
+            if job.status == JobStatus.LEASED and job.lease_expires_at and job.lease_expires_at <= now:
+                job.status = JobStatus.QUEUED
+                job.lease_expires_at = None
+        jobs = sorted(self.queued_jobs(), key=lambda job: job.created_at)
+        if not jobs:
+            return None
+        job = jobs[0]
+        job.status = JobStatus.LEASED
+        job.lease_expires_at = now + timedelta(seconds=self.lease_ttl_seconds)
+        return job
+
+    def complete_job(self, job_id: str) -> None:
+        self.jobs[job_id].status = JobStatus.COMPLETED
+        self.jobs[job_id].lease_expires_at = None
+
+    def fail_job(self, job_id: str, *, reason: str, failure_class: FailureClass | None = None) -> None:
+        self.jobs[job_id].status = JobStatus.FAILED
+        self.jobs[job_id].lease_expires_at = None
+        self.jobs[job_id].payload["failure_reason"] = reason
+        if failure_class is not None:
+            self.jobs[job_id].payload["failure_class"] = failure_class.value
+
+    def record_event(self, event: RuntimeEvent) -> None:
+        self.events.append(event)
+
+    def list_events(self) -> list[RuntimeEvent]:
+        return list(self.events)
+
+
+def postgres_dsn_from_env() -> str | None:
+    return os.environ.get("TEST_POSTGRES_DSN") or os.environ.get("RESEARKA_V2_POSTGRES_DSN")
+
+
+def postgres_runtime_available() -> bool:
+    if not postgres_dsn_from_env():
+        return False
+    try:
+        import psycopg  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
+class PostgresRuntimeRepository:
+    def __init__(self, dsn: str, *, lease_ttl_seconds: int = 300) -> None:
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+        except Exception as exc:
+            raise RuntimeError("psycopg is required for PostgresRuntimeRepository") from exc
+        self._psycopg = psycopg
+        self._dict_row = dict_row
+        self.dsn = dsn
+        self.lease_ttl_seconds = lease_ttl_seconds
+        self._ensure_schema()
+
+    def _connect(self):
+        return self._psycopg.connect(self.dsn, row_factory=self._dict_row)
+
+    def _ensure_schema(self) -> None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_lock(62004201)")
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS research_objects (
+                    id TEXT PRIMARY KEY,
+                    object_type TEXT NOT NULL,
+                    parent_object_id TEXT NULL,
+                    title TEXT NOT NULL,
+                    body_markdown TEXT NOT NULL,
+                    metadata TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL
+                )
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS runtime_jobs (
+                    id TEXT PRIMARY KEY,
+                    target_object_id TEXT NOT NULL,
+                    stage TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    lease_expires_at TIMESTAMPTZ NULL,
+                    created_at TIMESTAMPTZ NOT NULL
+                )
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS runtime_events (
+                    ts TIMESTAMPTZ NOT NULL,
+                    event_type TEXT NOT NULL,
+                    target_object_id TEXT NOT NULL,
+                    job_id TEXT NULL,
+                    worker_id TEXT NULL,
+                    payload TEXT NOT NULL
+                )
+                """
+            )
+            cur.execute("SELECT pg_advisory_unlock(62004201)")
+            conn.commit()
+
+    def reset(self) -> None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("TRUNCATE runtime_events, runtime_jobs, research_objects;")
+            conn.commit()
+
+    def _object_from_row(self, row: dict | None) -> ResearchObject | None:
+        if row is None:
+            return None
+        return ResearchObject(
+            id=row["id"],
+            object_type=row["object_type"],
+            parent_object_id=row["parent_object_id"],
+            title=row["title"],
+            body_markdown=row["body_markdown"],
+            metadata=json.loads(row["metadata"]),
+            created_at=row["created_at"],
+        )
+
+    def _job_from_row(self, row: dict | None) -> RuntimeJob | None:
+        if row is None:
+            return None
+        return RuntimeJob(
+            id=row["id"],
+            target_object_id=row["target_object_id"],
+            stage=row["stage"],
+            status=row["status"],
+            payload=json.loads(row["payload"]),
+            lease_expires_at=row["lease_expires_at"],
+            created_at=row["created_at"],
+        )
+
+    def _event_from_row(self, row: dict) -> RuntimeEvent:
+        return RuntimeEvent(
+            ts=row["ts"],
+            event_type=row["event_type"],
+            target_object_id=row["target_object_id"],
+            job_id=row["job_id"],
+            worker_id=row["worker_id"],
+            payload=json.loads(row["payload"]),
+        )
+
+    def create_object(self, obj: ResearchObject) -> ResearchObject:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO research_objects (id, object_type, parent_object_id, title, body_markdown, metadata, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    obj.id,
+                    obj.object_type,
+                    obj.parent_object_id,
+                    obj.title,
+                    obj.body_markdown,
+                    json.dumps(obj.metadata),
+                    obj.created_at,
+                ),
+            )
+            conn.commit()
+        return obj
+
+    def get_object(self, object_id: str) -> ResearchObject | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT * FROM research_objects WHERE id = %s", (object_id,))
+            return self._object_from_row(cur.fetchone())
+
+    def list_objects(self, object_type: ObjectType | str | None = None) -> list[ResearchObject]:
+        with self._connect() as conn, conn.cursor() as cur:
+            if object_type is None:
+                cur.execute("SELECT * FROM research_objects ORDER BY created_at ASC")
+            else:
+                cur.execute("SELECT * FROM research_objects WHERE object_type = %s ORDER BY created_at ASC", (str(object_type),))
+            return [self._object_from_row(row) for row in cur.fetchall()]
+
+    def children_of(self, parent_object_id: str, object_type: ObjectType | str | None = None) -> list[ResearchObject]:
+        with self._connect() as conn, conn.cursor() as cur:
+            if object_type is None:
+                cur.execute(
+                    "SELECT * FROM research_objects WHERE parent_object_id = %s ORDER BY created_at ASC",
+                    (parent_object_id,),
+                )
+            else:
+                cur.execute(
+                    "SELECT * FROM research_objects WHERE parent_object_id = %s AND object_type = %s ORDER BY created_at ASC",
+                    (parent_object_id, str(object_type)),
+                )
+            return [self._object_from_row(row) for row in cur.fetchall()]
+
+    def publication_for_target(self, target_object_id: str) -> ResearchObject | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT * FROM research_objects
+                WHERE object_type = %s AND parent_object_id = %s
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (ObjectType.PUBLICATION.value, target_object_id),
+            )
+            return self._object_from_row(cur.fetchone())
+
+    def enqueue_job(self, job: RuntimeJob) -> RuntimeJob:
+        if job.stage.value == "autonomous_publish":
+            existing_publication = self.publication_for_target(job.target_object_id)
+            if existing_publication is not None:
+                completed = RuntimeJob(
+                    target_object_id=job.target_object_id,
+                    stage=job.stage,
+                    status=JobStatus.COMPLETED,
+                    payload={"deduped_to_existing_publication": True},
+                )
+                self._insert_job(completed)
+                return completed
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT * FROM runtime_jobs
+                    WHERE target_object_id = %s AND stage = %s AND status IN ('queued', 'leased', 'completed')
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                    """,
+                    (job.target_object_id, job.stage.value),
+                )
+                existing = cur.fetchone()
+                if existing is not None:
+                    return self._job_from_row(existing)
+        self._insert_job(job)
+        return job
+
+    def _insert_job(self, job: RuntimeJob) -> None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO runtime_jobs (id, target_object_id, stage, status, payload, lease_expires_at, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    job.id,
+                    job.target_object_id,
+                    job.stage.value,
+                    job.status.value,
+                    json.dumps(job.payload),
+                    job.lease_expires_at,
+                    job.created_at,
+                ),
+            )
+            conn.commit()
+
+    def get_job(self, job_id: str) -> RuntimeJob | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT * FROM runtime_jobs WHERE id = %s", (job_id,))
+            return self._job_from_row(cur.fetchone())
+
+    def queued_jobs(self, stage: str | None = None) -> list[RuntimeJob]:
+        with self._connect() as conn, conn.cursor() as cur:
+            if stage is None:
+                cur.execute("SELECT * FROM runtime_jobs WHERE status = 'queued' ORDER BY created_at ASC")
+            else:
+                cur.execute(
+                    "SELECT * FROM runtime_jobs WHERE status = 'queued' AND stage = %s ORDER BY created_at ASC",
+                    (stage,),
+                )
+            return [self._job_from_row(row) for row in cur.fetchall()]
+
+    def claim_next_job(self) -> RuntimeJob | None:
+        now = datetime.now(timezone.utc)
+        lease_expires_at = now + timedelta(seconds=self.lease_ttl_seconds)
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE runtime_jobs
+                SET status = 'queued', lease_expires_at = NULL
+                WHERE status = 'leased' AND lease_expires_at IS NOT NULL AND lease_expires_at <= %s
+                """,
+                (now,),
+            )
+            cur.execute(
+                """
+                WITH next_job AS (
+                    SELECT id
+                    FROM runtime_jobs
+                    WHERE status = 'queued'
+                    ORDER BY created_at ASC
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
+                )
+                UPDATE runtime_jobs
+                SET status = 'leased', lease_expires_at = %s
+                WHERE id = (SELECT id FROM next_job)
+                RETURNING *
+                """,
+                (lease_expires_at,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                conn.commit()
+                return None
+            conn.commit()
+            return self._job_from_row(row)
+
+    def complete_job(self, job_id: str) -> None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE runtime_jobs SET status = 'completed', lease_expires_at = NULL WHERE id = %s", (job_id,))
+            conn.commit()
+
+    def fail_job(self, job_id: str, *, reason: str, failure_class: FailureClass | None = None) -> None:
+        job = self.get_job(job_id)
+        if job is None:
+            return
+        payload = dict(job.payload)
+        payload["failure_reason"] = reason
+        if failure_class is not None:
+            payload["failure_class"] = failure_class.value
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE runtime_jobs SET status = 'failed', payload = %s, lease_expires_at = NULL WHERE id = %s",
+                (json.dumps(payload), job_id),
+            )
+            conn.commit()
+
+    def record_event(self, event: RuntimeEvent) -> None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO runtime_events (ts, event_type, target_object_id, job_id, worker_id, payload)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    event.ts,
+                    event.event_type.value,
+                    event.target_object_id,
+                    event.job_id,
+                    event.worker_id,
+                    json.dumps(event.payload),
+                ),
+            )
+            conn.commit()
+
+    def list_events(self) -> list[RuntimeEvent]:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT * FROM runtime_events ORDER BY ts ASC")
+            return [self._event_from_row(row) for row in cur.fetchall()]
