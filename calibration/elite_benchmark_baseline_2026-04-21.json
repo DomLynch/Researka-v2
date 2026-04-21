@@ -1,0 +1,42 @@
+{
+  "baseline_date": "2026-04-21T15:30:00Z",
+  "benchmark_source": "elite_benchmark_v2.json",
+  "provider_config": "judge_panel",
+  "panel": "MiniMax 2.7 + Mimo v2 Pro + DeepSeek v3.2 tiebreaker",
+  "total_benchmark_entries": 64,
+  "decisions_clean": {
+    "accept": 0,
+    "revise": 24,
+    "reject": 40,
+    "pending_or_errored": 0
+  },
+  "confusion_matrix": {
+    "elite_real_good_total": 58,
+    "elite_real_good_accept": 0,
+    "elite_real_good_revise": 20,
+    "elite_real_good_reject": 38,
+    "contested_total": 6,
+    "contested_revise": 4,
+    "contested_reject": 2
+  },
+  "headline_metrics": {
+    "elite_agreement_rate": 0.0,
+    "contested_revise_rate": 0.667,
+    "effective_sample": 64,
+    "lost_to_provider_error_first_pass": 7,
+    "lost_to_intake_validation_first_pass": 22
+  },
+  "known_issues_encountered": [
+    "First pass: 22/64 rejected at intake due to MiniMax output quirks (evidence_type meta-analysis, short Gaps Identified section, extra Pydantic-incompatible fields). Patched and re-fired.",
+    "First pass: 7/64 failed at review stage with provider_error (panel exhausted under burst load). Sequential pacing eliminated this. Final 64/64 are clean panel decisions.",
+    "Panel genuinely rejects MiniMax-drafted elite-tier synthesis content at 0% accept rate. This is real, not a concurrency artifact."
+  ],
+  "interpretation": "Panel discriminates correctly: contested evidence flagged 67% of the time (target >= 70%, just below), and elite content is split 35% revise / 65% reject. Zero accepts on 58 elite-tier papers means Researka's current rubric requires higher-quality synthesis than MiniMax produced. Two orthogonal next-step options: (1) LOOSEN the reviewer accept threshold one notch and re-run to see if accept rate climbs to 40-70%. If so, threshold was too strict. If still 0%, the drafter style is the limiting factor. (2) TIGHTEN the drafter's output alignment with what the rubric rewards (shorter, narrower claims, bundle-grounded every sentence) and re-run to measure.",
+  "next_validation_step": "Loosen accept threshold in reviewer prompt by one calibration notch, re-fire all 64, compare. If accept rate on elite jumps >30%, threshold was the issue. If still <10%, the drafter style is the issue.",
+  "artifact_paths": {
+    "benchmark_source_file": "/Users/domininclynch/Desktop/Business/Researka v2/elite_benchmark_v2.json",
+    "submission_ids_primary": "/tmp/elite_bench_ids_v2.tsv",
+    "submission_ids_retry_patched": "/tmp/retry_ids.tsv",
+    "submission_ids_retry_sequential": "/tmp/retry_sequential_results.tsv"
+  }
+}

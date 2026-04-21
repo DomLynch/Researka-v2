@@ -1,0 +1,215 @@
+{
+  "run_meta": {
+    "provider": "judge_panel",
+    "target": "http://49.12.7.18:8000",
+    "paper_count": 5,
+    "elapsed_s": 623.36,
+    "timestamp": "2026-04-21T09:41:08Z"
+  },
+  "aggregates": {
+    "total": 5,
+    "completed": 3,
+    "intake_rejected": 0,
+    "errors": 0,
+    "accepts": 2,
+    "revises": 1,
+    "rejects": 0,
+    "accept_rate": 0.4,
+    "revise_rate": 0.2,
+    "reject_rate": 0.0,
+    "disagreement_rate": 0.0,
+    "consensus_count": 0,
+    "tiebreak_count": 0,
+    "total_cost_usd": 0.0058,
+    "median_cost_usd": 0.003,
+    "mean_duration_s": 124.168,
+    "median_duration_s": 121.452,
+    "error_rate": 0.0,
+    "by_quality": {
+      "high": {
+        "count": 2,
+        "accept_rate": 0.0,
+        "revise_rate": 0.5,
+        "reject_rate": 0.0,
+        "intake_reject_rate": 0.0
+      },
+      "medium": {
+        "count": 3,
+        "accept_rate": 0.667,
+        "revise_rate": 0.0,
+        "reject_rate": 0.0,
+        "intake_reject_rate": 0.0
+      }
+    },
+    "by_domain": {
+      "longevity": {
+        "count": 1,
+        "accept": 0,
+        "revise": 0,
+        "reject": 0,
+        "intake_rejected": 0
+      },
+      "ai-ethics": {
+        "count": 1,
+        "accept": 0,
+        "revise": 1,
+        "reject": 0,
+        "intake_rejected": 0
+      },
+      "public-health": {
+        "count": 1,
+        "accept": 0,
+        "revise": 0,
+        "reject": 0,
+        "intake_rejected": 0
+      },
+      "climate-adaptation": {
+        "count": 1,
+        "accept": 1,
+        "revise": 0,
+        "reject": 0,
+        "intake_rejected": 0
+      },
+      "ocean-biodiversity": {
+        "count": 1,
+        "accept": 1,
+        "revise": 0,
+        "reject": 0,
+        "intake_rejected": 0
+      }
+    }
+  },
+  "papers": [
+    {
+      "paper_id": 1,
+      "title": "Benchmark Paper #1: anti-aging evidence synthesis",
+      "domain": "longevity",
+      "quality": "high",
+      "bundle_size": 12,
+      "stage_reached": "pending",
+      "outcome": "no_decision",
+      "recommendation": null,
+      "decision": null,
+      "route": null,
+      "rubric_scores": null,
+      "major_issues_count": null,
+      "overclaim": null,
+      "claim_support": null,
+      "synthesis_quality": null,
+      "cost_usd": 0.0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "error": null,
+      "duration_s": 204.852
+    },
+    {
+      "paper_id": 2,
+      "title": "Benchmark Paper #2: algorithmic bias evidence synthesis",
+      "domain": "ai-ethics",
+      "quality": "high",
+      "bundle_size": 14,
+      "stage_reached": "done",
+      "outcome": "revise",
+      "recommendation": null,
+      "decision": "revise",
+      "route": null,
+      "rubric_scores": {
+        "research_question_quality": 5,
+        "synthesis_quality": 3,
+        "claim_evidence_alignment": 3,
+        "limitations_quality": 4,
+        "gaps_quality": 4,
+        "source_grounding": 2
+      },
+      "major_issues_count": 2,
+      "overclaim": "significant",
+      "claim_support": "partially_supported",
+      "synthesis_quality": "adequate",
+      "cost_usd": 0.0,
+      "tokens_in": 1744,
+      "tokens_out": 600,
+      "error": null,
+      "duration_s": 121.452
+    },
+    {
+      "paper_id": 3,
+      "title": "Benchmark Paper #3: vaccine hesitancy evidence synthesis",
+      "domain": "public-health",
+      "quality": "medium",
+      "bundle_size": 16,
+      "stage_reached": "pending",
+      "outcome": "no_decision",
+      "recommendation": null,
+      "decision": null,
+      "route": null,
+      "rubric_scores": null,
+      "major_issues_count": null,
+      "overclaim": null,
+      "claim_support": null,
+      "synthesis_quality": null,
+      "cost_usd": 0.0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "error": null,
+      "duration_s": 207.797
+    },
+    {
+      "paper_id": 4,
+      "title": "Benchmark Paper #4: heat resilience evidence synthesis",
+      "domain": "climate-adaptation",
+      "quality": "medium",
+      "bundle_size": 20,
+      "stage_reached": "done",
+      "outcome": "accept",
+      "recommendation": null,
+      "decision": "accept",
+      "route": null,
+      "rubric_scores": {
+        "research_question_quality": 4,
+        "synthesis_quality": 4,
+        "claim_evidence_alignment": 5,
+        "limitations_quality": 4,
+        "gaps_quality": 4,
+        "source_grounding": 4
+      },
+      "major_issues_count": 0,
+      "overclaim": "none",
+      "claim_support": "supported",
+      "synthesis_quality": "strong",
+      "cost_usd": 0.00278,
+      "tokens_in": 1933,
+      "tokens_out": 675,
+      "error": null,
+      "duration_s": 38.934
+    },
+    {
+      "paper_id": 5,
+      "title": "Benchmark Paper #5: coral restoration evidence synthesis",
+      "domain": "ocean-biodiversity",
+      "quality": "medium",
+      "bundle_size": 12,
+      "stage_reached": "done",
+      "outcome": "accept",
+      "recommendation": null,
+      "decision": "accept",
+      "route": null,
+      "rubric_scores": {
+        "research_question_quality": 4,
+        "synthesis_quality": 4,
+        "claim_evidence_alignment": 4,
+        "limitations_quality": 4,
+        "gaps_quality": 4,
+        "source_grounding": 4
+      },
+      "major_issues_count": 0,
+      "overclaim": "none",
+      "claim_support": "supported",
+      "synthesis_quality": "strong",
+      "cost_usd": 0.003025,
+      "tokens_in": 1445,
+      "tokens_out": 899,
+      "error": null,
+      "duration_s": 47.804
+    }
+  ]
+}
