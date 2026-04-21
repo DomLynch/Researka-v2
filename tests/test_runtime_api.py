@@ -772,6 +772,58 @@ def test_calibration_mismatches(client: TestClient, tmp_path, monkeypatch) -> No
     assert mismatches[1]["expected"] == "reject"
 
 
+def test_calibration_benchmark_format(client: TestClient, tmp_path, monkeypatch) -> None:
+    from apps.runtime_api.app import reset_calibration_cache
+
+    reset_calibration_cache()
+    benchmark_data = {
+        "run_meta": {"run_id": "test-1", "papers": 4},
+        "aggregates": {
+            "total": 4,
+            "completed": 4,
+            "accepts": 3,
+            "rejects": 1,
+            "accept_rate": 0.75,
+            "reject_rate": 0.25,
+            "by_quality": {
+                "high": {"count": 2, "accept_rate": 1.0, "reject_rate": 0.0},
+                "low": {"count": 2, "accept_rate": 0.5, "reject_rate": 0.5},
+            },
+            "by_domain": {
+                "longevity": {"count": 1, "accept": 1, "reject": 0},
+            },
+        },
+        "papers": [
+            {"paper_id": 1, "quality": "high", "domain": "longevity", "outcome": "accept"},
+            {"paper_id": 2, "quality": "high", "domain": "ai-ethics", "outcome": "accept"},
+            {"paper_id": 3, "quality": "low", "domain": "climate", "outcome": "accept"},
+            {"paper_id": 4, "quality": "low", "domain": "energy", "outcome": "reject", "stage_reached": "review", "error": "gate_timeout"},
+        ],
+    }
+    bench_path = tmp_path / "benchmark_baseline.json"
+    bench_path.write_text(__import__("json").dumps(benchmark_data))
+    monkeypatch.setenv("RESEARKA_V2_CALIBRATION_PATH", str(bench_path))
+
+    resp = client.get("/calibration")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["overall"]["total"] == 4
+    assert data["overall"]["accept_rate"] == 0.75
+    assert "high" in data["by_category"]
+    # Paper 4 has error, counted as gate failure
+    assert data["gate_failures"] == {"review": [4]}
+    # Paper 3: low quality, expected reject, actual accept → mismatch
+    assert data["mismatch_count"] == 1
+
+    resp2 = client.get("/calibration/mismatches")
+    assert resp2.status_code == 200
+    mismatches = resp2.json()["mismatches"]
+    assert len(mismatches) == 1
+    assert mismatches[0]["paper_id"] == 3
+    assert mismatches[0]["expected"] == "reject"
+    assert mismatches[0]["actual"] == "accept"
+
+
 def _submit_and_process(client: TestClient) -> str:
     submission = client.post(
         "/submissions",

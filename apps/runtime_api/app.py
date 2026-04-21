@@ -21,6 +21,41 @@ def reset_calibration_cache() -> None:
     _calibration_path = None
 
 
+def _normalize_benchmark(raw: dict) -> dict:
+    if "summary" in raw:
+        return raw
+    aggregates = raw.get("aggregates", {})
+    papers = raw.get("papers", [])
+    mismatches = []
+    gate_failures: dict[str, list] = {}
+    for p in papers:
+        if p.get("error"):
+            stage = p.get("stage_reached", "unknown")
+            gate_failures.setdefault(stage, []).append(p["paper_id"])
+        quality = p.get("quality", "unknown")
+        expected = "reject" if quality in ("low", "broken") else "accept"
+        actual = p.get("outcome")
+        if actual and actual != expected:
+            mismatches.append(
+                {
+                    "paper_id": p["paper_id"],
+                    "quality": quality,
+                    "domain": p.get("domain", "unknown"),
+                    "expected": expected,
+                    "actual": actual,
+                }
+            )
+    return {
+        "summary": {
+            "overall": aggregates,
+            "by_category": aggregates.get("by_quality", {}),
+            "gate_failures": gate_failures,
+            "mismatches": mismatches,
+        },
+        "results": papers,
+    }
+
+
 def _load_calibration_data() -> dict:
     global _calibration_cache, _calibration_path
     default_path = os.environ.get(
@@ -32,7 +67,8 @@ def _load_calibration_data() -> dict:
     path = Path(default_path)
     if not path.exists():
         return {"summary": {}, "results": []}
-    _calibration_cache = json.loads(path.read_text())
+    raw = json.loads(path.read_text())
+    _calibration_cache = _normalize_benchmark(raw)
     _calibration_path = default_path
     return _calibration_cache
 

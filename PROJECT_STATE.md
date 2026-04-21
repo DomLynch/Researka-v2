@@ -3,7 +3,7 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: 9d8513b (fix PROJECT_STATE.md staleness)
+Latest: b76c89f (normalize benchmark artifact for /calibration endpoint)
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -43,7 +43,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 86 passing, 1 skipped (Postgres concurrency)
+- Tests: 87 passing, 1 skipped (Postgres concurrency)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)
