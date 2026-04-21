@@ -781,23 +781,31 @@ def test_calibration_benchmark_format(client: TestClient, tmp_path, monkeypatch)
         "aggregates": {
             "total": 4,
             "completed": 4,
+            "correct": 3,
+            "accuracy": 0.75,
             "accepts": 3,
             "rejects": 1,
             "accept_rate": 0.75,
             "reject_rate": 0.25,
+            "confusion_matrix": {
+                "accept": {"accept": 2, "revise": 0, "reject": 0},
+                "revise": {"accept": 1, "revise": 0, "reject": 0},
+                "reject": {"accept": 0, "revise": 0, "reject": 1},
+            },
             "by_quality": {
-                "high": {"count": 2, "accept_rate": 1.0, "reject_rate": 0.0},
-                "low": {"count": 2, "accept_rate": 0.5, "reject_rate": 0.5},
+                "high": {"count": 2, "expected_decision": "accept", "accuracy": 1.0, "accept_rate": 1.0, "reject_rate": 0.0},
+                "medium": {"count": 1, "expected_decision": "revise", "accuracy": 0.0, "accept_rate": 1.0, "reject_rate": 0.0},
+                "low": {"count": 1, "expected_decision": "reject", "accuracy": 1.0, "accept_rate": 0.0, "reject_rate": 1.0},
             },
             "by_domain": {
                 "longevity": {"count": 1, "accept": 1, "reject": 0},
             },
         },
         "papers": [
-            {"paper_id": 1, "quality": "high", "domain": "longevity", "outcome": "accept"},
-            {"paper_id": 2, "quality": "high", "domain": "ai-ethics", "outcome": "accept"},
-            {"paper_id": 3, "quality": "low", "domain": "climate", "outcome": "accept"},
-            {"paper_id": 4, "quality": "low", "domain": "energy", "outcome": "reject", "stage_reached": "review", "error": "gate_timeout"},
+            {"paper_id": 1, "quality": "high", "expected_decision": "accept", "domain": "longevity", "decision": "accept", "outcome": "accept"},
+            {"paper_id": 2, "quality": "high", "expected_decision": "accept", "domain": "ai-ethics", "decision": "accept", "outcome": "accept"},
+            {"paper_id": 3, "quality": "medium", "expected_decision": "revise", "domain": "climate", "decision": "accept", "outcome": "accept"},
+            {"paper_id": 4, "quality": "low", "expected_decision": "reject", "domain": "energy", "decision": "reject", "outcome": "reject", "stage_reached": "review", "error": "gate_timeout"},
         ],
     }
     bench_path = tmp_path / "benchmark_baseline.json"
@@ -808,11 +816,13 @@ def test_calibration_benchmark_format(client: TestClient, tmp_path, monkeypatch)
     assert resp.status_code == 200
     data = resp.json()
     assert data["overall"]["total"] == 4
+    assert data["overall"]["correct"] == 3
     assert data["overall"]["accept_rate"] == 0.75
+    assert data["confusion_matrix"]["revise"]["accept"] == 1
     assert "high" in data["by_category"]
     # Paper 4 has error, counted as gate failure
     assert data["gate_failures"] == {"review": [4]}
-    # Paper 3: low quality, expected reject, actual accept → mismatch
+    # Paper 3: medium quality, expected revise, actual accept → mismatch
     assert data["mismatch_count"] == 1
 
     resp2 = client.get("/calibration/mismatches")
@@ -820,7 +830,7 @@ def test_calibration_benchmark_format(client: TestClient, tmp_path, monkeypatch)
     mismatches = resp2.json()["mismatches"]
     assert len(mismatches) == 1
     assert mismatches[0]["paper_id"] == 3
-    assert mismatches[0]["expected"] == "reject"
+    assert mismatches[0]["expected"] == "revise"
     assert mismatches[0]["actual"] == "accept"
 
 

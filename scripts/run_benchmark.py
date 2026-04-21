@@ -89,6 +89,13 @@ DOMAIN_TOPICS = {
 }
 
 MODELS = ["human", "mouse", "in-vitro", "computational", "primate", "cohort"]
+EXPECTED_BY_QUALITY = {
+    "high": Decision.ACCEPT.value,
+    "medium": Decision.REVISE.value,
+    "low": Decision.REJECT.value,
+    "broken": Decision.REJECT.value,
+}
+DECISION_LABELS = [Decision.ACCEPT.value, Decision.REVISE.value, Decision.REJECT.value]
 
 
 def _build_source_bundle(domain: str, count: int, paper_id: int) -> list[dict]:
@@ -179,6 +186,26 @@ def _make_sections(domain: str, quality: str, paper_id: int) -> dict:
     return sections
 
 
+def expected_decision_for_paper(paper: dict) -> str:
+    expected = paper.get("_benchmark_expected_decision")
+    if isinstance(expected, str) and expected:
+        return expected
+    quality = paper.get("_benchmark_quality", "medium")
+    return EXPECTED_BY_QUALITY.get(quality, Decision.REVISE.value)
+
+
+def actual_label_for_record(record: dict) -> str:
+    decision = record.get("decision")
+    if isinstance(decision, str) and decision in DECISION_LABELS:
+        return decision
+    outcome = record.get("outcome")
+    if outcome == "intake_rejected":
+        return Decision.REJECT.value
+    if isinstance(outcome, str) and outcome:
+        return outcome
+    return "unknown"
+
+
 def generate_papers(count: int) -> list[dict]:
     papers = []
     qualities = ["high", "high", "medium", "medium", "medium", "medium", "low", "low", "broken"]
@@ -202,6 +229,7 @@ def generate_papers(count: int) -> list[dict]:
             "_benchmark_quality": quality,
             "_benchmark_bundle_size": bundle_size,
             "_benchmark_paper_id": paper_id,
+            "_benchmark_expected_decision": EXPECTED_BY_QUALITY.get(quality, Decision.REVISE.value),
         })
     return papers
 
@@ -237,6 +265,7 @@ def run_paper(submission_data: dict, engine: WorkflowEngine, repo: InMemoryRunti
         "domain": submission_data.get("domain_slug", "general"),
         "quality": submission_data.get("_benchmark_quality", "medium"),
         "bundle_size": submission_data.get("_benchmark_bundle_size", 12),
+        "expected_decision": expected_decision_for_paper(submission_data),
         "stage_reached": None,
         "outcome": None,
         "recommendation": None,
@@ -377,14 +406,48 @@ def aggregate(records: list[dict]) -> dict:
 
     costs = [r["cost_usd"] for r in records if r["cost_usd"]]
     durations = [r["duration_s"] for r in records if r["duration_s"]]
+    confusion_matrix = {
+        expected: {actual: 0 for actual in DECISION_LABELS}
+        for expected in DECISION_LABELS
+    }
+    correct = 0
+    mismatches = []
+
+    for r in records:
+        expected = r.get("expected_decision")
+        actual = actual_label_for_record(r)
+        if expected in confusion_matrix:
+            if actual not in confusion_matrix[expected]:
+                confusion_matrix[expected][actual] = 0
+            confusion_matrix[expected][actual] += 1
+            if actual == expected:
+                correct += 1
+            else:
+                mismatches.append(
+                    {
+                        "paper_id": r.get("paper_id"),
+                        "title": r.get("title"),
+                        "quality": r.get("quality"),
+                        "domain": r.get("domain"),
+                        "expected": expected,
+                        "actual": actual,
+                        "stage_reached": r.get("stage_reached"),
+                        "route": r.get("route"),
+                        "error": r.get("error"),
+                    }
+                )
 
     by_quality = {}
     for q in ("high", "medium", "low", "broken"):
         group = [r for r in records if r.get("quality") == q]
         if group:
             g_decisions = [r for r in group if r["decision"] is not None]
+            g_correct = sum(1 for r in group if actual_label_for_record(r) == r.get("expected_decision"))
             by_quality[q] = {
                 "count": len(group),
+                "expected_decision": EXPECTED_BY_QUALITY.get(q, Decision.REVISE.value),
+                "correct": g_correct,
+                "accuracy": round(g_correct / len(group), 3) if group else 0,
                 "accept_rate": round(sum(1 for r in g_decisions if r["decision"] == Decision.ACCEPT.value) / len(group), 3) if group else 0,
                 "revise_rate": round(sum(1 for r in g_decisions if r["decision"] == Decision.REVISE.value) / len(group), 3) if group else 0,
                 "reject_rate": round(sum(1 for r in g_decisions if r["decision"] == Decision.REJECT.value) / len(group), 3) if group else 0,
@@ -411,6 +474,8 @@ def aggregate(records: list[dict]) -> dict:
         "completed": len(completed),
         "intake_rejected": len(intake_rejected),
         "errors": len(errors),
+        "correct": correct,
+        "accuracy": round(correct / total, 3) if total else 0,
         "accepts": accepts,
         "revises": revises,
         "rejects": rejects,
@@ -425,6 +490,8 @@ def aggregate(records: list[dict]) -> dict:
         "mean_duration_s": round(sum(durations) / len(durations), 3) if durations else 0,
         "median_duration_s": round(sorted(durations)[len(durations) // 2], 3) if durations else 0,
         "error_rate": round(len(errors) / total, 3) if total else 0,
+        "confusion_matrix": confusion_matrix,
+        "mismatches": mismatches,
         "by_quality": by_quality,
         "by_domain": by_domain,
     }
@@ -491,6 +558,7 @@ def main() -> None:
     print("BENCHMARK RESULTS")
     print("=" * 70)
     print(f"Total papers:    {agg['total']}")
+    print(f"Accuracy:        {agg['correct']} / {agg['total']} ({agg['accuracy']:.1%})")
     print(f"Accept:          {agg['accepts']} ({agg['accept_rate']:.1%})")
     print(f"Revise:          {agg['revises']} ({agg['revise_rate']:.1%})")
     print(f"Reject:          {agg['rejects']} ({agg['reject_rate']:.1%})")
@@ -503,9 +571,15 @@ def main() -> None:
     print()
     print("By quality:")
     for q, stats in agg.get("by_quality", {}).items():
-        print(f"  {q:8s}  n={stats['count']:4d}  accept={stats['accept_rate']:.0%}  "
+        print(f"  {q:8s}  n={stats['count']:4d}  expected={stats['expected_decision']:6s}  "
+              f"accuracy={stats['accuracy']:.0%}  accept={stats['accept_rate']:.0%}  "
               f"revise={stats['revise_rate']:.0%}  reject={stats['reject_rate']:.0%}  "
               f"intake_rej={stats['intake_reject_rate']:.0%}")
+    print()
+    print("Confusion matrix:")
+    for expected, actuals in agg.get("confusion_matrix", {}).items():
+        cells = "  ".join(f"{actual}={count}" for actual, count in actuals.items())
+        print(f"  expected {expected:6s} -> {cells}")
     print()
     print(f"Artifact saved to: {args.output}")
 

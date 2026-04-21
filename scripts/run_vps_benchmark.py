@@ -21,7 +21,7 @@ import requests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts.run_benchmark import DOMAINS, DOMAIN_TOPICS, MODELS, SOURCE_TEMPLATES, _build_source_bundle, _make_sections, generate_papers, aggregate
+from scripts.run_benchmark import generate_papers, aggregate, expected_decision_for_paper
 
 
 def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float = 600.0) -> dict:
@@ -37,6 +37,7 @@ def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float 
         "domain": paper.get("domain_slug", "general"),
         "quality": quality,
         "bundle_size": paper.get("_benchmark_bundle_size", 12),
+        "expected_decision": expected_decision_for_paper(paper),
         "stage_reached": None,
         "outcome": None,
         "recommendation": None,
@@ -244,14 +245,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Researka v2 VPS benchmark runner")
     parser.add_argument("--count", type=int, default=200, help="Number of synthetic papers")
     parser.add_argument("--base-url", default="http://49.12.7.18:8000", help="VPS API base URL")
-    parser.add_argument("--output", default=None, help="Output artifact path")
+    parser.add_argument("--output", default=None, help="Output artifact path (defaults to artifacts/benchmark_baseline.json)")
     parser.add_argument("--resume-from", type=int, default=0, help="Skip first N papers (resume run)")
     args = parser.parse_args()
 
-    api_key = os.environ.get("RESEARKA_V2_API_KEY", "ResearkaLive2026!")
+    api_key = os.environ.get("RESEARKA_V2_API_KEY")
+    if not api_key:
+        print("RESEARKA_V2_API_KEY must be set for VPS benchmark runs.")
+        sys.exit(1)
     count = args.count
     base_url = args.base_url.rstrip("/")
-    output = args.output or f"artifacts/benchmark_vps_{count}.json"
+    output = args.output or "artifacts/benchmark_baseline.json"
 
     # Verify health
     try:
@@ -329,6 +333,7 @@ def main() -> None:
     print("VPS BENCHMARK RESULTS")
     print("=" * 70)
     print(f"Total papers:    {agg['total']}")
+    print(f"Accuracy:        {agg['correct']} / {agg['total']} ({agg['accuracy']:.1%})")
     print(f"Accept:          {agg['accepts']} ({agg['accept_rate']:.1%})")
     print(f"Revise:          {agg['revises']} ({agg['revise_rate']:.1%})")
     print(f"Reject:          {agg['rejects']} ({agg['reject_rate']:.1%})")
@@ -341,9 +346,15 @@ def main() -> None:
     print()
     print("By quality:")
     for q, stats in agg.get("by_quality", {}).items():
-        print(f"  {q:8s}  n={stats['count']:4d}  accept={stats['accept_rate']:.0%}  "
+        print(f"  {q:8s}  n={stats['count']:4d}  expected={stats['expected_decision']:6s}  "
+              f"accuracy={stats['accuracy']:.0%}  accept={stats['accept_rate']:.0%}  "
               f"revise={stats['revise_rate']:.0%}  reject={stats['reject_rate']:.0%}  "
               f"intake_rej={stats['intake_reject_rate']:.0%}")
+    print()
+    print("Confusion matrix:")
+    for expected, actuals in agg.get("confusion_matrix", {}).items():
+        cells = "  ".join(f"{actual}={count}" for actual, count in actuals.items())
+        print(f"  expected {expected:6s} -> {cells}")
     print()
     print(f"Artifact saved to: {output}")
 

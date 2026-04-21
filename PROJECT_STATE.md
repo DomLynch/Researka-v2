@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: f236e61 (add target_object_id filter to run-once to prevent stale job cross-contamination)
-Next: timeout 30→60s, benchmark delay 0.5→5s (MIMO reliability + shared VPS)
+Latest: calibration benchmark now measures real label accuracy, mismatches, and confusion matrix
+Next: finish live 200-paper benchmark rerun, inspect mismatches, then decide on prompt tuning vs invited pilot
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -24,7 +24,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Structured scoring/provenance on papers (GET /submissions/{id}/provenance)
 - [x] Public `/calibration` endpoint (benchmark trust data)
 - [x] External auditor endpoints (POST/GET /audit, GET /audit-summary)
-- [ ] Run live 200-paper benchmark against judge_panel (current calibration: ~60% accuracy)
+- [ ] Run live 200-paper benchmark against judge_panel to target (current live baseline still below pilot bar)
 - [ ] Open invited pilot (ops task)
 
 ## Non-Goals
@@ -44,7 +44,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 87 passing, 1 skipped (Postgres concurrency)
+- Tests: 91 passing, 1 skipped (Postgres concurrency)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)
@@ -54,3 +54,4 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - **Shared with elite-trader benchmark** — other dev running 64-paper test against same LLM providers
 - LLM providers: MiniMax (primary), MIMO (sparring, ~15s baseline), DeepSeek (fallback)
 - Timeout: 60s per provider call (was 30s, MIMO needs headroom under shared load)
+- Calibration artifact path: `artifacts/benchmark_baseline.json` (shared by benchmark runners and `/calibration`)

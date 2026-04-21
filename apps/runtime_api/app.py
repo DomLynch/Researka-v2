@@ -28,13 +28,24 @@ def _normalize_benchmark(raw: dict) -> dict:
     papers = raw.get("papers", [])
     mismatches = []
     gate_failures: dict[str, list] = {}
+    confusion_matrix = aggregates.get("confusion_matrix", {})
+    correct = aggregates.get("correct")
+    accuracy = aggregates.get("accuracy")
+    quality_expectations = {
+        "high": "accept",
+        "medium": "revise",
+        "low": "reject",
+        "broken": "reject",
+    }
     for p in papers:
         if p.get("error"):
             stage = p.get("stage_reached", "unknown")
             gate_failures.setdefault(stage, []).append(p["paper_id"])
         quality = p.get("quality", "unknown")
-        expected = "reject" if quality in ("low", "broken") else "accept"
-        actual = p.get("outcome")
+        expected = p.get("expected_decision") or quality_expectations.get(quality, "revise")
+        actual = p.get("decision")
+        if not actual:
+            actual = "reject" if p.get("outcome") == "intake_rejected" else p.get("outcome")
         if actual and actual != expected:
             mismatches.append(
                 {
@@ -45,11 +56,20 @@ def _normalize_benchmark(raw: dict) -> dict:
                     "actual": actual,
                 }
             )
+    if correct is None:
+        correct = len(papers) - len(mismatches)
+    if accuracy is None:
+        accuracy = round(correct / len(papers), 3) if papers else 0.0
     return {
         "summary": {
-            "overall": aggregates,
+            "overall": {
+                **aggregates,
+                "correct": correct,
+                "accuracy": accuracy,
+            },
             "by_category": aggregates.get("by_quality", {}),
             "gate_failures": gate_failures,
+            "confusion_matrix": confusion_matrix,
             "mismatches": mismatches,
         },
         "results": papers,
@@ -360,6 +380,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             "overall": summary.get("overall", {}),
             "by_category": summary.get("by_category", {}),
             "gate_failures": summary.get("gate_failures", {}),
+            "confusion_matrix": summary.get("confusion_matrix", {}),
             "mismatch_count": len(mismatches),
         }
 
