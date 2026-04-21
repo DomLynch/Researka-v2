@@ -1,0 +1,514 @@
+[
+  {
+    "sid": "ab023480-6e10-49ff-9342-c4518eb2472b",
+    "expected": "revise",
+    "cat": "contested",
+    "domain": "biomedical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "4366be77-1266-42d5-83d5-30802307383c",
+    "expected": "revise",
+    "cat": "contested",
+    "domain": "biomedical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "7a563190-b362-440e-8b62-73c5823abdb7",
+    "expected": "revise",
+    "cat": "contested",
+    "domain": "biomedical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "85b8d346-bc38-4f12-9ed1-f8e52e7bb534",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "biomedical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "d7b90a1e-7dc0-4408-a588-4c80a6dba25d",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "biomedical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "7dfd9e58-059a-423c-b58f-c615ba7f0b65",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "clinical",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "db3bfd79-8d9e-4ddc-853d-f5e88bb8160d",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "clinical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "44680ce6-d715-4401-88b1-1387c850aca5",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "clinical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "8096676c-5a21-4570-b2c5-050a4424a928",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "clinical",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "be7f2d97-5149-4e91-95bb-f7017004ccd7",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "clinical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "bde7a3e9-caa9-472f-a613-c9df58c503c2",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "climate",
+    "actual": "pending",
+    "gates": []
+  },
+  {
+    "sid": "c6666ef6-8d3a-4266-a9b5-0c56ad463aba",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "climate",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "098a8a36-78e3-4bc8-8288-ae9f76413079",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "climate",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "4f10f466-9f98-4ca8-b914-c126e322f226",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "climate",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "fd4a2f55-eff1-456b-9ad1-3e2bd7b25910",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "eef06156-a204-4aca-8085-39e0e49e9e38",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "ff8c63c1-1763-43ac-a607-0eba3f32b7d4",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "10187b94-0b10-4e16-a789-21beac3da8e9",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "d7f2c683-77c2-4f73-b3c5-c50b39654d15",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "pending",
+    "gates": []
+  },
+  {
+    "sid": "d1fc447d-2e28-4575-8346-ed4398f88ebd",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "c0a4dcb0-b8e5-457d-ba36-8b671a795221",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "8a53d312-edd2-47a1-8c70-a89e4bb67db6",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "pending",
+    "gates": []
+  },
+  {
+    "sid": "98180b36-c596-4b55-a10b-4da1ad9bfb7d",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "pending",
+    "gates": []
+  },
+  {
+    "sid": "0eb218de-633d-49de-b3f1-63f1945c713b",
+    "expected": "revise",
+    "cat": "contested",
+    "domain": "biomedical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "dfa76ef1-bc74-4b44-b9ae-3d2336cfec1e",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "biomedical",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "4931d25f-ae0b-4ed0-9cb8-de08a21302d4",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "biomedical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "7e764cfb-0cc6-40ec-9d17-6737924da6e6",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "biomedical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "f3359237-c7e8-45b6-9677-ee953f9eeccb",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "clinical",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "730f94c7-221a-4fd7-8756-73df1bd4f032",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "clinical",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "0d3292a0-4cd5-4bab-9d08-244069093c43",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "clinical",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "2f598ca8-a024-49db-8dfa-216bf70c248b",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "clinical",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "d06877cd-d646-451f-bf7f-cd6099458ae3",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "climate",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "86bbd239-06f0-4bd2-a2a1-2a06160034fa",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "climate",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "ee82ca13-e5cd-4e6b-9dc9-e9ed503e5616",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "9a990c6f-4a87-410a-ae60-5b4c60817244",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "9b5bd753-0b96-471f-a26b-8329371e787b",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "0083932a-390a-4d78-9b5c-17233bb9a6de",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "21d4981f-e948-4e10-82db-f5612fc227e5",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "778e3145-7dc7-4bd0-891f-41dded38856c",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "0eab1c56-0056-4e77-a85c-b735e825f9b9",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "d59fb427-0340-4146-a0ca-179dfd25e95c",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "e6d9ea60-a6df-4060-a792-54aa7f4f6c02",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "01b1e956-b62b-42aa-a880-abcd1034af19",
+    "expected": "revise",
+    "cat": "contested",
+    "domain": "clinical",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "f88d3b5b-5366-41cb-9f54-04529619d896",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "7e8d32e0-0178-4d9e-be1b-3f10b18692b1",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "101ea13e-5a20-4445-97e3-fa2b609613a3",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "a7706c9b-cedb-4555-8784-6046ca747fb5",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "01885490-20ef-445f-a115-feabecdbf770",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "d0ea0494-f777-4765-846b-d4d034b3363f",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "7f3f43ae-c4fb-415f-aa1e-8b68b9c06e4d",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "4b2636af-2279-433c-bf76-e734d4fea390",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "44efe90c-787c-4da7-86c7-874b933d4534",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "f70462b6-bdbb-43f4-be07-4f1d82f1e0bd",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "climate",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "1607b594-c8c1-45d9-ac1d-696e5dbe11f5",
+    "expected": "revise",
+    "cat": "contested",
+    "domain": "general",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "1d96a1be-d1e1-498a-b2d3-2bef32977d89",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "biomedical",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "b7f19f2f-5e35-4af9-bf75-7b557757e220",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "c3c15bf7-ac40-4810-8019-700ddc71df99",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "3b9c1db9-40f8-4f0e-94c1-6a753211d6e0",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "032a09ac-54b6-4859-82f1-53cc1a02db89",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "0d9f81c0-6e05-4dfb-b3a6-f96e4cb37a07",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "ai",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "0329e743-e616-4a5c-8f8d-c66b63056b8a",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "df374881-50f4-4bbf-9cb5-822bbe384eeb",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "ffcb1462-8c42-4032-a128-5e495829ae1a",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "0f36ee8e-f02a-4069-9fad-7a9d72d95206",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "domain": "physics",
+    "actual": "reject",
+    "gates": []
+  }
+]

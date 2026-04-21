@@ -1,0 +1,52 @@
+{
+  "run_date": "2026-04-21T14:00:00Z",
+  "benchmark_source": "elite_benchmark_v2.json",
+  "panel_config": "Mimo v2 Pro (primary) + DeepSeek chat (sparring) + DeepSeek reasoner (tiebreaker)",
+  "threshold_config": "accept allowed if at most one rubric score dips to 3/5 (min floor 3, others >= 4)",
+  "change_set_vs_baseline": [
+    "Removed MiniMax from panel entirely (primary slot)",
+    "Promoted Mimo v2 Pro to primary",
+    "Added DeepSeek chat as sparring (was fallback-only)",
+    "Kept DeepSeek reasoner as tiebreaker on disagreement",
+    "Loosened accept threshold: was 'every score >= 4', now 'at most one score can be 3, min floor 3'"
+  ],
+  "total_benchmark_entries": 64,
+  "decisions_clean": {
+    "accept": 1,
+    "revise": 18,
+    "reject": 41,
+    "pending_or_errored": 4
+  },
+  "confusion_matrix": {
+    "elite_real_good_total": 58,
+    "elite_real_good_accept": 1,
+    "elite_real_good_revise": 15,
+    "elite_real_good_reject": 38,
+    "elite_real_good_pending": 4,
+    "contested_total": 6,
+    "contested_revise": 3,
+    "contested_reject": 3
+  },
+  "headline_metrics": {
+    "elite_agreement_rate": 0.017,
+    "contested_revise_rate": 0.500
+  },
+  "comparison_to_baseline_2026-04-21": {
+    "elite_agreement_delta": "+1.7pp (0.0% -> 1.7%)",
+    "elite_reject_delta": "0pp (unchanged at 65.5%)",
+    "contested_revise_delta": "-16.7pp (66.7% -> 50.0%) — REGRESSION"
+  },
+  "interpretation": "Changes moved the needle only marginally on elite accept rate (+1 paper). The 38 hard rejects are UNCHANGED — they fail on verbosity-triggered boolean gates (overclaim, scope drift, partial claim support), not on rubric scores. Loosening the score threshold therefore does not unlock elite content. Root cause identified via direct DB comparison: MiniMax-drafted content is 3-5x longer per section than the benchmark-agent-N style that Researka accepts. The bottleneck is drafter output shape, not reviewer strictness.",
+  "diagnostic_finding": {
+    "minimax_drafted_avg_section_chars": {
+      "Research Question": 900, "Search Summary": 781, "Evidence Landscape": 811,
+      "Key Findings": 1011, "Limitations": 773, "Gaps Identified": 821, "Conclusion": 818
+    },
+    "accepted_benchmark_agent_avg_section_chars": {
+      "Research Question": 472, "Search Summary": 189, "Evidence Landscape": 241,
+      "Key Findings": 332, "Limitations": 172, "Gaps Identified": 160, "Conclusion": 303
+    },
+    "verbosity_ratio": "MiniMax writes 3-5x more text per section than the accepted style"
+  },
+  "next_validation_step": "Do NOT further loosen rubric — the panel is correctly calibrated. Instead, produce a terser MiniMax brief: cap sections at 300-500 chars each, strip ornamental prose, force bundle-tight claims. Re-run the 64-paper benchmark against that tighter draft. Expected result: elite accept rate jumps to 10-30% without any reviewer change."
+}

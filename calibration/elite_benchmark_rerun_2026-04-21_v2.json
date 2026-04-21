@@ -1,0 +1,450 @@
+[
+  {
+    "sid": "4be94251-f977-4b62-a2f8-c9e426dbd4ed",
+    "expected": "revise",
+    "cat": "contested",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "b80d79d2-32a9-4ada-80f9-4097e5196f27",
+    "expected": "revise",
+    "cat": "contested",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "4892f9a0-f9e2-4704-843b-00e3d4ec12cb",
+    "expected": "revise",
+    "cat": "contested",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "b080d786-ac29-4322-9a90-3af8fa21def3",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "158053b1-09fb-4fc0-bc09-2f196fdb89a3",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "5068d787-870c-4c78-b5fc-dc266919b49c",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "8ec8a614-ec37-46cc-9079-2d557c579811",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "accept",
+    "gates": []
+  },
+  {
+    "sid": "032a8b0b-4ab4-4039-ad92-7665f54bae25",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "d37a83f4-659e-4aa7-9ebf-fbf44169acda",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "5bd0f7e7-e089-4345-94d1-9485f339a7ff",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "dd575813-64e3-4f8b-ad99-a3fee66d5839",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "60e18ecc-3bad-4feb-b4e8-649c6acc645c",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "d3b7435b-c6b2-4fc3-831d-85cd1401a3b4",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "dcc50dc1-b635-40a5-8a06-306b37f6ce68",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "51605d53-c8e4-4b7c-92cd-b64b98cb3f74",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "6c8e3bd4-21ae-46e2-899e-6a50a2d53059",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "0327404e-3c0a-41c5-a94f-7b705895b552",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "b1b213c8-b1ac-4b35-8d8f-af28f153891e",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "1d1f7560-e7f5-4dfc-a5d3-718c07d3008d",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "dcfc9a9b-bec9-4d2a-8d8f-026533e3e866",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "7673a381-161f-4a4f-9179-ee6b92906395",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "572b4eda-77bb-4ff6-8c8f-63e05e7f067c",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "eda4f33c-dba6-4c1a-8735-d0119393dc45",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "pending",
+    "gates": []
+  },
+  {
+    "sid": "e3009115-221e-4272-aff5-a7be1a0467f9",
+    "expected": "revise",
+    "cat": "contested",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "c4988413-ca85-4acd-8aeb-21edf3b6cf30",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "0573320a-9b2f-4e8e-9969-b591c66683a3",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "45e26c2f-31ed-4a99-948a-512f1d711808",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "5cc62552-a976-4d75-be00-8bfd7e7b8a53",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "99ea2b2f-125a-45c0-b2fd-c9b5f02c27a0",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "f29d3eac-32e5-4cd9-9efa-9fa39a0db568",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "3db8c223-d782-4bca-a499-1625c441455c",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "05bb2a89-3b3a-483c-b4e5-40c3b46205bd",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "cbbd93f5-585c-4481-847f-6ff85a3dd516",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "8b88ff7a-9a8f-4f88-a1e4-c1cadd2aec41",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "9287cd8a-e0de-4646-b10a-df1afff74126",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "7ff663fc-7f52-4674-849b-d4709e59f4e2",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "7b9f1497-5283-496e-ba9f-e8e5cfdc3c2d",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "75749fa7-9b89-468b-be9d-ac27843d46ea",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "3099e1e7-edae-40b3-bbbd-f9337b758088",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "fc815c99-d794-425e-ba53-06b64483b569",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "fbb7a5dd-79b1-410a-ad4a-24622beb3172",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "e7df0147-3572-40e1-8e11-85393366238b",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "e3a62c87-d3de-408b-ae72-35ffc6feef5e",
+    "expected": "revise",
+    "cat": "contested",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "43db06ba-6dbd-44a8-bf90-b36ee241c7b2",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "a4db19f5-3e55-47d9-8d90-b47c0d492ae8",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "40fd0f41-6d56-4aee-85e5-e1702ffd53b5",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "da9ed50f-8f07-449d-9a2b-92ec58b7d138",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "1b523bae-5473-4686-8ecf-5f960426bfe0",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "ab698e19-594b-4f48-9770-3f62bbbccc03",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "c99ea9fb-6376-4269-88ab-ab77e684216e",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "a902a404-514d-4e29-bd38-786957f99215",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "deabbfda-79cd-427e-8486-1f47163e45a0",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "43cf82e9-cb1e-4fb4-8d3e-587b3f25aeaa",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "99b4e174-68c9-4087-9022-29bebab0606e",
+    "expected": "revise",
+    "cat": "contested",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "d957e135-f3a6-4c66-8980-35ea0400fd65",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "d6cf6fed-c179-4e43-8cdf-c89f931f3c57",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "31fad9de-1bc3-4847-8829-44c2b8bd3640",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "pending",
+    "gates": []
+  },
+  {
+    "sid": "0f13942c-12c1-4263-9ecd-eb2a4e066f0b",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "pending",
+    "gates": []
+  },
+  {
+    "sid": "8fafa5b3-fbcd-4e81-836a-3882d1f13465",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "a1177e96-4a31-4dde-96da-449650a3eab4",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "61153b88-33e5-47aa-bbcc-1cd5c4d9195a",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "fc1b1eec-3451-4bfc-9591-2537fd8a4fc9",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "pending",
+    "gates": []
+  },
+  {
+    "sid": "92211d40-f675-4b1b-a9fe-dfc3ef7dbb9b",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  },
+  {
+    "sid": "be5ae2ec-4a40-4a7d-ac03-0ad33cf55e54",
+    "expected": "accept",
+    "cat": "elite_real_good",
+    "actual": "reject",
+    "gates": []
+  }
+]
