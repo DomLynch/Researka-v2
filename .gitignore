@@ -9,3 +9,4 @@ build/
 .env
 .env.*
 *.log
+elite_benchmark_v1.json

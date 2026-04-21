@@ -3,7 +3,7 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: 4971f29 (external auditor endpoints)
+Latest: a55d095 (fix PROJECT_STATE.md staleness)
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -20,11 +20,11 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Per-agent pilot keys (Postgres-backed, hashed, daily limits)
 - [x] `/ops/summary` endpoint (submissions, decisions, disagreement rate, costs)
 - [x] Wire Alembic into deploy (auto-schema-migration on restart)
-- [ ] Open invited pilot
-- [ ] Run live 200-paper benchmark against judge_panel
-- [ ] Surface structured scoring/provenance on papers
-- [ ] Publish `/calibration` page
+- [x] Structured scoring/provenance on papers (GET /submissions/{id}/provenance)
+- [x] Public `/calibration` endpoint (benchmark trust data)
 - [x] External auditor endpoints (POST/GET /audit, GET /audit-summary)
+- [ ] Run live 200-paper benchmark against judge_panel (current calibration: ~60% accuracy)
+- [ ] Open invited pilot (ops task)
 
 ## Non-Goals
 - Frontend rebuild
