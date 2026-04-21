@@ -1,0 +1,84 @@
+[
+  {
+    "sid": "ee79992d-e224-48da-b7bc-7c5da16e1963",
+    "paper": "2025_20_antler_EV_bone_loss.pdf",
+    "journal": "Nature Aging",
+    "doi": "10.1038/s43587-025-00918-x",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "e4d088ca-4e66-41b5-9d37-cc5e25970969",
+    "paper": "2024_16_S6K1_inflammaging.pdf",
+    "journal": "Nature Aging",
+    "doi": "10.1038/s43587-024-00695-z",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "aab77c3f-562b-4bf8-90c6-20f71611f456",
+    "paper": "2025_37_ovarian_aging_multi_omics.pdf",
+    "journal": "Nature Aging",
+    "doi": "10.1038/s43587-024-00762-5",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "2feba025-8949-47dd-b462-75821d342dd0",
+    "paper": "2026_15_spontaneous_aging_killifish.pdf",
+    "journal": "Nature Aging",
+    "doi": "10.1038/s43587-026-01086-2",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "33433b44-5617-4d42-82ce-7adec8fe0039",
+    "paper": "2026_16_RhoA_HSC_rejuvenation.pdf",
+    "journal": "Nature Aging",
+    "doi": "10.1038/s43587-025-01014-w",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "f7d9138a-2647-43d8-863d-b23da728f53f",
+    "paper": "2026_03_anti_upar_cAR_t_cells.pdf",
+    "journal": "Nature Aging",
+    "doi": "10.1038/s43587-025-01022-w",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "dcd3657e-b2bc-409e-bf86-942bebc03fdb",
+    "paper": "2025_36_social_disadvantage.pdf",
+    "journal": "Nature Medicine",
+    "doi": "10.1038/s41591-025-03563-4",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "bf567489-9b74-41bd-ac89-c812b011a5a7",
+    "paper": "2024_17_SGLT2_senescent_cells.pdf",
+    "journal": "Nature Aging",
+    "doi": "10.1038/s43587-024-00642-y",
+    "actual": "reject",
+    "gates": [
+      "research_question_word_budget"
+    ]
+  },
+  {
+    "sid": "04917e40-b484-4a2d-bea7-605715f3c6db",
+    "paper": "2026_05_DNA_damage_macrophages.pdf",
+    "journal": "Nature Aging",
+    "doi": "10.1038/s43587-025-01053-3",
+    "actual": "revise",
+    "gates": []
+  },
+  {
+    "sid": "14d59aef-ae05-4a16-b916-77faca565c82",
+    "paper": "2026_33_treatment_resistance_platinum.pdf",
+    "journal": "Nature Aging",
+    "doi": "10.1038/s43587-025-01054-2",
+    "actual": "revise",
+    "gates": []
+  }
+]

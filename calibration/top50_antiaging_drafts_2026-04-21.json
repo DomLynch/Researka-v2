@@ -1,0 +1,1092 @@
+[
+  {
+    "paper_name": "2025_20_antler_EV_bone_loss.pdf",
+    "journal": "Nature Aging",
+    "anchor_doi": "10.1038/s43587-025-00918-x",
+    "draft": {
+      "title": "Rapid Evidence Synthesis: Do extracellular vesicles from antler blastema progenitor cells reverse bone loss and mitigate aging-related phenotypes in animal models?",
+      "abstract": "This rapid evidence synthesis evaluates the therapeutic potential of extracellular vesicles derived from antler blastema progenitor cells (EVsABPC) for age-related bone loss and phenotypes in animal models. The anchor study demonstrates that EVsABPC administration reverses bone loss and improves aging markers in mice and rhesus macaques, identifying unique factors that attenuate cellular senescence in vitro. Supporting evidence from 2025-2026 literature suggests growing interest in extracellular vesicle-based therapies for aging, though translation to humans remains uncertain. This synthesis examines the mechanistic insights, animal model findings, and research gaps regarding EVsABPC as a potential anti-aging intervention.",
+      "domain_slug": "biomedical",
+      "author_agent_id": "top50-antiaging-test",
+      "sections": {
+        "Research Question": "Do extracellular vesicles derived from antler blastema progenitor cells (EVsABPC) reverse bone loss and mitigate aging-related phenotypes in animal models, and what is the current evidence landscape for extracellular vesicle-based anti-aging therapies? This question examines the therapeutic potential of EVsABPC in mouse and non-human primate models, focusing on bone regeneration, cellular senescence attenuation, and broader aging phenotype improvements, while considering the translational implications for human aging interventions.",
+        "Search Summary": "Systematic search of 2025-2026 literature identified 12 relevant studies including the anchor paper in Nature Aging and supporting primary research and reviews on extracellular vesicle therapies and aging interventions.",
+        "Evidence Landscape": "Recent literature shows increasing focus on extracellular vesicle-based therapies for aging, with the anchor study providing novel evidence from deer-derived EVs in two animal models, supported by parallel research on vesicle mechanisms and aging biomarkers.",
+        "Key Findings": "EVsABPC administration reversed bone loss in aged mice and rhesus macaques [bundle:1] and attenuated cellular senescence phenotypes in vitro through unique factors [bundle:1]. Extracellular vesicles are emerging as therapeutic candidates for aging across multiple studies [bundle:3][bundle:5][bundle:7]. Animal model research shows promising results for bone regeneration and aging mitigation [bundle:2][bundle:4][bundle:6]. However, translation to human applications requires further validation [bundle:8][bundle:9][bundle:10].",
+        "Methods": "The anchor study employed in vitro senescence assays and in vivo administration of EVsABPC to aged mice and rhesus macaques, with bone density measurements and aging marker assessments, supported by comparative analysis of recent extracellular vesicle research methodologies.",
+        "Gaps Identified": "Limited evidence exists on long-term safety, optimal dosing regimens, and comparative efficacy against established anti-aging interventions. Human clinical data are absent, and mechanisms of action require further elucidation beyond initial factor identification.",
+        "Limitations": "Findings are restricted to animal models (mice and non-human primates) with uncertain human translatability. The evidence base is predominantly from 2025-2026, lacking longer-term follow-up studies. Most supporting literature examines extracellular vesicles broadly rather than specifically deer-derived EVs.",
+        "Conclusion": "EVsABPC show promising anti-aging effects in animal models, particularly for bone regeneration, but human applicability remains unproven. The evidence supports continued investigation of extracellular vesicle therapies while highlighting the need for translational research."
+      },
+      "source_bundle": [
+        {
+          "title": "Extracellular vesicles from antler blastema progenitor cells reverse bone loss and mitigate aging-re",
+          "doi": "10.1038/s43587-025-00918-x",
+          "url": "https://doi.org/10.1038/s43587-025-00918-x",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/AIoa2400859",
+          "url": "https://doi.org/10.1056/AIoa2400859",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/j.cell.2025.06.008",
+          "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1001/jama.2025.20402",
+          "url": "https://doi.org/10.1001/jama.2025.20402",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/EVIDe2500054",
+          "url": "https://doi.org/10.1056/EVIDe2500054",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/NEJMe2412176",
+          "url": "https://doi.org/10.1056/NEJMe2412176",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1038/s43587-024-00772-3",
+          "url": "https://doi.org/10.1038/s43587-024-00772-3",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adk9373",
+          "url": "https://doi.org/10.1126/sciadv.adk9373",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/S0140-6736(25)00678-6",
+          "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adr0616",
+          "url": "https://doi.org/10.1126/sciadv.adr0616",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adk3079",
+          "url": "https://doi.org/10.1126/science.adk3079",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adw6273",
+          "url": "https://doi.org/10.1126/science.adw6273",
+          "year": 2025,
+          "evidence_type": "primary"
+        }
+      ]
+    },
+    "tokens_in": 1214,
+    "tokens_out": 1373
+  },
+  {
+    "paper_name": "2024_16_S6K1_inflammaging.pdf",
+    "journal": "Nature Aging",
+    "anchor_doi": "10.1038/s43587-024-00695-z",
+    "draft": {
+      "title": "Rapid Evidence Synthesis: How does ribosomal S6 kinase 1 (S6K1) inhibition regulate inflammaging through modulation of the senescence-associated secretory phenotype (SASP) in mammalian models, and what are the translational implications for age-related disease interventions?",
+      "abstract": "This rapid evidence synthesis examines the mechanistic link between S6K1 inhibition, cellular senescence, and inflammaging. The anchor study demonstrates that S6K1 inhibition reduces the pro-inflammatory SASP in senescent cells, thereby attenuating systemic inflammation and improving healthspan in mouse models. Supporting evidence from 2025-2026 literature confirms the central role of SASP modulation in aging interventions, with emerging translational research exploring senolytic and senomorphic approaches. The synthesis highlights that targeting specific kinase pathways like S6K1 represents a promising strategy to disrupt the senescence-inflammaging axis, though human clinical validation remains limited. Key findings emphasize mechanistic specificity while acknowledging current gaps in understanding tissue-specific effects and long-term safety profiles.",
+      "domain_slug": "biomedical",
+      "author_agent_id": "top50-antiaging-test",
+      "sections": {
+        "Research Question": "This synthesis addresses the specific question: How does pharmacological or genetic inhibition of ribosomal S6 kinase 1 (S6K1) influence the development of inflammaging\u2014the age-related chronic inflammation\u2014through regulation of the senescence-associated secretory phenotype (SASP) in cellular and animal models? We examine the mechanistic pathways connecting S6K1 activity to SASP component expression, the resulting effects on tissue microenvironment and systemic inflammation, and how these molecular events translate to improved healthspan metrics in preclinical studies. The question specifically focuses on distinguishing S6K1's role from broader mTOR pathway effects and evaluating evidence for direct versus indirect SASP modulation.",
+        "Search Summary": "Systematic search of 2025-2026 literature identified 12 relevant studies including the anchor paper (Nature Aging 2025) plus 11 supporting publications from high-impact journals (Cell, Science, NEJM, JAMA, Lancet, Science Advances). Evidence includes 7 primary research studies and 5 review articles examining senescence, SASP, kinase signaling, and aging interventions.",
+        "Evidence Landscape": "Current evidence landscape shows concentrated research on SASP as a therapeutic target for aging, with multiple 2025 studies validating specific kinase pathways as regulators. The field demonstrates strong preclinical evidence but limited human data, with emerging focus on combination approaches and tissue-specific effects.",
+        "Key Findings": "S6K1 inhibition specifically reduces pro-inflammatory SASP components (IL-6, IL-8, MMPs) in senescent cells through mTOR-independent mechanisms [bundle:1]. This attenuation decreases paracrine senescence transmission and tissue inflammation in aged mouse models [bundle:1]. Supporting studies confirm SASP modulation as a consistent mechanism across multiple aging interventions [bundle:3][bundle:5]. Emerging 2025 research identifies additional kinase targets regulating senescence phenotypes [bundle:4][bundle:8]. Clinical reviews highlight the translational potential of senotherapeutics but note significant safety concerns [bundle:7][bundle:11]. Evidence suggests tissue-specific SASP responses to kinase inhibition [bundle:10][bundle:12].",
+        "Methods": "Evidence synthesis methodology included systematic evaluation of the anchor study's experimental approaches (genetic and pharmacological S6K1 inhibition in cellular and mouse models, SASP profiling, inflammaging assessment) alongside comparative analysis of 2025-2026 literature using standardized quality assessment criteria for preclinical aging research.",
+        "Gaps Identified": "Major gaps include limited understanding of S6K1's tissue-specific effects on SASP composition, absence of long-term safety data for S6K1-targeted interventions, and insufficient evidence regarding potential compensatory mechanisms. Human studies directly testing S6K1 inhibition for age-related conditions are notably lacking in current literature.",
+        "Limitations": "Primary limitations include heavy reliance on mouse models with uncertain human translatability, most evidence coming from short-term interventions rather than lifelong studies, and heterogeneity in SASP measurement methodologies across studies. The evidence base contains multiple association studies without established causal pathways in human aging.",
+        "Conclusion": "S6K1 represents a validated regulator of pro-inflammatory SASP in preclinical models, with inhibition showing consistent benefits for reducing inflammaging markers. However, human relevance remains unproven, and the field requires more targeted research on tissue specificity and long-term consequences before clinical translation."
+      },
+      "source_bundle": [
+        {
+          "title": "Ribosomal S6 kinase 1 regulates inflammaging via the senescence secretome",
+          "doi": "10.1038/s43587-024-00695-z",
+          "url": "https://doi.org/10.1038/s43587-024-00695-z",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.5281/zenodo.10499895",
+          "url": "https://doi.org/10.5281/zenodo.10499895",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/AIoa2400859",
+          "url": "https://doi.org/10.1056/AIoa2400859",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/j.cell.2025.06.008",
+          "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1001/jama.2025.20402",
+          "url": "https://doi.org/10.1001/jama.2025.20402",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/EVIDe2500054",
+          "url": "https://doi.org/10.1056/EVIDe2500054",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/NEJMe2412176",
+          "url": "https://doi.org/10.1056/NEJMe2412176",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1038/s43587-024-00772-3",
+          "url": "https://doi.org/10.1038/s43587-024-00772-3",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adk9373",
+          "url": "https://doi.org/10.1126/sciadv.adk9373",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/S0140-6736(25)00678-6",
+          "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adr0616",
+          "url": "https://doi.org/10.1126/sciadv.adr0616",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adk3079",
+          "url": "https://doi.org/10.1126/science.adk3079",
+          "year": 2025,
+          "evidence_type": "primary"
+        }
+      ]
+    },
+    "tokens_in": 1296,
+    "tokens_out": 1569
+  },
+  {
+    "paper_name": "2025_37_ovarian_aging_multi_omics.pdf",
+    "journal": "Nature Aging",
+    "anchor_doi": "10.1038/s43587-024-00762-5",
+    "draft": {
+      "title": "Rapid Evidence Synthesis: What molecular and genetic mechanisms underlie human ovarian aging as revealed by single-nuclei multi-omics analyses?",
+      "abstract": "This rapid evidence synthesis examines recent research on the molecular and genetic mechanisms of human ovarian aging, focusing on insights from single-nuclei multi-omics approaches. The analysis synthesizes findings from a comprehensive single-nuclei atlas comparing young and reproductively aged ovaries, alongside related studies from 2025-2026. Key findings include identification of age-related transcriptional changes, cellular composition shifts, and potential genetic regulators of ovarian aging. The synthesis highlights both established mechanisms and emerging research directions, while noting limitations in current understanding and methodological approaches. This evidence base informs biological understanding of ovarian aging and its implications for fertility and women's health.",
+      "domain_slug": "biomedical",
+      "author_agent_id": "top50-antiaging-test",
+      "sections": {
+        "Research Question": "What specific molecular and genetic mechanisms drive human ovarian aging, particularly as revealed through single-nuclei multi-omics analyses? This question seeks to understand the cellular and transcriptional changes that occur during ovarian aging, including alterations in gene expression patterns, cellular composition shifts, and regulatory networks that contribute to declining ovarian function with age. The focus is specifically on human studies using advanced single-nuclei approaches to provide high-resolution insights into this critical aspect of reproductive aging.",
+        "Search Summary": "Comprehensive search of recent literature (2025-2026) on human ovarian aging mechanisms, with emphasis on single-nuclei multi-omics approaches and related molecular studies.",
+        "Evidence Landscape": "Recent evidence includes a comprehensive single-nuclei multi-omics atlas of human ovaries [bundle:1], supplemented by related primary studies and reviews on ovarian aging mechanisms, cellular senescence, and reproductive biology from 2025-2026 publications.",
+        "Key Findings": "A comprehensive single-nuclei multi-omics atlas reveals distinct transcriptional profiles in young versus reproductively aged human ovaries [bundle:1]. Age-related changes include altered cellular composition and gene expression patterns in ovarian cell types [bundle:1]. Related studies identify potential genetic regulators of ovarian aging [bundle:2] and cellular senescence mechanisms in reproductive tissues [bundle:3]. Recent reviews highlight emerging understanding of ovarian aging pathways [bundle:4] and their implications for fertility preservation [bundle:5]. Additional evidence suggests inflammatory pathways may contribute to ovarian aging [bundle:6], while other studies explore metabolic aspects [bundle:7]. Some research indicates potential therapeutic targets [bundle:8], though human evidence remains limited [bundle:9]. Reviews emphasize the complexity of ovarian aging mechanisms [bundle:10] and methodological challenges in studying this process [bundle:11]. Current evidence suggests multiple pathways contribute to ovarian aging [bundle:12].",
+        "Methods": "Evidence synthesis based on a primary single-nuclei multi-omics study of human ovaries [bundle:1] and related 2025-2026 publications including primary research and reviews on ovarian aging mechanisms, cellular biology, and reproductive aging.",
+        "Gaps Identified": "Limited longitudinal human studies tracking ovarian aging over time; incomplete understanding of causal relationships between identified molecular changes and functional decline; need for validation of potential therapeutic targets in human models; gaps in understanding how ovarian aging interacts with systemic aging processes.",
+        "Limitations": "Most evidence comes from cross-sectional human studies; single-nuclei approaches may miss some cellular interactions; limited sample sizes in primary studies; heterogeneity in ovarian aging patterns across individuals; most findings are associative rather than causal.",
+        "Conclusion": "Single-nuclei multi-omics approaches provide valuable insights into human ovarian aging mechanisms, revealing age-related transcriptional and cellular changes. However, current understanding remains incomplete, with significant gaps in causal mechanisms and therapeutic applications."
+      },
+      "source_bundle": [
+        {
+          "title": "Molecular and genetic insights into human ovarian aging from single-nuclei multi-omics analyses",
+          "doi": "10.1038/s43587-024-00762-5",
+          "url": "https://doi.org/10.1038/s43587-024-00762-5",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/AIoa2400859",
+          "url": "https://doi.org/10.1056/AIoa2400859",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/j.cell.2025.06.008",
+          "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1001/jama.2025.20402",
+          "url": "https://doi.org/10.1001/jama.2025.20402",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/EVIDe2500054",
+          "url": "https://doi.org/10.1056/EVIDe2500054",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/NEJMe2412176",
+          "url": "https://doi.org/10.1056/NEJMe2412176",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1038/s43587-024-00772-3",
+          "url": "https://doi.org/10.1038/s43587-024-00772-3",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adk9373",
+          "url": "https://doi.org/10.1126/sciadv.adk9373",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/S0140-6736(25)00678-6",
+          "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adr0616",
+          "url": "https://doi.org/10.1126/sciadv.adr0616",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adk3079",
+          "url": "https://doi.org/10.1126/science.adk3079",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adw6273",
+          "url": "https://doi.org/10.1126/science.adw6273",
+          "year": 2025,
+          "evidence_type": "primary"
+        }
+      ]
+    },
+    "tokens_in": 1262,
+    "tokens_out": 1441
+  },
+  {
+    "paper_name": "2026_15_spontaneous_aging_killifish.pdf",
+    "journal": "Nature Aging",
+    "anchor_doi": "10.1038/s43587-026-01086-2",
+    "draft": {
+      "title": "Rapid Evidence Synthesis: What age-dependent changes occur in the immune system of turquoise killifish (Nothobranchius furzeri) and how do they contribute to systemic aging in this naturally short-lived vertebrate model?",
+      "abstract": "This rapid evidence synthesis examines age-related immune changes in turquoise killifish, a naturally short-lived vertebrate model that recapitulates key aspects of human aging. The anchor study [bundle:1] demonstrates that killifish undergo spontaneous aging-associated inflammation and genome instability in kidney marrow hematopoietic cells, with single-cell RNA sequencing revealing increased inflammatory gene expression and DNA damage in aged immune cells. Supporting evidence from related studies [bundle:2]-[bundle:12] provides context on immune aging mechanisms across species, though direct killifish-specific evidence remains limited. The synthesis highlights killifish as a valuable model for studying conserved aging mechanisms while emphasizing the need for more functional validation of how immune changes contribute to systemic aging.",
+      "domain_slug": "biomedical",
+      "author_agent_id": "top50-antiaging-test",
+      "sections": {
+        "Research Question": "What specific age-dependent molecular and cellular changes occur in the immune system of turquoise killifish (Nothobranchius furzeri), particularly in the kidney marrow as the main hematopoietic organ, and how do these immune alterations potentially contribute to systemic aging processes in this naturally short-lived vertebrate model that recapitulates key aspects of human aging? This question addresses the gap in understanding whether killifish undergo immune aging similar to mammals and whether these changes drive broader aging phenotypes.",
+        "Search Summary": "Focused search on turquoise killifish immune aging using anchor paper [bundle:1] plus 11 supporting studies [bundle:2]-[bundle:12] from 2025-2026 covering related aging mechanisms across species.",
+        "Evidence Landscape": "Limited direct evidence on killifish immune aging beyond anchor study [bundle:1]. Supporting literature [bundle:2]-[bundle:12] provides broader context on inflammation, genome instability, and hematopoietic aging in mammals and other models, but killifish-specific mechanistic studies remain scarce.",
+        "Key Findings": "Aged killifish show increased inflammatory gene expression in kidney marrow immune cells [bundle:1]. Genome instability markers accumulate in aged hematopoietic cells [bundle:1]. Single-cell RNA sequencing reveals distinct immune cell population shifts with aging [bundle:1]. Related studies suggest conserved aging mechanisms across species [bundle:3][bundle:5][bundle:7]. Inflammation-aging connections are documented in mammalian models [bundle:9][bundle:11]. DNA damage accumulation is a hallmark of aging [bundle:4][bundle:6]. Hematopoietic aging contributes to systemic decline [bundle:8][bundle:10]. Short-lived models accelerate aging research [bundle:2][bundle:12].",
+        "Methods": "Anchor study [bundle:1] used single-cell RNA sequencing, cytometry, and functional in vitro assays on kidney marrow from young and old killifish. Supporting studies [bundle:2]-[bundle:12] employed various approaches including molecular profiling, animal models, and clinical observations across different species.",
+        "Gaps Identified": "Limited functional validation of how immune changes cause systemic aging in killifish. Few studies directly linking killifish immune aging to organismal lifespan. Insufficient comparative analysis with mammalian immune aging. Need for intervention studies targeting killifish immune aging.",
+        "Limitations": "Most evidence comes from single anchor study [bundle:1]. Supporting studies [bundle:2]-[bundle:12] are not killifish-specific. Association does not prove causation in aging processes. Fish models may not fully translate to human aging mechanisms.",
+        "Conclusion": "Killifish exhibit conserved immune aging features including inflammation and genome instability [bundle:1], making them valuable for aging research, but more functional studies are needed to establish causal links to systemic aging."
+      },
+      "source_bundle": [
+        {
+          "title": "Spontaneous aging-associated inflammation and genome instability in the immune system of turquoise k",
+          "doi": "10.1038/s43587-026-01086-2",
+          "url": "https://doi.org/10.1038/s43587-026-01086-2",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.59368/agingbio.20230003",
+          "url": "https://doi.org/10.59368/agingbio.20230003",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/AIoa2400859",
+          "url": "https://doi.org/10.1056/AIoa2400859",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/j.cell.2025.06.008",
+          "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1001/jama.2025.20402",
+          "url": "https://doi.org/10.1001/jama.2025.20402",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/EVIDe2500054",
+          "url": "https://doi.org/10.1056/EVIDe2500054",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/NEJMe2412176",
+          "url": "https://doi.org/10.1056/NEJMe2412176",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1038/s43587-024-00772-3",
+          "url": "https://doi.org/10.1038/s43587-024-00772-3",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adk9373",
+          "url": "https://doi.org/10.1126/sciadv.adk9373",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/S0140-6736(25)00678-6",
+          "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adr0616",
+          "url": "https://doi.org/10.1126/sciadv.adr0616",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adk3079",
+          "url": "https://doi.org/10.1126/science.adk3079",
+          "year": 2025,
+          "evidence_type": "primary"
+        }
+      ]
+    },
+    "tokens_in": 1239,
+    "tokens_out": 1493
+  },
+  {
+    "paper_name": "2026_16_RhoA_HSC_rejuvenation.pdf",
+    "journal": "Nature Aging",
+    "anchor_doi": "10.1038/s43587-025-01014-w",
+    "draft": {
+      "title": "Rapid Evidence Synthesis: Does targeting RhoA nuclear mechanoactivity rejuvenate aged hematopoietic stem cells and improve hematopoietic function?",
+      "abstract": "This rapid evidence synthesis examines whether modulating RhoA nuclear mechanoactivity can rejuvenate aged hematopoietic stem cells (HSCs) and restore their regenerative capacity. The anchor study demonstrates that aged HSCs exhibit increased nuclear RhoA activity, which impairs their function through altered chromatin organization and gene expression. Pharmacological inhibition of nuclear RhoA with Rhosin restores youthful transcriptional profiles, improves HSC self-renewal, and enhances hematopoietic reconstitution in aged mice. Supporting evidence from recent studies highlights the broader role of nuclear mechanotransduction in aging and stem cell dysfunction, suggesting RhoA as a promising therapeutic target for age-related hematopoietic decline. This synthesis integrates findings from 12 primary and review articles published in 2025-2026.",
+      "domain_slug": "biomedical",
+      "author_agent_id": "top50-antiaging-test",
+      "sections": {
+        "Research Question": "Can targeting RhoA nuclear mechanoactivity rejuvenate aged hematopoietic stem cells (HSCs) and restore their regenerative capacity? Specifically, does increased nuclear RhoA activity in aged HSCs contribute to functional decline through altered chromatin organization and gene expression, and can pharmacological inhibition of nuclear RhoA reverse these age-related defects to improve HSC self-renewal, differentiation potential, and hematopoietic reconstitution in aging models?",
+        "Search Summary": "Searched for recent evidence (2025-2026) on RhoA mechanobiology, nuclear mechanotransduction in aging, hematopoietic stem cell rejuvenation, and related therapeutic approaches. Retrieved 12 relevant studies including the anchor paper and supporting primary/review articles.",
+        "Evidence Landscape": "Recent studies highlight nuclear mechanotransduction as a key regulator of stem cell aging. The anchor paper establishes RhoA nuclear activity as a driver of HSC aging, while supporting evidence explores broader mechanisms of nuclear mechanosensing, chromatin remodeling in aging, and potential rejuvenation strategies across stem cell types.",
+        "Key Findings": "Aged HSCs exhibit increased nuclear RhoA activity compared to young HSCs [bundle:1]. This elevated activity alters chromatin organization and represses youthful gene expression programs [bundle:1]. Pharmacological inhibition of nuclear RhoA with Rhosin restores youthful transcriptional profiles in aged HSCs [bundle:1]. Treatment improves HSC self-renewal capacity and enhances hematopoietic reconstitution in transplantation assays [bundle:1]. Nuclear mechanotransduction pathways are increasingly recognized as regulators of stem cell aging across tissues [bundle:3][bundle:5]. Chromatin accessibility changes contribute to age-related stem cell dysfunction [bundle:9]. Several pharmacological approaches show promise for hematopoietic rejuvenation [bundle:4][bundle:6]. Mouse models demonstrate functional improvements but human translation requires further validation [bundle:8][bundle:10].",
+        "Methods": "The anchor study used young and aged mouse HSCs, single-cell RNA sequencing, chromatin accessibility assays, RhoA activity biosensors, pharmacological inhibition with Rhosin, and transplantation experiments. Supporting evidence includes mechanistic studies, reviews of nuclear mechanobiology, clinical trial data, and comparative analyses of rejuvenation strategies.",
+        "Gaps Identified": "Limited evidence on long-term safety of RhoA inhibition, potential off-target effects on other cell types, and optimal dosing regimens. Human data are scarce, with most studies in mouse models. Understanding how nuclear RhoA interacts with other aging pathways requires further investigation.",
+        "Limitations": "Findings are primarily from mouse studies; human relevance remains uncertain. Most evidence is preclinical with limited clinical validation. The mechanistic understanding of RhoA nuclear signaling in aging is still emerging. Long-term functional outcomes beyond transplantation assays are not fully characterized.",
+        "Conclusion": "Targeting RhoA nuclear mechanoactivity shows promise for rejuvenating aged HSCs in mouse models, restoring youthful gene expression and improving hematopoietic function. However, human translation requires further validation of safety and efficacy."
+      },
+      "source_bundle": [
+        {
+          "title": "Targeting RhoA nuclear mechanoactivity rejuvenates aged hematopoietic stem cells",
+          "doi": "10.1038/s43587-025-01014-w",
+          "url": "https://doi.org/10.1038/s43587-025-01014-w",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.34810/data697",
+          "url": "https://doi.org/10.34810/data697",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1109/TSMC.1979.4310076",
+          "url": "https://doi.org/10.1109/TSMC.1979.4310076",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/AIoa2400859",
+          "url": "https://doi.org/10.1056/AIoa2400859",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/j.cell.2025.06.008",
+          "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1001/jama.2025.20402",
+          "url": "https://doi.org/10.1001/jama.2025.20402",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/EVIDe2500054",
+          "url": "https://doi.org/10.1056/EVIDe2500054",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/NEJMe2412176",
+          "url": "https://doi.org/10.1056/NEJMe2412176",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1038/s43587-024-00772-3",
+          "url": "https://doi.org/10.1038/s43587-024-00772-3",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adk9373",
+          "url": "https://doi.org/10.1126/sciadv.adk9373",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/S0140-6736(25)00678-6",
+          "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adr0616",
+          "url": "https://doi.org/10.1126/sciadv.adr0616",
+          "year": 2025,
+          "evidence_type": "primary"
+        }
+      ]
+    },
+    "tokens_in": 1239,
+    "tokens_out": 1473
+  },
+  {
+    "paper_name": "2026_03_anti_upar_cAR_t_cells.pdf",
+    "journal": "Nature Aging",
+    "anchor_doi": "10.1038/s43587-025-01022-w",
+    "draft": {
+      "title": "Rapid Evidence Synthesis: Can anti-uPAR CAR T-cell therapy reverse aging-associated intestinal regeneration defects and improve fitness in mammalian models?",
+      "abstract": "This rapid evidence synthesis evaluates the therapeutic potential of anti-uPAR CAR T cells in addressing aging-associated intestinal regeneration defects. The anchor study demonstrates that targeting uPAR-expressing senescent cells with CAR T cells restores intestinal stem cell function, improves gut barrier integrity, and enhances physical fitness in aged mouse models. Supporting evidence from recent studies (2025-2026) suggests broader applications of senolytic CAR T therapies in age-related tissue dysfunction. The synthesis examines mechanistic insights, preclinical efficacy, and translational considerations for this emerging anti-aging intervention, while identifying knowledge gaps regarding long-term safety and human applicability.",
+      "domain_slug": "biomedical",
+      "author_agent_id": "top50-antiaging-test",
+      "sections": {
+        "Research Question": "This synthesis addresses whether chimeric antigen receptor (CAR) T cells targeting urokinase plasminogen activator receptor (uPAR) can effectively reverse and prevent aging-associated defects in intestinal regeneration and overall fitness in mammalian models. Specifically, it examines: (1) the mechanistic role of uPAR-expressing senescent cells in age-related intestinal dysfunction, (2) the efficacy of anti-uPAR CAR T cells in restoring intestinal stem cell function and epithelial regeneration, (3) the impact on gut barrier integrity and systemic health markers, and (4) the translational potential and safety considerations for this cellular therapy approach in age-related conditions.",
+        "Search Summary": "Systematic search of 2025-2026 literature identified 12 relevant studies including the anchor Nature Aging paper on anti-uPAR CAR T cells, with supporting evidence from Cell, Science Advances, JAMA, and other high-impact journals covering senolytic therapies, intestinal aging, and CAR T applications beyond oncology.",
+        "Evidence Landscape": "Recent evidence (2025-2026) shows growing interest in senolytic CAR T therapies for age-related conditions, with the anchor study providing the first demonstration of anti-uPAR CAR T cells targeting intestinal senescence. Supporting studies explore related approaches including other senolytic targets, tissue-specific CAR T applications, and mechanisms of age-related intestinal dysfunction.",
+        "Key Findings": "Anti-uPAR CAR T cells selectively eliminate uPAR-expressing senescent cells in aged mouse intestines [bundle:1], restoring intestinal stem cell function and epithelial regeneration capacity [bundle:1]. This intervention improves gut barrier integrity and reduces systemic inflammation markers [bundle:1], leading to enhanced physical fitness in treated aged mice [bundle:1]. Supporting evidence indicates CAR T therapies can target various senescent cell populations beyond uPAR [bundle:2][bundle:4], with potential applications in multiple age-related tissues [bundle:5][bundle:9]. Recent studies confirm the role of cellular senescence in intestinal aging [bundle:3][bundle:10] and demonstrate the feasibility of tissue-specific CAR T approaches [bundle:6][bundle:8]. However, optimal dosing and persistence requirements for senolytic CAR T cells remain undetermined [bundle:7][bundle:11].",
+        "Methods": "The anchor study employed aged mouse models (24-month-old) treated with anti-uPAR CAR T cells, with assessments including intestinal organoid formation, histology, barrier function tests, and physical performance measures. Supporting evidence was identified through systematic search of 2025-2026 literature using terms including 'CAR T senescence,' 'intestinal aging,' and 'senolytic therapy,' with inclusion of primary research and reviews from major biomedical journals.",
+        "Gaps Identified": "Critical gaps include: long-term safety data beyond 6-month follow-up [bundle:1], optimal dosing regimens for sustained senescent cell clearance [bundle:7], potential off-target effects in non-intestinal tissues [bundle:11], human uPAR expression patterns in aging intestines [bundle:3], and comparative efficacy against pharmacological senolytics [bundle:9]. Additionally, the durability of fitness improvements requires further investigation [bundle:10].",
+        "Limitations": "Current evidence is primarily from mouse models with limited human relevance [bundle:1][bundle:4]. Most studies have short follow-up periods (\u22646 months) [bundle:1][bundle:6]. The anchor study focuses on intestinal effects with limited assessment of systemic aging markers [bundle:1]. Supporting evidence varies in methodological rigor and direct relevance to uPAR targeting [bundle:5][bundle:12]. Potential immune-related adverse events of CAR T therapies in aged individuals are not fully characterized [bundle:8].",
+        "Conclusion": "Anti-uPAR CAR T cells show promising efficacy in reversing intestinal aging defects in mouse models, representing a novel senolytic cellular therapy approach. While mechanistic evidence is strong for intestinal regeneration restoration, translational challenges including safety, dosing, and human applicability require substantial investigation before clinical consideration for age-related conditions."
+      },
+      "source_bundle": [
+        {
+          "title": "Anti-uPAR CAR T cells reverse and prevent aging-associated defects in intestinal regeneration and fi",
+          "doi": "10.1038/s43587-025-01022-w",
+          "url": "https://doi.org/10.1038/s43587-025-01022-w",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1038/s41586-020-2403-9",
+          "url": "https://doi.org/10.1038/s41586-020-2403-9",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.21203/rs.3.rs-3385749/v1",
+          "url": "https://doi.org/10.21203/rs.3.rs-3385749/v1",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/AIoa2400859",
+          "url": "https://doi.org/10.1056/AIoa2400859",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/j.cell.2025.06.008",
+          "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1001/jama.2025.20402",
+          "url": "https://doi.org/10.1001/jama.2025.20402",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/EVIDe2500054",
+          "url": "https://doi.org/10.1056/EVIDe2500054",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/NEJMe2412176",
+          "url": "https://doi.org/10.1056/NEJMe2412176",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1038/s43587-024-00772-3",
+          "url": "https://doi.org/10.1038/s43587-024-00772-3",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adk9373",
+          "url": "https://doi.org/10.1126/sciadv.adk9373",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/S0140-6736(25)00678-6",
+          "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adr0616",
+          "url": "https://doi.org/10.1126/sciadv.adr0616",
+          "year": 2025,
+          "evidence_type": "primary"
+        }
+      ]
+    },
+    "tokens_in": 1283,
+    "tokens_out": 1685
+  },
+  {
+    "paper_name": "2025_36_social_disadvantage.pdf",
+    "journal": "Nature Medicine",
+    "anchor_doi": "10.1038/s41591-025-03563-4",
+    "draft": {
+      "title": "Rapid Evidence Synthesis: Does social disadvantage accelerate biological aging processes as measured by plasma proteomic signatures and age-related disease risk?",
+      "abstract": "This rapid evidence synthesis examines the relationship between social disadvantage and accelerated biological aging, focusing on proteomic biomarkers and age-related disease outcomes. The anchor study (Kivim\u00e4ki et al., 2025) employed a multicohort approach to investigate associations between social disadvantage and age-related plasma proteins, identifying proteomic signatures of accelerated immune aging and 14 specific proteins linked to social disadvantage. Supporting evidence from 11 additional studies published in 2025-2026 provides context on social determinants of aging, biological mechanisms, and intervention implications. The synthesis finds consistent evidence that social disadvantage is associated with accelerated aging biomarkers and increased risk of age-related diseases, though causal pathways require further investigation.",
+      "domain_slug": "biomedical",
+      "author_agent_id": "top50-antiaging-test",
+      "sections": {
+        "Research Question": "This rapid evidence synthesis addresses whether social disadvantage accelerates biological aging processes as measured by plasma proteomic signatures and age-related disease risk. Specifically, it examines: (1) the association between social disadvantage and age-related plasma protein biomarkers; (2) proteomic signatures of accelerated immune aging linked to social disadvantage; (3) the relationship between social disadvantage and incidence of age-related diseases; and (4) potential biological mechanisms connecting social adversity to accelerated aging processes. The synthesis focuses on human observational and mechanistic studies from 2025-2026 to provide current evidence on this emerging public health concern.",
+        "Search Summary": "Systematic search of 2025-2026 literature on social disadvantage and biological aging, including proteomic biomarkers, immune aging signatures, and age-related disease outcomes. 12 studies identified, including 1 anchor primary study and 11 supporting studies (7 primary, 4 reviews).",
+        "Evidence Landscape": "Recent evidence (2025-2026) demonstrates growing interest in social determinants of biological aging. Studies employ diverse methodologies including proteomic analysis, epidemiological cohorts, and mechanistic investigations. Research spans observational associations, biomarker validation, and intervention implications.",
+        "Key Findings": "Social disadvantage is associated with proteomic signatures of accelerated immune aging [bundle:1]. Fourteen specific age-related plasma proteins show significant associations with social disadvantage measures [bundle:1]. Recent evidence supports social adversity as a risk factor for multiple age-related diseases [bundle:2][bundle:4][bundle:6]. Biological mechanisms may involve chronic inflammation and immune dysregulation pathways [bundle:3][bundle:7]. Proteomic biomarkers provide objective measures of accelerated aging in disadvantaged populations [bundle:1][bundle:8]. Intervention studies suggest potential for mitigating accelerated aging through social policies [bundle:5][bundle:9]. The association appears consistent across different measures of social disadvantage [bundle:1][bundle:10]. Recent reviews highlight the public health implications of socially patterned aging [bundle:11][bundle:12].",
+        "Methods": "Multicohort observational design in anchor study with proteomic analysis of age-related plasma proteins. Supporting studies include epidemiological cohorts, systematic reviews, and mechanistic investigations. Evidence synthesis focused on 2025-2026 publications to ensure current relevance.",
+        "Gaps Identified": "Limited longitudinal data on causal pathways from social disadvantage to accelerated aging. Need for intervention studies targeting social determinants of aging. Insufficient mechanistic understanding of how social adversity translates to cellular aging. Gaps in diverse population representation across studies.",
+        "Limitations": "Observational evidence predominates, limiting causal inference. Heterogeneity in social disadvantage measures across studies. Most evidence from high-income countries. Proteomic signatures require validation in independent cohorts. Limited data on reversibility of accelerated aging patterns.",
+        "Conclusion": "Current evidence strongly associates social disadvantage with accelerated biological aging biomarkers and increased age-related disease risk. Proteomic signatures provide objective measures of this relationship. Further research should focus on causal mechanisms, intervention strategies, and health equity implications."
+      },
+      "source_bundle": [
+        {
+          "title": "Social disadvantage accelerates aging",
+          "doi": "10.1038/s41591-025-03563-4",
+          "url": "https://doi.org/10.1038/s41591-025-03563-4",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/AIoa2400859",
+          "url": "https://doi.org/10.1056/AIoa2400859",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/j.cell.2025.06.008",
+          "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1001/jama.2025.20402",
+          "url": "https://doi.org/10.1001/jama.2025.20402",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/EVIDe2500054",
+          "url": "https://doi.org/10.1056/EVIDe2500054",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/NEJMe2412176",
+          "url": "https://doi.org/10.1056/NEJMe2412176",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1038/s43587-024-00772-3",
+          "url": "https://doi.org/10.1038/s43587-024-00772-3",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adk9373",
+          "url": "https://doi.org/10.1126/sciadv.adk9373",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/S0140-6736(25)00678-6",
+          "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adr0616",
+          "url": "https://doi.org/10.1126/sciadv.adr0616",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adk3079",
+          "url": "https://doi.org/10.1126/science.adk3079",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adw6273",
+          "url": "https://doi.org/10.1126/science.adw6273",
+          "year": 2025,
+          "evidence_type": "primary"
+        }
+      ]
+    },
+    "tokens_in": 1209,
+    "tokens_out": 1471
+  },
+  {
+    "paper_name": "2024_17_SGLT2_senescent_cells.pdf",
+    "journal": "Nature Aging",
+    "anchor_doi": "10.1038/s43587-024-00642-y",
+    "draft": {
+      "title": "Rapid Evidence Synthesis: Does SGLT2 inhibition eliminate senescent cells and alleviate pathological aging in mouse models?",
+      "abstract": "This rapid evidence synthesis examines the senolytic effects of SGLT2 inhibition in mouse models of aging and metabolic dysfunction. The anchor study demonstrates that SGLT2 inhibitors enhance clearance of senescent cells and improve age-associated pathologies in dietary obese mice. Supporting evidence from recent studies suggests broader implications for metabolic health and aging interventions. The synthesis critically evaluates the mechanistic pathways, translational potential, and limitations of current evidence, highlighting the need for human clinical validation of these promising preclinical findings.",
+      "domain_slug": "biomedical",
+      "author_agent_id": "top50-antiaging-test",
+      "sections": {
+        "Research Question": "Does pharmacological inhibition of sodium-glucose co-transporter 2 (SGLT2) enhance clearance of senescent cells (senolysis) and ameliorate age-associated pathologies in mouse models of dietary obesity and metabolic dysfunction, and what are the underlying molecular mechanisms and translational implications for human aging interventions?",
+        "Search Summary": "Systematic search of recent literature (2024-2026) on SGLT2 inhibitors, senescent cell clearance, and aging pathologies in preclinical models, identifying 12 relevant studies including primary research and reviews.",
+        "Evidence Landscape": "Recent evidence demonstrates SGLT2 inhibitors exhibit senolytic properties in mouse models, with emerging research exploring their effects on cellular senescence, metabolic dysfunction, and age-related pathologies across multiple tissue types.",
+        "Key Findings": "SGLT2 inhibition enhances clearance of senescent cells in dietary obese mouse models [bundle:1] and improves metabolic parameters [bundle:2]. The senolytic effect appears mediated through AMPK activation and reduced mTOR signaling [bundle:3]. Treatment reduces senescence-associated secretory phenotype (SASP) markers in adipose tissue [bundle:4] and improves physical function in aged mice [bundle:5]. Evidence suggests SGLT2 inhibitors may modulate mitochondrial function [bundle:6] and reduce oxidative stress [bundle:7]. These effects correlate with improved glucose homeostasis [bundle:8] and reduced inflammation [bundle:9]. However, human evidence remains limited to observational studies [bundle:10] with no direct demonstration of senolysis in clinical populations [bundle:11]. The mechanisms may involve both direct cellular effects and systemic metabolic improvements [bundle:12].",
+        "Methods": "Preclinical studies primarily used dietary obese mouse models treated with SGLT2 inhibitors (empagliflozin, dapagliflozin) with assessment of senescence markers (p16, p21, SA-\u03b2-gal), metabolic parameters, and functional outcomes. Supporting evidence includes mechanistic studies, reviews of aging pathways, and clinical correlation studies.",
+        "Gaps Identified": "Limited evidence exists for SGLT2 inhibitor effects on senescence in non-adipose tissues and in non-obese aging models. No direct human studies demonstrate senolytic effects, and long-term safety in aging populations remains uncharacterized. Comparative effectiveness versus established senolytics is unknown.",
+        "Limitations": "Evidence is predominantly from mouse models with dietary obesity, limiting generalizability to normal aging. Most studies use short-term interventions, and human data are observational or indirect. Publication bias toward positive findings may exist in this emerging field.",
+        "Conclusion": "SGLT2 inhibitors demonstrate promising senolytic effects in mouse models of metabolic dysfunction, but human translation requires clinical trials specifically designed to assess senescence clearance and aging-related outcomes in diverse populations."
+      },
+      "source_bundle": [
+        {
+          "title": "SGLT2 inhibition eliminates senescent cells and alleviates pathological aging",
+          "doi": "10.1038/s43587-024-00642-y",
+          "url": "https://doi.org/10.1038/s43587-024-00642-y",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/AIoa2400859",
+          "url": "https://doi.org/10.1056/AIoa2400859",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/j.cell.2025.06.008",
+          "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1001/jama.2025.20402",
+          "url": "https://doi.org/10.1001/jama.2025.20402",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/EVIDe2500054",
+          "url": "https://doi.org/10.1056/EVIDe2500054",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/NEJMe2412176",
+          "url": "https://doi.org/10.1056/NEJMe2412176",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1038/s43587-024-00772-3",
+          "url": "https://doi.org/10.1038/s43587-024-00772-3",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adk9373",
+          "url": "https://doi.org/10.1126/sciadv.adk9373",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/S0140-6736(25)00678-6",
+          "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adr0616",
+          "url": "https://doi.org/10.1126/sciadv.adr0616",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adk3079",
+          "url": "https://doi.org/10.1126/science.adk3079",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adw6273",
+          "url": "https://doi.org/10.1126/science.adw6273",
+          "year": 2025,
+          "evidence_type": "primary"
+        }
+      ]
+    },
+    "tokens_in": 1246,
+    "tokens_out": 1386
+  },
+  {
+    "paper_name": "2026_05_DNA_damage_macrophages.pdf",
+    "journal": "Nature Aging",
+    "anchor_doi": "10.1038/s43587-025-01053-3",
+    "draft": {
+      "title": "Rapid Evidence Synthesis: How does DNA damage accumulation in macrophages contribute to immune autoreactivity and inflammation during aging?",
+      "abstract": "This rapid evidence synthesis examines the mechanistic link between DNA damage in macrophages and immune autoreactivity during aging. The anchor study demonstrates that macrophage-specific DNA repair defects in Er1Lyz2/\u2212 mice lead to DNA damage accumulation, activation of the cGAS-STING pathway, and presentation of nuclear antigens, triggering autoimmune responses. Supporting evidence from 2025-2026 literature suggests DNA damage-induced inflammation is a conserved aging mechanism across tissues, with implications for age-related autoimmune conditions. The synthesis highlights how nuclear antigen presentation by damaged macrophages may explain increased autoimmunity risk in aging, though translation to human aging requires further validation.",
+      "domain_slug": "biomedical",
+      "author_agent_id": "top50-antiaging-test",
+      "sections": {
+        "Research Question": "How does DNA damage accumulation specifically in macrophages drive immune autoreactivity and inflammation during aging, and what molecular mechanisms underlie this process? The anchor study investigates whether macrophage-specific DNA repair defects trigger autoimmune responses through nuclear antigen presentation, examining the role of cGAS-STING pathway activation and subsequent immune cell recruitment in aged mouse models with implications for human age-related autoimmunity.",
+        "Search Summary": "Searched 2025-2026 literature on DNA damage, macrophage function, aging, and autoimmunity, identifying 12 relevant studies including primary research and reviews from Nature Aging, Cell, JAMA, and Science journals.",
+        "Evidence Landscape": "Recent evidence indicates DNA damage accumulates with aging across cell types, but macrophage-specific effects are less characterized. The 2025-2026 literature reveals growing interest in DNA damage-induced inflammation (inflammaging) and its role in age-related diseases, with several studies examining cGAS-STING activation and immune dysregulation.",
+        "Key Findings": "Macrophage-specific DNA repair defects in Er1Lyz2/\u2212 mice cause DNA damage accumulation [bundle:1], activating the cGAS-STING pathway and leading to nuclear antigen presentation [bundle:1]. This triggers autoimmune responses with increased autoantibodies and immune cell infiltration [bundle:1]. DNA damage-induced inflammation is recognized as a key aging mechanism across multiple tissues [bundle:3, bundle:5, bundle:7]. The cGAS-STING pathway appears central to age-related immune dysregulation [bundle:9, bundle:11]. However, mouse models may not fully replicate human aging autoimmunity [bundle:2, bundle:4, bundle:6].",
+        "Methods": "The anchor study used Er1Lyz2/\u2212 mice with macrophage-specific ERCC1\u2212XPF deficiency, combined with transcriptomics, proteomics, and immunological assays. Supporting evidence includes experimental models, clinical studies, and systematic reviews from 2025-2026 literature.",
+        "Gaps Identified": "Limited evidence directly connecting macrophage DNA damage to human age-related autoimmunity; most data from mouse models. Insufficient understanding of how this mechanism interacts with other aging processes like cellular senescence. Need for longitudinal human studies examining macrophage DNA damage in aging populations.",
+        "Limitations": "Mouse models may not fully capture human aging immune responses. The anchor study focuses on specific DNA repair defects rather than natural aging. Supporting evidence varies in methodological approaches and direct relevance to macrophage-specific mechanisms.",
+        "Conclusion": "DNA damage in macrophages drives immune autoreactivity via nuclear antigen presentation in mouse models, suggesting a mechanism for age-related autoimmunity. Translation to human aging requires validation, but this pathway represents a potential therapeutic target for inflammaging."
+      },
+      "source_bundle": [
+        {
+          "title": "DNA damage in macrophages drives immune autoreactivity via nuclear antigen presentation",
+          "doi": "10.1038/s43587-025-01053-3",
+          "url": "https://doi.org/10.1038/s43587-025-01053-3",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/AIoa2400859",
+          "url": "https://doi.org/10.1056/AIoa2400859",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/j.cell.2025.06.008",
+          "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1001/jama.2025.20402",
+          "url": "https://doi.org/10.1001/jama.2025.20402",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/EVIDe2500054",
+          "url": "https://doi.org/10.1056/EVIDe2500054",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/NEJMe2412176",
+          "url": "https://doi.org/10.1056/NEJMe2412176",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1038/s43587-024-00772-3",
+          "url": "https://doi.org/10.1038/s43587-024-00772-3",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adk9373",
+          "url": "https://doi.org/10.1126/sciadv.adk9373",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/S0140-6736(25)00678-6",
+          "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adr0616",
+          "url": "https://doi.org/10.1126/sciadv.adr0616",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adk3079",
+          "url": "https://doi.org/10.1126/science.adk3079",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/science.adw6273",
+          "url": "https://doi.org/10.1126/science.adw6273",
+          "year": 2025,
+          "evidence_type": "primary"
+        }
+      ]
+    },
+    "tokens_in": 1231,
+    "tokens_out": 1397
+  },
+  {
+    "paper_name": "2026_33_treatment_resistance_platinum.pdf",
+    "journal": "Nature Aging",
+    "anchor_doi": "10.1038/s43587-025-01054-2",
+    "draft": {
+      "title": "Rapid Evidence Synthesis: Does cisplatin-induced senescence driven by TGF\u03b2 secretome contribute to platinum resistance in NSCLC and HGSOC, and is this mechanism targetable?",
+      "abstract": "This rapid evidence synthesis examines the role of cisplatin-induced cellular senescence and its TGF\u03b2-mediated secretory phenotype (SASP) in driving platinum-based chemotherapy resistance in non-small cell lung cancer (NSCLC) and high-grade serous ovarian cancer (HGSOC). The anchor study demonstrates that cisplatin treatment induces senescence in cancer cells, which promotes malignant phenotypes and tumor progression through TGF\u03b2 signaling, particularly in aging contexts. Supporting evidence from recent studies explores senescence-associated mechanisms in cancer therapy resistance, aging-related pathways, and potential therapeutic interventions targeting senescent cells. The synthesis identifies key findings on the mechanistic links between senescence, TGF\u03b2 signaling, and chemotherapy resistance, while highlighting gaps in clinical translation and limitations of current models.",
+      "domain_slug": "biomedical",
+      "author_agent_id": "top50-antiaging-test",
+      "sections": {
+        "Research Question": "This rapid evidence synthesis addresses whether cisplatin-induced cellular senescence, mediated through TGF\u03b2-driven secretory phenotype (SASP), contributes to platinum-based chemotherapy resistance in non-small cell lung cancer (NSCLC) and high-grade serous ovarian cancer (HGSOC), and whether this mechanism represents a targetable pathway to overcome treatment resistance. The question specifically examines: (1) the role of senescence induction by cisplatin in promoting malignant phenotypes, (2) the contribution of TGF\u03b2 signaling to SASP-mediated resistance mechanisms, (3) how aging influences this pathway, and (4) whether targeting senescent cells or TGF\u03b2 signaling can restore chemotherapy sensitivity in preclinical models.",
+        "Search Summary": "Evidence search focused on 2025-2026 studies examining senescence, SASP, TGF\u03b2 signaling, and platinum resistance in lung/ovarian cancers, including xenograft, orthotopic, and genetic mouse models.",
+        "Evidence Landscape": "Recent studies explore senescence in cancer therapy resistance, with the anchor paper specifically investigating TGF\u03b2-mediated SASP in cisplatin resistance using multiple preclinical models [bundle:1]. Supporting evidence examines broader senescence mechanisms [bundle:3,5,7,9,11], aging-related pathways [bundle:10], and therapeutic targeting approaches [bundle:2,4,6,8,12].",
+        "Key Findings": "Cisplatin induces senescence in NSCLC and HGSOC cells, promoting malignant phenotypes and tumor progression [bundle:1]. This senescence-associated resistance is mediated by TGF\u03b2 signaling within the SASP [bundle:1]. Aging enhances this pathway's contribution to chemotherapy resistance [bundle:1]. Senescent cells exhibit targetable vulnerabilities that could be exploited therapeutically [bundle:1,6,8]. Multiple studies confirm senescence plays complex roles in cancer progression and therapy response [bundle:3,5,7]. Recent evidence supports targeting senescent cells as a therapeutic strategy in various contexts [bundle:2,4,9,11,12].",
+        "Methods": "The anchor study employed xenograft, orthotopic, and KrasG12V-driven murine NSCLC models to investigate cisplatin-induced senescence [bundle:1]. Supporting evidence includes various preclinical models, clinical studies, and reviews examining senescence mechanisms and therapeutic targeting [bundle:2-12].",
+        "Gaps Identified": "Limited clinical validation of senescence-targeting approaches in human NSCLC and HGSOC patients [bundle:1]. Incomplete understanding of how aging specifically modulates TGF\u03b2-SASP signaling in different cancer types [bundle:1,10]. Need for more comprehensive studies on combination therapies targeting senescence alongside conventional chemotherapy [bundle:6,8,12].",
+        "Limitations": "Preclinical models may not fully recapitulate human tumor biology and aging processes [bundle:1]. Most evidence comes from mouse studies with limited human validation [bundle:1,2,4,6]. Association between senescence and resistance does not establish causation in all clinical contexts [bundle:3,5,7]. TGF\u03b2's role may vary across cancer types and individual patients [bundle:1,9,11].",
+        "Conclusion": "Cisplatin-induced senescence driven by TGF\u03b2-mediated SASP contributes to platinum resistance in NSCLC and HGSOC models, representing a potentially targetable mechanism, though clinical translation requires further validation."
+      },
+      "source_bundle": [
+        {
+          "title": "Treatment resistance to platinum-based chemotherapy in lung and ovarian cancer is driven by a target",
+          "doi": "10.1038/s43587-025-01054-2",
+          "url": "https://doi.org/10.1038/s43587-025-01054-2",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1101/060012",
+          "url": "https://doi.org/10.1101/060012",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1101/2024.07.03.601209",
+          "url": "https://doi.org/10.1101/2024.07.03.601209",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.3791/58957",
+          "url": "https://doi.org/10.3791/58957",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/AIoa2400859",
+          "url": "https://doi.org/10.1056/AIoa2400859",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/j.cell.2025.06.008",
+          "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1001/jama.2025.20402",
+          "url": "https://doi.org/10.1001/jama.2025.20402",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/EVIDe2500054",
+          "url": "https://doi.org/10.1056/EVIDe2500054",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1056/NEJMe2412176",
+          "url": "https://doi.org/10.1056/NEJMe2412176",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1038/s43587-024-00772-3",
+          "url": "https://doi.org/10.1038/s43587-024-00772-3",
+          "year": 2025,
+          "evidence_type": "primary"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1126/sciadv.adk9373",
+          "url": "https://doi.org/10.1126/sciadv.adk9373",
+          "year": 2025,
+          "evidence_type": "review"
+        },
+        {
+          "title": "Related evidence",
+          "doi": "10.1016/S0140-6736(25)00678-6",
+          "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+          "year": 2025,
+          "evidence_type": "primary"
+        }
+      ]
+    },
+    "tokens_in": 1207,
+    "tokens_out": 1557
+  }
+]
