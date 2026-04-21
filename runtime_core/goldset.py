@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+from typing import Callable
 
 from contracts import Decision, GoldSetCorpus, GoldSetEntry, ObjectType, ResearchObject, RuntimeJob, Stage
 
@@ -261,14 +262,19 @@ def summarize_gold_results(records: list[dict]) -> dict:
     }
 
 
-def evaluate_gold_set(corpus: GoldSetCorpus, engine: WorkflowEngine | None = None) -> dict:
+def evaluate_gold_set(
+    corpus: GoldSetCorpus,
+    engine: WorkflowEngine | None = None,
+    progress_callback: Callable[[int, int, dict, dict], None] | None = None,
+) -> dict:
     active_engine = engine or WorkflowEngine()
     started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    records = [run_gold_entry(entry, active_engine) for entry in corpus.entries]
-    return {
+    total = len(corpus.entries)
+    records: list[dict] = []
+    artifact = {
         "run_meta": {
             "timestamp": started_at,
-            "entry_count": len(corpus.entries),
+            "entry_count": total,
             "provider": getattr(active_engine.provider, "provider", active_engine.provider.__class__.__name__.lower()),
             "model": getattr(active_engine.provider, "model", "unknown"),
             "corpus_version": corpus.version,
@@ -276,3 +282,76 @@ def evaluate_gold_set(corpus: GoldSetCorpus, engine: WorkflowEngine | None = Non
         "summary": summarize_gold_results(records),
         "results": records,
     }
+    for index, entry in enumerate(corpus.entries, start=1):
+        record = run_gold_entry(entry, active_engine)
+        records.append(record)
+        artifact["summary"] = summarize_gold_results(records)
+        if progress_callback is not None:
+            progress_callback(index, total, record, artifact)
+    return artifact
+
+
+def render_gold_set_report(artifact: dict) -> str:
+    summary = artifact.get("summary", {})
+    run_meta = artifact.get("run_meta", {})
+    lines = [
+        "# Gold Set Evaluation Report",
+        "",
+        f"- Timestamp: `{run_meta.get('timestamp', 'unknown')}`",
+        f"- Corpus version: `{run_meta.get('corpus_version', 'unknown')}`",
+        f"- Provider: `{run_meta.get('provider', 'unknown')}`",
+        f"- Model: `{run_meta.get('model', 'unknown')}`",
+        f"- Accuracy: `{summary.get('correct', 0)}` / `{summary.get('total', 0)}` (`{summary.get('accuracy', 0.0):.1%}`)",
+        f"- Mismatches: `{summary.get('mismatch_count', 0)}`",
+        "",
+        "## By article type",
+        "",
+        "| Article type | Count | Correct | Accuracy |",
+        "|---|---:|---:|---:|",
+    ]
+    for article_type, stats in sorted(summary.get("by_article_type", {}).items()):
+        lines.append(
+            f"| {article_type} | {stats.get('count', 0)} | {stats.get('correct', 0)} | {stats.get('accuracy', 0.0):.1%} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Accept blockers",
+            "",
+            "| Blocker | Count |",
+            "|---|---:|",
+        ]
+    )
+    accept_blockers = summary.get("accept_blockers", {})
+    if accept_blockers:
+        for blocker, count in accept_blockers.items():
+            lines.append(f"| {blocker} | {count} |")
+    else:
+        lines.append("| none | 0 |")
+
+    lines.extend(
+        [
+            "",
+            "## Mismatches",
+            "",
+            "| Entry | Article type | Expected | Actual | Error |",
+            "|---|---|---|---|---|",
+        ]
+    )
+    mismatches = summary.get("mismatches", [])
+    if mismatches:
+        for mismatch in mismatches:
+            lines.append(
+                "| {entry_id} | {article_type} | {expected} | {actual} | {error} |".format(
+                    entry_id=mismatch.get("entry_id", "unknown"),
+                    article_type=mismatch.get("article_type", "unknown"),
+                    expected=mismatch.get("expected", "unknown"),
+                    actual=mismatch.get("actual", "unknown"),
+                    error=(mismatch.get("error") or "").replace("\n", " "),
+                )
+            )
+    else:
+        lines.append("| none | - | - | - | - |")
+
+    return "\n".join(lines) + "\n"

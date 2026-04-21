@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 
 from contracts import ArticleType, Decision, GoldSetCorpus, GoldSetEntry, GoldSetExpectation, ProviderUsage, SubmissionPayload
-from runtime_core.goldset import evaluate_gold_set, load_gold_set
+from scripts.build_gold_set_v1 import build_gold_set
+from runtime_core.goldset import evaluate_gold_set, load_gold_set, render_gold_set_report
 from runtime_core.providers import ProviderRequest, ProviderResponse, ProviderResult
 from runtime_core.workflow import WorkflowEngine
 
@@ -88,6 +89,17 @@ def test_load_gold_set_accepts_list_format(tmp_path) -> None:
     assert len(corpus.entries) == 1
 
 
+def test_build_gold_set_emits_expected_working_mix() -> None:
+    corpus = build_gold_set()
+    entries = corpus["entries"]
+    assert corpus["version"] == "gold-set-v1-working"
+    assert len(entries) == 30
+    article_types = {entry["article_type"] for entry in entries}
+    assert article_types == {"rapid_evidence_synthesis", "empirical_study"}
+    assert sum(1 for entry in entries if "real-draft" in entry.get("tags", [])) == 10
+    assert sum(1 for entry in entries if entry["article_type"] == "empirical_study") == 8
+
+
 def test_evaluate_gold_set_scores_article_types_and_accept_blockers() -> None:
     corpus = GoldSetCorpus(
         entries=[
@@ -169,3 +181,90 @@ def test_evaluate_gold_set_scores_article_types_and_accept_blockers() -> None:
     assert artifact["summary"]["accept_blockers"]["claim_support_verdict"] == 1
     assert artifact["summary"]["confusion_matrix"]["accept"]["accept"] == 1
     assert artifact["summary"]["mismatch_count"] == 1
+
+
+def test_evaluate_gold_set_progress_callback_receives_partial_artifact() -> None:
+    corpus = GoldSetCorpus(
+        entries=[
+            GoldSetEntry(
+                entry_id="emp-1",
+                article_type=ArticleType.EMPIRICAL_STUDY,
+                submission=SubmissionPayload(
+                    title="Empirical Study: bounded cohort signal",
+                    abstract="Bounded empirical study.",
+                    sections=_empirical_sections(),
+                    source_bundle=[
+                        {"title": f"Source {i}", "evidence_type": "primary", "year": 2025}
+                        for i in range(12)
+                    ],
+                    author_agent_id="gold-agent",
+                    article_type=ArticleType.EMPIRICAL_STUDY,
+                ),
+                expected=GoldSetExpectation(decision=Decision.ACCEPT),
+            ),
+            GoldSetEntry(
+                entry_id="emp-2",
+                article_type=ArticleType.EMPIRICAL_STUDY,
+                submission=SubmissionPayload(
+                    title="Empirical Study: bounded cohort signal 2",
+                    abstract="Bounded empirical study.",
+                    sections=_empirical_sections(),
+                    source_bundle=[
+                        {"title": f"Source {i}", "evidence_type": "primary", "year": 2025}
+                        for i in range(12)
+                    ],
+                    author_agent_id="gold-agent",
+                    article_type=ArticleType.EMPIRICAL_STUDY,
+                ),
+                expected=GoldSetExpectation(decision=Decision.ACCEPT),
+            ),
+        ]
+    )
+    snapshots: list[tuple[int, int, str, int]] = []
+
+    def _progress(index: int, total: int, record: dict, artifact: dict) -> None:
+        snapshots.append((index, total, record["entry_id"], artifact["summary"]["total"]))
+
+    artifact = evaluate_gold_set(corpus, engine=WorkflowEngine(provider=RoutingProvider()), progress_callback=_progress)
+
+    assert artifact["summary"]["total"] == 2
+    assert snapshots == [(1, 2, "emp-1", 1), (2, 2, "emp-2", 2)]
+
+
+def test_render_gold_set_report_contains_core_sections() -> None:
+    artifact = {
+        "run_meta": {
+            "timestamp": "2026-04-21T00:00:00Z",
+            "corpus_version": "gold-set-v1-working",
+            "provider": "reviewer-panel",
+            "model": "mimo|deepseek",
+        },
+        "summary": {
+            "total": 2,
+            "correct": 1,
+            "accuracy": 0.5,
+            "mismatch_count": 1,
+            "by_article_type": {
+                "empirical_study": {"count": 1, "correct": 1, "accuracy": 1.0},
+                "rapid_evidence_synthesis": {"count": 1, "correct": 0, "accuracy": 0.0},
+            },
+            "accept_blockers": {"claim_support_verdict": 1},
+            "mismatches": [
+                {
+                    "entry_id": "res-1",
+                    "article_type": "rapid_evidence_synthesis",
+                    "expected": "accept",
+                    "actual": "revise",
+                    "error": None,
+                }
+            ],
+        },
+    }
+
+    report = render_gold_set_report(artifact)
+
+    assert "# Gold Set Evaluation Report" in report
+    assert "gold-set-v1-working" in report
+    assert "| empirical_study | 1 | 1 | 100.0% |" in report
+    assert "| claim_support_verdict | 1 |" in report
+    assert "| res-1 | rapid_evidence_synthesis | accept | revise |  |" in report

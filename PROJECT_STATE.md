@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: `gold_set_v1` seed corpus is committed and the first live judge-panel eval is on disk (`artifacts/gold_set_eval_v1.json`) with 8/10 accuracy; empirical-study controls scored 3/3, rapid-evidence-synthesis scored 5/7
-Next: expand `gold_set_v1` beyond the seed set and tune rapid-evidence-synthesis reviewer/drafter behavior against the two live mismatches and dominant accept blockers (`claim_support_verdict`, `major_issues`, `required_revisions`)
+Latest: `gold_set_v1` has been expanded into the 30-entry working corpus (`gold-set-v1-working`), and the live judge-panel baseline is now frozen on disk (`artifacts/gold_set_eval_v2_working_baseline.json`, `artifacts/gold_set_eval_v2_working_baseline.md`) at 30/30 correct across both `rapid_evidence_synthesis` and `empirical_study`
+Next: expand the working corpus into a true human/domain-labeled gold set, then rerun the 200-paper benchmark against the current reviewer to measure pilot readiness on a broader non-curated slice
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -28,7 +28,9 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Gold-set contracts + evaluator script (`scripts/evaluate_gold_set.py`)
 - [x] `gold_set_v1` seed corpus committed (`calibration/gold_set_v1.json`)
 - [x] First live gold-set eval artifact committed (`artifacts/gold_set_eval_v1.json`)
-- [ ] Run live 200-paper benchmark against judge_panel to target (current live baseline still below pilot bar)
+- [x] `gold_set_v1` working corpus builder and execution board (`scripts/build_gold_set_v1.py`, `calibration/week1_execution_board.md`)
+- [x] Live 30-entry working gold-set baseline frozen (`artifacts/gold_set_eval_v2_working_baseline.json`, `.md`)
+- [ ] Run live 200-paper benchmark against judge_panel to target (working gold set passes, broader calibration still unproven)
 - [ ] Expand `gold_set_v1` from seed corpus to a true human/domain-labeled gold set
 - [ ] Open invited pilot (ops task)
 
@@ -49,7 +51,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 95 passing, 1 skipped (Postgres concurrency)
+- Tests: 98 passing, 1 skipped (Postgres concurrency)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)
