@@ -1,0 +1,442 @@
+{
+  "run_meta": {
+    "timestamp": "2026-04-21T17:54:16Z",
+    "entry_count": 10,
+    "provider": "reviewer-panel",
+    "model": "mimo-v2-pro|deepseek-chat|deepseek-reasoner",
+    "corpus_version": "gold-set-v1-seed"
+  },
+  "summary": {
+    "total": 10,
+    "correct": 8,
+    "accuracy": 0.8,
+    "confusion_matrix": {
+      "accept": {
+        "accept": 1,
+        "revise": 1,
+        "reject": 0
+      },
+      "revise": {
+        "accept": 0,
+        "revise": 5,
+        "reject": 0
+      },
+      "reject": {
+        "accept": 0,
+        "revise": 1,
+        "reject": 2
+      }
+    },
+    "mismatch_count": 2,
+    "mismatches": [
+      {
+        "entry_id": "res-1",
+        "title": "Benchmark Paper #1: anti-aging evidence synthesis",
+        "article_type": "rapid_evidence_synthesis",
+        "expected": "accept",
+        "actual": "revise",
+        "accept_blockers": [
+          "rubric_scores:synthesis_quality,source_grounding",
+          "major_issues",
+          "required_revisions",
+          "claim_support_verdict",
+          "overclaim_verdict",
+          "synthesis_quality_verdict"
+        ],
+        "error": null
+      },
+      {
+        "entry_id": "res-4",
+        "title": "Benchmark Paper #4: heat resilience evidence synthesis",
+        "article_type": "rapid_evidence_synthesis",
+        "expected": "reject",
+        "actual": "revise",
+        "accept_blockers": [
+          "rubric_scores:synthesis_quality,claim_evidence_alignment,source_grounding",
+          "major_issues",
+          "required_revisions",
+          "claim_support_verdict",
+          "overclaim_verdict"
+        ],
+        "error": null
+      }
+    ],
+    "by_article_type": {
+      "rapid_evidence_synthesis": {
+        "count": 7,
+        "correct": 5,
+        "accuracy": 0.714
+      },
+      "empirical_study": {
+        "count": 3,
+        "correct": 3,
+        "accuracy": 1.0
+      }
+    },
+    "rubric_mae": {
+      "research_question_quality": null,
+      "synthesis_quality": null,
+      "claim_evidence_alignment": null,
+      "limitations_quality": null,
+      "gaps_quality": null,
+      "source_grounding": null
+    },
+    "boolean_match_rates": {
+      "claim_support_verdict": null,
+      "overclaim_verdict": null,
+      "synthesis_quality_verdict": null
+    },
+    "accept_blockers": {
+      "claim_support_verdict": 7,
+      "major_issues": 7,
+      "required_revisions": 7,
+      "overclaim_verdict": 5,
+      "synthesis_quality_verdict": 5,
+      "rubric_scores:synthesis_quality,source_grounding": 3,
+      "rubric_scores:synthesis_quality,claim_evidence_alignment,source_grounding": 2,
+      "rubric_scores:synthesis_quality,claim_evidence_alignment,limitations_quality,source_grounding": 1
+    }
+  },
+  "results": [
+    {
+      "entry_id": "res-1",
+      "title": "Benchmark Paper #1: anti-aging evidence synthesis",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity",
+      "expected_decision": "accept",
+      "actual_decision": "revise",
+      "decision_match": false,
+      "stage_reached": "editorial",
+      "route": "primary_failed_sparring_used",
+      "cost_usd": 0.000985,
+      "duration_s": 26.799,
+      "error": null,
+      "expected_rubric_scores": {},
+      "actual_rubric_scores": {
+        "research_question_quality": 4,
+        "synthesis_quality": 3,
+        "claim_evidence_alignment": 4,
+        "limitations_quality": 4,
+        "gaps_quality": 4,
+        "source_grounding": 3
+      },
+      "rubric_score_deltas": {},
+      "expected_claim_support_verdict": null,
+      "actual_claim_support_verdict": "partially_supported",
+      "expected_overclaim_verdict": null,
+      "actual_overclaim_verdict": "mild",
+      "expected_synthesis_quality_verdict": null,
+      "actual_synthesis_quality_verdict": "weak",
+      "accept_blockers": [
+        "rubric_scores:synthesis_quality,source_grounding",
+        "major_issues",
+        "required_revisions",
+        "claim_support_verdict",
+        "overclaim_verdict",
+        "synthesis_quality_verdict"
+      ]
+    },
+    {
+      "entry_id": "res-3",
+      "title": "Benchmark Paper #3: vaccine hesitancy evidence synthesis",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "public-health",
+      "expected_decision": "revise",
+      "actual_decision": "revise",
+      "decision_match": true,
+      "stage_reached": "editorial",
+      "route": "consensus",
+      "cost_usd": 0.000901,
+      "duration_s": 22.955,
+      "error": null,
+      "expected_rubric_scores": {},
+      "actual_rubric_scores": {
+        "research_question_quality": 5,
+        "synthesis_quality": 3,
+        "claim_evidence_alignment": 3,
+        "limitations_quality": 4,
+        "gaps_quality": 4,
+        "source_grounding": 2
+      },
+      "rubric_score_deltas": {},
+      "expected_claim_support_verdict": null,
+      "actual_claim_support_verdict": "partially_supported",
+      "expected_overclaim_verdict": null,
+      "actual_overclaim_verdict": "mild",
+      "expected_synthesis_quality_verdict": null,
+      "actual_synthesis_quality_verdict": "weak",
+      "accept_blockers": [
+        "rubric_scores:synthesis_quality,claim_evidence_alignment,source_grounding",
+        "major_issues",
+        "required_revisions",
+        "claim_support_verdict",
+        "overclaim_verdict",
+        "synthesis_quality_verdict"
+      ]
+    },
+    {
+      "entry_id": "res-4",
+      "title": "Benchmark Paper #4: heat resilience evidence synthesis",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "climate-adaptation",
+      "expected_decision": "reject",
+      "actual_decision": "revise",
+      "decision_match": false,
+      "stage_reached": "editorial",
+      "route": "consensus",
+      "cost_usd": 0.000965,
+      "duration_s": 23.412,
+      "error": null,
+      "expected_rubric_scores": {},
+      "actual_rubric_scores": {
+        "research_question_quality": 5,
+        "synthesis_quality": 3,
+        "claim_evidence_alignment": 3,
+        "limitations_quality": 4,
+        "gaps_quality": 4,
+        "source_grounding": 3
+      },
+      "rubric_score_deltas": {},
+      "expected_claim_support_verdict": null,
+      "actual_claim_support_verdict": "partially_supported",
+      "expected_overclaim_verdict": null,
+      "actual_overclaim_verdict": "mild",
+      "expected_synthesis_quality_verdict": null,
+      "actual_synthesis_quality_verdict": "adequate",
+      "accept_blockers": [
+        "rubric_scores:synthesis_quality,claim_evidence_alignment,source_grounding",
+        "major_issues",
+        "required_revisions",
+        "claim_support_verdict",
+        "overclaim_verdict"
+      ]
+    },
+    {
+      "entry_id": "top50-2025_20_antler_ev_bone_loss",
+      "title": "Rapid Evidence Synthesis: Do extracellular vesicles from antler blastema progenitor cells reverse bone loss and mitigate aging-related phenotypes in animal models?",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "biomedical",
+      "expected_decision": "revise",
+      "actual_decision": "revise",
+      "decision_match": true,
+      "stage_reached": "editorial",
+      "route": "primary_failed_sparring_used",
+      "cost_usd": 0.000972,
+      "duration_s": 28.297,
+      "error": null,
+      "expected_rubric_scores": {},
+      "actual_rubric_scores": {
+        "research_question_quality": 4,
+        "synthesis_quality": 3,
+        "claim_evidence_alignment": 4,
+        "limitations_quality": 4,
+        "gaps_quality": 4,
+        "source_grounding": 3
+      },
+      "rubric_score_deltas": {},
+      "expected_claim_support_verdict": null,
+      "actual_claim_support_verdict": "partially_supported",
+      "expected_overclaim_verdict": null,
+      "actual_overclaim_verdict": "none",
+      "expected_synthesis_quality_verdict": null,
+      "actual_synthesis_quality_verdict": "weak",
+      "accept_blockers": [
+        "rubric_scores:synthesis_quality,source_grounding",
+        "major_issues",
+        "required_revisions",
+        "claim_support_verdict",
+        "synthesis_quality_verdict"
+      ]
+    },
+    {
+      "entry_id": "top50-2024_16_s6k1_inflammaging",
+      "title": "Rapid Evidence Synthesis: How does ribosomal S6 kinase 1 (S6K1) inhibition regulate inflammaging through modulation of the senescence-associated secretory phenotype (SASP) in mammalian models, and what are the translational implications for age-related disease interventions?",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "biomedical",
+      "expected_decision": "revise",
+      "actual_decision": "revise",
+      "decision_match": true,
+      "stage_reached": "editorial",
+      "route": "primary_failed_sparring_used",
+      "cost_usd": 0.000981,
+      "duration_s": 24.671,
+      "error": null,
+      "expected_rubric_scores": {},
+      "actual_rubric_scores": {
+        "research_question_quality": 5,
+        "synthesis_quality": 4,
+        "claim_evidence_alignment": 4,
+        "limitations_quality": 5,
+        "gaps_quality": 5,
+        "source_grounding": 4
+      },
+      "rubric_score_deltas": {},
+      "expected_claim_support_verdict": null,
+      "actual_claim_support_verdict": "partially_supported",
+      "expected_overclaim_verdict": null,
+      "actual_overclaim_verdict": "none",
+      "expected_synthesis_quality_verdict": null,
+      "actual_synthesis_quality_verdict": "adequate",
+      "accept_blockers": [
+        "major_issues",
+        "required_revisions",
+        "claim_support_verdict"
+      ]
+    },
+    {
+      "entry_id": "top50-2024_17_sglt2_senescent_cells",
+      "title": "Rapid Evidence Synthesis: Does SGLT2 inhibition eliminate senescent cells and alleviate pathological aging in mouse models?",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "biomedical",
+      "expected_decision": "reject",
+      "actual_decision": "reject",
+      "decision_match": true,
+      "stage_reached": "intake",
+      "route": null,
+      "cost_usd": 0.0,
+      "duration_s": 0.0,
+      "error": null,
+      "expected_rubric_scores": {},
+      "actual_rubric_scores": {},
+      "rubric_score_deltas": {},
+      "expected_claim_support_verdict": null,
+      "actual_claim_support_verdict": null,
+      "expected_overclaim_verdict": null,
+      "actual_overclaim_verdict": null,
+      "expected_synthesis_quality_verdict": null,
+      "actual_synthesis_quality_verdict": null,
+      "accept_blockers": []
+    },
+    {
+      "entry_id": "top50-2026_16_rhoa_hsc_rejuvenation",
+      "title": "Rapid Evidence Synthesis: Does targeting RhoA nuclear mechanoactivity rejuvenate aged hematopoietic stem cells and improve hematopoietic function?",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "biomedical",
+      "expected_decision": "revise",
+      "actual_decision": "revise",
+      "decision_match": true,
+      "stage_reached": "editorial",
+      "route": "primary_failed_sparring_used",
+      "cost_usd": 0.000975,
+      "duration_s": 22.584,
+      "error": null,
+      "expected_rubric_scores": {},
+      "actual_rubric_scores": {
+        "research_question_quality": 5,
+        "synthesis_quality": 3,
+        "claim_evidence_alignment": 4,
+        "limitations_quality": 4,
+        "gaps_quality": 4,
+        "source_grounding": 3
+      },
+      "rubric_score_deltas": {},
+      "expected_claim_support_verdict": null,
+      "actual_claim_support_verdict": "partially_supported",
+      "expected_overclaim_verdict": null,
+      "actual_overclaim_verdict": "mild",
+      "expected_synthesis_quality_verdict": null,
+      "actual_synthesis_quality_verdict": "weak",
+      "accept_blockers": [
+        "rubric_scores:synthesis_quality,source_grounding",
+        "major_issues",
+        "required_revisions",
+        "claim_support_verdict",
+        "overclaim_verdict",
+        "synthesis_quality_verdict"
+      ]
+    },
+    {
+      "entry_id": "empirical-accept-1",
+      "title": "Empirical Study: targeted intervention improves prespecified mobility endpoint in older adults",
+      "article_type": "empirical_study",
+      "domain_slug": "biomedical",
+      "expected_decision": "accept",
+      "actual_decision": "accept",
+      "decision_match": true,
+      "stage_reached": "publish",
+      "route": "consensus",
+      "cost_usd": 0.000663,
+      "duration_s": 14.378,
+      "error": null,
+      "expected_rubric_scores": {},
+      "actual_rubric_scores": {
+        "research_question_quality": 5,
+        "synthesis_quality": 5,
+        "claim_evidence_alignment": 5,
+        "limitations_quality": 5,
+        "gaps_quality": 5,
+        "source_grounding": 5
+      },
+      "rubric_score_deltas": {},
+      "expected_claim_support_verdict": null,
+      "actual_claim_support_verdict": "supported",
+      "expected_overclaim_verdict": null,
+      "actual_overclaim_verdict": "none",
+      "expected_synthesis_quality_verdict": null,
+      "actual_synthesis_quality_verdict": "strong",
+      "accept_blockers": []
+    },
+    {
+      "entry_id": "empirical-revise-1",
+      "title": "Empirical Study: pathway biomarker shifts after short-term intervention",
+      "article_type": "empirical_study",
+      "domain_slug": "biomedical",
+      "expected_decision": "revise",
+      "actual_decision": "revise",
+      "decision_match": true,
+      "stage_reached": "editorial",
+      "route": "primary_failed_sparring_used",
+      "cost_usd": 0.000811,
+      "duration_s": 19.551,
+      "error": null,
+      "expected_rubric_scores": {},
+      "actual_rubric_scores": {
+        "research_question_quality": 4,
+        "synthesis_quality": 3,
+        "claim_evidence_alignment": 2,
+        "limitations_quality": 3,
+        "gaps_quality": 4,
+        "source_grounding": 3
+      },
+      "rubric_score_deltas": {},
+      "expected_claim_support_verdict": null,
+      "actual_claim_support_verdict": "partially_supported",
+      "expected_overclaim_verdict": null,
+      "actual_overclaim_verdict": "significant",
+      "expected_synthesis_quality_verdict": null,
+      "actual_synthesis_quality_verdict": "weak",
+      "accept_blockers": [
+        "rubric_scores:synthesis_quality,claim_evidence_alignment,limitations_quality,source_grounding",
+        "major_issues",
+        "required_revisions",
+        "claim_support_verdict",
+        "overclaim_verdict",
+        "synthesis_quality_verdict"
+      ]
+    },
+    {
+      "entry_id": "empirical-reject-1",
+      "title": "Empirical Study: single-site observational signal framed as definitive anti-aging proof",
+      "article_type": "empirical_study",
+      "domain_slug": "biomedical",
+      "expected_decision": "reject",
+      "actual_decision": "reject",
+      "decision_match": true,
+      "stage_reached": "intake",
+      "route": null,
+      "cost_usd": 0.0,
+      "duration_s": 0.0,
+      "error": null,
+      "expected_rubric_scores": {},
+      "actual_rubric_scores": {},
+      "rubric_score_deltas": {},
+      "expected_claim_support_verdict": null,
+      "actual_claim_support_verdict": null,
+      "expected_overclaim_verdict": null,
+      "actual_overclaim_verdict": null,
+      "expected_synthesis_quality_verdict": null,
+      "actual_synthesis_quality_verdict": null,
+      "accept_blockers": []
+    }
+  ]
+}

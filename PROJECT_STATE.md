@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: gold-set evaluator + empirical-study article-type scaffolding landed; reviewer can now be calibrated against human labels instead of synthetic quality tiers
-Next: create `gold_set_v1` with human labels, run `scripts/evaluate_gold_set.py`, then decide whether the reviewer rubric or article-type split needs tuning before pilot
+Latest: `gold_set_v1` seed corpus is committed and the first live judge-panel eval is on disk (`artifacts/gold_set_eval_v1.json`) with 8/10 accuracy; empirical-study controls scored 3/3, rapid-evidence-synthesis scored 5/7
+Next: expand `gold_set_v1` beyond the seed set and tune rapid-evidence-synthesis reviewer/drafter behavior against the two live mismatches and dominant accept blockers (`claim_support_verdict`, `major_issues`, `required_revisions`)
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -26,8 +26,10 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] External auditor endpoints (POST/GET /audit, GET /audit-summary)
 - [x] `empirical_study` article-type scaffold (intake/review/publish path)
 - [x] Gold-set contracts + evaluator script (`scripts/evaluate_gold_set.py`)
+- [x] `gold_set_v1` seed corpus committed (`calibration/gold_set_v1.json`)
+- [x] First live gold-set eval artifact committed (`artifacts/gold_set_eval_v1.json`)
 - [ ] Run live 200-paper benchmark against judge_panel to target (current live baseline still below pilot bar)
-- [ ] Populate `gold_set_v1` with human-labeled entries and run first true calibration pass
+- [ ] Expand `gold_set_v1` from seed corpus to a true human/domain-labeled gold set
 - [ ] Open invited pilot (ops task)
 
 ## Non-Goals
