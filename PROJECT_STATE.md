@@ -3,7 +3,7 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: a55d095 (fix PROJECT_STATE.md staleness)
+Latest: 9d8513b (fix PROJECT_STATE.md staleness)
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.

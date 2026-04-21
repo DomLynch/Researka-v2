@@ -25,7 +25,7 @@ def _load_calibration_data() -> dict:
     global _calibration_cache, _calibration_path
     default_path = os.environ.get(
         "RESEARKA_V2_CALIBRATION_PATH",
-        str(Path(__file__).resolve().parents[2] / "calibration_run_v1_results.json"),
+        str(Path(__file__).resolve().parents[2] / "artifacts" / "benchmark_baseline.json"),
     )
     if _calibration_cache is not None and _calibration_path == default_path:
         return _calibration_cache
