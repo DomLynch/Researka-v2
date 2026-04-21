@@ -18,7 +18,7 @@ class WorkerApp:
         self.worker_id = worker_id
         self.engine = engine or WorkflowEngine()
 
-    def run_once(self) -> dict[str, int]:
+    def run_once(self) -> dict:
         job = self.repository.claim_next_job()
         if not job:
             return {"claimed": 0, "completed": 0, "failed": 0}
@@ -44,7 +44,14 @@ class WorkerApp:
                     payload={"stage": job.stage.value, **result},
                 )
             )
-            return {"claimed": 1, "completed": 1, "failed": 0}
+            return {
+                "claimed": 1,
+                "completed": 1,
+                "failed": 0,
+                "target_object_id": job.target_object_id,
+                "stage": job.stage.value,
+                "job_id": job.id,
+            }
         except Exception as exc:
             failure_class = classify_failure(str(exc))
             self.repository.fail_job(job.id, reason=str(exc), failure_class=failure_class)
@@ -61,7 +68,14 @@ class WorkerApp:
                     },
                 )
             )
-            return {"claimed": 1, "completed": 0, "failed": 1}
+            return {
+                "claimed": 1,
+                "completed": 0,
+                "failed": 1,
+                "target_object_id": job.target_object_id,
+                "stage": job.stage.value,
+                "job_id": job.id,
+            }
 
 
 if __name__ == "__main__":
