@@ -40,10 +40,7 @@ def _check_admin(request: Request) -> None:
     """Require admin key for /ops/* endpoints."""
     provided = request.headers.get("x-api-key", "")
     admin_key = os.environ.get("RESEARKA_V2_ADMIN_KEY")
-    legacy_key = os.environ.get("RESEARKA_V2_API_KEY")
     if admin_key and provided == admin_key:
-        return
-    if legacy_key and provided == legacy_key:
         return
     raise HTTPException(status_code=403, detail="admin_key_required")
 
@@ -73,9 +70,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
 
     @app.post("/submissions")
     def submit(payload: SubmissionPayload, request: Request) -> dict:
-        api_key = os.environ.get("RESEARKA_V2_API_KEY")
-        if api_key:
-            _check_api_key(app.state.repository, request)
+        _check_api_key(app.state.repository, request)
         submission = app.state.repository.create_object(
             ResearchObject(
                 object_type=ObjectType.SUBMISSION,
@@ -177,7 +172,8 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             notes = d.metadata.get("notes", [])
             if isinstance(notes, list) and "intake gate rejection" in notes:
                 intake_rejections += 1
-            cost = d.metadata.get("cost_usd")
+        for r in reviews:
+            cost = r.metadata.get("cost_usd")
             if isinstance(cost, (int, float)) and cost > 0:
                 total_cost += cost
                 cost_count += 1

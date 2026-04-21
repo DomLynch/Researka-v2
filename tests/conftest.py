@@ -18,8 +18,12 @@ def inmemory_repo():
 
 
 @pytest.fixture
-def client(inmemory_repo):
-    return TestClient(create_app(inmemory_repo))
+def client(inmemory_repo, monkeypatch):
+    monkeypatch.setenv("RESEARKA_V2_API_KEY", "test-legacy-key")
+    return TestClient(
+        create_app(inmemory_repo),
+        headers={"x-api-key": "test-legacy-key"},
+    )
 
 
 @pytest.fixture

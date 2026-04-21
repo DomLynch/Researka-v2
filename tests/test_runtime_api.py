@@ -200,6 +200,7 @@ def test_api_key_blocks_unauthorized_submission(client: TestClient, monkeypatch)
     monkeypatch.setenv("RESEARKA_V2_API_KEY", "test-key-123")
     response = client.post(
         "/submissions",
+        headers={"x-api-key": ""},
         json={
             "title": "Unauthorized",
             "abstract": "Test.",
@@ -489,3 +490,68 @@ def test_ops_summary_requires_admin(client: TestClient) -> None:
     resp = client.get("/ops/summary")
     assert resp.status_code == 403
     assert resp.json()["detail"] == "admin_key_required"
+
+
+def test_per_agent_key_works_without_legacy_env_var(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    monkeypatch.delenv("RESEARKA_V2_API_KEY", raising=False)
+    create_resp = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={"agent_id": "agent-pilot-1", "label": "pilot"},
+    )
+    raw_key = create_resp.json()["raw_key"]
+    response = client.post(
+        "/submissions",
+        headers={"x-api-key": raw_key},
+        json=_minimal_submission_payload(),
+    )
+    assert response.status_code == 200
+
+
+def test_submission_always_requires_auth(client: TestClient, monkeypatch) -> None:
+    monkeypatch.delenv("RESEARKA_V2_API_KEY", raising=False)
+    monkeypatch.delenv("RESEARKA_V2_ADMIN_KEY", raising=False)
+    response = client.post(
+        "/submissions",
+        headers={"x-api-key": ""},
+        json=_minimal_submission_payload(),
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "missing_api_key"
+
+
+def test_admin_rejects_submission_key(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_API_KEY", "submission-key-123")
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    resp = client.get("/ops/summary", headers={"x-api-key": "submission-key-123"})
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "admin_key_required"
+    # Also try creating a key with the submission key
+    resp2 = client.post(
+        "/ops/keys",
+        headers={"x-api-key": "submission-key-123"},
+        json={"agent_id": "agent-1"},
+    )
+    assert resp2.status_code == 403
+    assert resp2.json()["detail"] == "admin_key_required"
+
+
+def test_ops_summary_cost_from_reviews(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    monkeypatch.delenv("RESEARKA_V2_API_KEY", raising=False)
+    from contracts import ObjectType, ResearchObject
+    # Inject a review with non-zero cost to simulate real provider usage
+    repo = client.app.state.repository
+    review = ResearchObject(
+        object_type=ObjectType.REVIEW,
+        title="cost-test-review",
+        body_markdown="",
+        metadata={"cost_usd": 0.05, "recommendation": "accept"},
+    )
+    repo.create_object(review)
+    resp = client.get("/ops/summary", headers=_ops_headers())
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["avg_cost_usd"] > 0
+    assert data["total_cost_usd"] > 0

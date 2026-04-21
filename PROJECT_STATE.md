@@ -18,7 +18,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Live accept/revise/reject proven on VPS (49.12.7.18)
 - [x] Per-agent pilot keys (Postgres-backed, hashed, daily limits)
 - [x] `/ops/summary` endpoint (submissions, decisions, disagreement rate, costs)
-- [ ] Wire Alembic into deploy (auto-schema-migration on restart)
+- [x] Wire Alembic into deploy (auto-schema-migration on restart)
 - [ ] Open invited pilot
 - [ ] Run live 200-paper benchmark against judge_panel
 - [ ] Surface structured scoring/provenance on papers
@@ -42,11 +42,10 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 67 passing, 1 skipped (Postgres concurrency)
+- Tests: 71 passing, 1 skipped (Postgres concurrency)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)
 - Service: `researka-v2.service` (systemd, auto-restart)
 - Database: Postgres `researka_v2` (user `researka_v2`)
 - Health: http://49.12.7.18:8000/health
-- Platform API key: `ResearkaLive2026!`
