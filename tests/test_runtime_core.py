@@ -393,8 +393,8 @@ def test_reviewer_panel_escalates_on_disagreement() -> None:
             )
 
     panel = ReviewerPanel(
-        primary=FakeProvider("minimax", "MiniMax-M2.7-highspeed", "accept"),
-        sparring=FakeProvider("mimo", "mimo-v2-pro", "reject"),
+        primary=FakeProvider("mimo", "mimo-v2-pro", "accept"),
+        sparring=FakeProvider("deepseek", "deepseek-chat", "reject"),
         fallback=FakeProvider("deepseek", "deepseek-reasoner", "revise"),
     )
     result = panel.complete(
@@ -435,7 +435,7 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
             )
 
     panel = ReviewerPanel(
-        primary=BrokenProvider("minimax", "MiniMax-M2.7-highspeed", "<think>not json Think"),
+        primary=BrokenProvider("mimo", "mimo-v2-pro", "<think>not json Think"),
         sparring=BrokenProvider(
             "mimo",
             "mimo-v2-pro",
@@ -483,8 +483,8 @@ def test_reviewer_panel_treats_missing_review_markdown_as_failure() -> None:
 
     panel = ReviewerPanel(
         primary=BrokenProvider(
-            "minimax",
-            "MiniMax-M2.7-highspeed",
+            "mimo",
+            "mimo-v2-pro",
             _review_payload("accept", review_markdown=""),
         ),
         sparring=BrokenProvider(
@@ -533,8 +533,8 @@ def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
 
     panel = ReviewerPanel(
         primary=BrokenProvider(
-            "minimax",
-            "MiniMax-M2.7-highspeed",
+            "mimo",
+            "mimo-v2-pro",
             _review_payload(
                 "accept",
                 rubric_scores={
@@ -581,7 +581,7 @@ def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
 def test_workflow_stores_panel_route_metadata() -> None:
     class PanelProvider:
         provider = "reviewer-panel"
-        model = "MiniMax-M2.7-highspeed|mimo-v2-pro|deepseek-reasoner"
+        model = "mimo-v2-pro|deepseek-chat|deepseek-reasoner"
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
             return ProviderResult(
@@ -612,8 +612,8 @@ def test_workflow_stores_panel_route_metadata() -> None:
                     usage=ProviderUsage(input_tokens=33, output_tokens=12, cost_usd=0.9),
                     metadata={
                         "route": "consensus",
-                        "winner_provider": "minimax",
-                        "winner_model": "MiniMax-M2.7-highspeed",
+                        "winner_provider": "mimo",
+                        "winner_model": "mimo-v2-pro",
                         "primary_recommendation": "accept",
                         "sparring_recommendation": "accept",
                     },
@@ -644,7 +644,7 @@ def test_workflow_stores_panel_route_metadata() -> None:
     review = repo.list_objects("review")[0]
     assert review.metadata["provider"] == "reviewer-panel"
     assert review.metadata["route"] == "consensus"
-    assert review.metadata["winner_provider"] == "minimax"
+    assert review.metadata["winner_provider"] == "mimo"
 
 
 _LONGEVITY_EXEMPLAR_ACCEPT = {
@@ -1202,7 +1202,7 @@ def test_calibration_reject_rubric_fields_stored() -> None:
 def test_panel_stores_rubric_metadata_in_review() -> None:
     class PanelProviderWithRubric:
         provider = "reviewer-panel"
-        model = "MiniMax-M2.7-highspeed|mimo-v2-pro|deepseek-reasoner"
+        model = "mimo-v2-pro|deepseek-chat|deepseek-reasoner"
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
             return ProviderResult(
@@ -1233,8 +1233,8 @@ def test_panel_stores_rubric_metadata_in_review() -> None:
                     usage=ProviderUsage(input_tokens=33, output_tokens=12, cost_usd=0.9),
                     metadata={
                         "route": "consensus",
-                        "winner_provider": "minimax",
-                        "winner_model": "MiniMax-M2.7-highspeed",
+                        "winner_provider": "mimo",
+                        "winner_model": "mimo-v2-pro",
                         "primary_recommendation": "revise",
                         "sparring_recommendation": "revise",
                     },

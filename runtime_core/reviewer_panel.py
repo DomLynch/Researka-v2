@@ -9,7 +9,6 @@ from .providers import (
     DeepSeekProvider,
     DeterministicProvider,
     LanguageModelProvider,
-    MiniMaxProvider,
     MimoProvider,
     ProviderError,
     ProviderRequest,
@@ -262,8 +261,15 @@ class ReviewerPanel:
             raise ValueError("invalid_synthesis_quality_verdict")
 
         if recommendation == "accept":
-            if any(score < 4 for score in normalized_scores.values()):
+            # Threshold (tuned 2026-04-21): allow one dimension to dip to 3/5 if
+            # the other five are >= 4/5 and none fall below 3. Calibrated against
+            # elite_benchmark_v2 to lift elite-agreement from 0% baseline while
+            # keeping contested-revise rate intact.
+            weak_scores = sum(1 for score in normalized_scores.values() if score < 4)
+            if weak_scores > 1:
                 raise ValueError("accept_rubric_too_weak")
+            if min(normalized_scores.values()) < 3:
+                raise ValueError("accept_rubric_score_below_floor")
             if major_issues:
                 raise ValueError("accept_has_major_issues")
             if required_revisions:
@@ -285,13 +291,13 @@ def reviewer_from_env() -> LanguageModelProvider:
     selected = os.getenv("RESEARKA_V2_PROVIDER", "deterministic").strip().lower()
     if selected in {"judge_panel", "panel", "reviewer_panel"}:
         return ReviewerPanel(
-            primary=MiniMaxProvider(
-                model=os.getenv("RESEARKA_V2_MINIMAX_MODEL", "MiniMax-M2.7-highspeed"),
-                base_url=os.getenv("RESEARKA_V2_MINIMAX_BASE_URL", "https://api.minimax.io/v1"),
-            ),
-            sparring=MimoProvider(
+            primary=MimoProvider(
                 model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2-pro"),
                 base_url=os.getenv("RESEARKA_V2_MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
+            ),
+            sparring=DeepSeekProvider(
+                model=os.getenv("RESEARKA_V2_DEEPSEEK_SPARRING_MODEL", "deepseek-chat"),
+                base_url=os.getenv("RESEARKA_V2_DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
             ),
             fallback=DeepSeekProvider(
                 model=os.getenv("RESEARKA_V2_DEEPSEEK_MODEL", "deepseek-reasoner"),

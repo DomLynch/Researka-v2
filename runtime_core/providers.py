@@ -209,24 +209,6 @@ class OpenAICompatibleProvider:
         }
 
 
-class MiniMaxProvider(OpenAICompatibleProvider):
-    def __init__(
-        self,
-        *,
-        api_key: str | None = None,
-        model: str = "MiniMax-M2.7-highspeed",
-        base_url: str = "https://api.minimax.io/v1",
-    ) -> None:
-        super().__init__(
-            provider="minimax",
-            model=model,
-            api_key=api_key or os.getenv("MINIMAX_API_KEY", ""),
-            base_url=base_url,
-            input_cost_per_million=0.6,
-            output_cost_per_million=2.4,
-        )
-
-
 class MimoProvider(OpenAICompatibleProvider):
     def __init__(
         self,
@@ -265,11 +247,6 @@ class DeepSeekProvider(OpenAICompatibleProvider):
 
 def provider_from_env() -> LanguageModelProvider:
     selected = os.getenv("RESEARKA_V2_PROVIDER", "deterministic").strip().lower()
-    if selected == "minimax":
-        return MiniMaxProvider(
-            model=os.getenv("RESEARKA_V2_MINIMAX_MODEL", "MiniMax-M2.7-highspeed"),
-            base_url=os.getenv("RESEARKA_V2_MINIMAX_BASE_URL", "https://api.minimax.io/v1"),
-        )
     if selected == "mimo":
         return MimoProvider(
             model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2-pro"),
