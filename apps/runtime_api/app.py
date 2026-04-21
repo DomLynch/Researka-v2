@@ -159,8 +159,8 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         return submission.model_dump(mode="json")
 
     @app.post("/jobs/run-once")
-    def run_one_job() -> dict:
-        return app.state.worker.run_once()
+    def run_one_job(target_object_id: str | None = None) -> dict:
+        return app.state.worker.run_once(target_object_id=target_object_id)
 
     @app.get("/jobs/queue")
     def queue() -> dict:

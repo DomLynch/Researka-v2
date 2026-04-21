@@ -81,12 +81,10 @@ def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float 
         return record
 
     # 2. Drain jobs (up to 3 per paper: intake, review, editorial)
-    #    Also drain any stale jobs left in queue from previous runs.
+    #    target_object_id filter ensures we only claim this submission's jobs.
     stages_completed = []
-    my_stages = []           # only stages for this submission
-    stale_drained = 0
     drain_loops = 0
-    max_drain_loops = 60     # generous safety valve
+    max_drain_loops = 30     # 3 real stages + empty-retry buffer
     consecutive_empty = 0
     max_empty_retries = 6    # keep retrying a few times after empty
 
@@ -102,7 +100,7 @@ def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float 
             record["outcome"] = "timeout"
             record["error"] = (
                 f"timed out after {elapsed:.1f}s | loops={drain_loops} "
-                f"my_stages={my_stages} stale={stale_drained}"
+                f"stages={stages_completed}"
             )
             record["duration_s"] = round(elapsed, 3)
             return record
@@ -112,6 +110,7 @@ def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float 
             resp = requests.post(
                 f"{base_url}/jobs/run-once",
                 headers=headers,
+                params={"target_object_id": submission_id},
                 timeout=300,
             )
             resp.raise_for_status()
@@ -127,7 +126,6 @@ def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float 
         claimed = result.get("claimed", 0)
         completed = result.get("completed", 0)
         failed = result.get("failed", 0)
-        target = result.get("target_object_id", "?")
         stage = result.get("stage", "?")
 
         if claimed == 0:
@@ -139,19 +137,12 @@ def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float 
             continue
 
         consecutive_empty = 0
-        is_mine = (target == submission_id)
-
-        if is_mine:
-            if completed == 1:
-                my_stages.append(stage)
-                _log(f"MY {stage} completed ({call_dur:.1f}s)")
-            elif failed == 1:
-                my_stages.append(f"{stage}:failed")
-                _log(f"MY {stage} FAILED ({call_dur:.1f}s)")
-            stages_completed = my_stages
-        else:
-            stale_drained += 1
-            _log(f"stale #{stale_drained} (sub={target[:8]}… stage={stage}, {call_dur:.1f}s)")
+        if completed == 1:
+            stages_completed.append(stage)
+            _log(f"{stage} completed ({call_dur:.1f}s)")
+        elif failed == 1:
+            stages_completed.append(f"{stage}:failed")
+            _log(f"{stage} FAILED ({call_dur:.1f}s)")
 
         time.sleep(0.2)
 

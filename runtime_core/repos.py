@@ -21,7 +21,7 @@ class RuntimeRepository(Protocol):
     def enqueue_job(self, job: RuntimeJob) -> RuntimeJob: ...
     def get_job(self, job_id: str) -> RuntimeJob | None: ...
     def queued_jobs(self, stage: str | None = None) -> list[RuntimeJob]: ...
-    def claim_next_job(self) -> RuntimeJob | None: ...
+    def claim_next_job(self, *, target_object_id: str | None = None) -> RuntimeJob | None: ...
     def complete_job(self, job_id: str) -> None: ...
     def fail_job(self, job_id: str, *, reason: str, failure_class: FailureClass | None = None) -> None: ...
     def record_event(self, event: RuntimeEvent) -> None: ...
@@ -128,13 +128,15 @@ class InMemoryRuntimeRepository:
             return jobs
         return [job for job in jobs if job.stage.value == stage]
 
-    def claim_next_job(self) -> RuntimeJob | None:
+    def claim_next_job(self, *, target_object_id: str | None = None) -> RuntimeJob | None:
         now = datetime.now(timezone.utc)
         for job in self.jobs.values():
             if job.status == JobStatus.LEASED and job.lease_expires_at and job.lease_expires_at <= now:
                 job.status = JobStatus.QUEUED
                 job.lease_expires_at = None
         jobs = sorted(self.queued_jobs(), key=lambda job: job.created_at)
+        if target_object_id is not None:
+            jobs = [j for j in jobs if j.target_object_id == target_object_id]
         if not jobs:
             return None
         job = jobs[0]
@@ -558,10 +560,11 @@ class PostgresRuntimeRepository:
                 )
             return [self._job_from_row(row) for row in cur.fetchall()]
 
-    def claim_next_job(self) -> RuntimeJob | None:
+    def claim_next_job(self, *, target_object_id: str | None = None) -> RuntimeJob | None:
         now = datetime.now(timezone.utc)
         lease_expires_at = now + timedelta(seconds=self.lease_ttl_seconds)
         with self._connect() as conn, conn.cursor() as cur:
+            # Always reset expired leases globally — scoped filter is on the claim query only
             cur.execute(
                 """
                 UPDATE runtime_jobs
@@ -570,23 +573,42 @@ class PostgresRuntimeRepository:
                 """,
                 (now,),
             )
-            cur.execute(
-                """
-                WITH next_job AS (
-                    SELECT id
-                    FROM runtime_jobs
-                    WHERE status = 'queued'
-                    ORDER BY created_at ASC
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT 1
+            if target_object_id is not None:
+                cur.execute(
+                    """
+                    WITH next_job AS (
+                        SELECT id
+                        FROM runtime_jobs
+                        WHERE status = 'queued' AND target_object_id = %s
+                        ORDER BY created_at ASC
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                    )
+                    UPDATE runtime_jobs
+                    SET status = 'leased', lease_expires_at = %s
+                    WHERE id = (SELECT id FROM next_job)
+                    RETURNING *
+                    """,
+                    (target_object_id, lease_expires_at),
                 )
-                UPDATE runtime_jobs
-                SET status = 'leased', lease_expires_at = %s
-                WHERE id = (SELECT id FROM next_job)
-                RETURNING *
-                """,
-                (lease_expires_at,),
-            )
+            else:
+                cur.execute(
+                    """
+                    WITH next_job AS (
+                        SELECT id
+                        FROM runtime_jobs
+                        WHERE status = 'queued'
+                        ORDER BY created_at ASC
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                    )
+                    UPDATE runtime_jobs
+                    SET status = 'leased', lease_expires_at = %s
+                    WHERE id = (SELECT id FROM next_job)
+                    RETURNING *
+                    """,
+                    (lease_expires_at,),
+                )
             row = cur.fetchone()
             if row is None:
                 conn.commit()

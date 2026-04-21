@@ -18,8 +18,8 @@ class WorkerApp:
         self.worker_id = worker_id
         self.engine = engine or WorkflowEngine()
 
-    def run_once(self) -> dict:
-        job = self.repository.claim_next_job()
+    def run_once(self, *, target_object_id: str | None = None) -> dict:
+        job = self.repository.claim_next_job(target_object_id=target_object_id)
         if not job:
             return {"claimed": 0, "completed": 0, "failed": 0}
 
