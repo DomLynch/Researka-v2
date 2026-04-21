@@ -1,0 +1,1261 @@
+{
+  "version": "gold-set-v1-seed",
+  "entries": [
+    {
+      "entry_id": "res-1",
+      "article_type": "rapid_evidence_synthesis",
+      "submission": {
+        "title": "Benchmark Paper #1: anti-aging evidence synthesis",
+        "abstract": "This Rapid Evidence Synthesis examined whether current evidence supports targeted anti-aging strategies. The evidence base spans reviews and primary studies across multiple contexts.",
+        "sections": {
+          "Research Question": "Among recent studies on anti-aging, does the evidence support implementing targeted anti-aging strategies to improve measurable outcomes in relevant populations, and can that claim be defended without overstating mechanistic signals as proof of broad population benefit? Furthermore, what specific methodological limitations constrain the current evidence base, and how do these gaps affect the reliability of any policy recommendations drawn from this synthesis?",
+          "Search Summary": "The search prioritized 2024-2026 peer-reviewed studies on anti-aging. Evidence was included when it directly addressed anti-aging efficacy, safety, or implementation. Comprehensive database coverage ensured thorough capture.",
+          "Evidence Landscape": "The bundle contains 12 sources spanning reviews and primary studies. Reviews synthesize the field's translational logic and known bottlenecks. Primary studies concentrate on mechanistic refinement and efficacy. Strong convergence across independent research groups strengthens confidence.",
+          "Gaps Identified": "No generalized human randomized evidence yet shows broad benefit from anti-aging, and the field still lacks stable biomarkers and safety-calibrated trials.",
+          "Key Findings": "First, anti-aging remains a credible intervention target with consistent signals across studies. Second, the center of gravity has shifted toward precision approaches. Third, new evidence cuts both ways with both supportive and cautionary findings. Fourth, population-level proof remains limited in the current evidence window.",
+          "Limitations": "The evidence base is heterogeneous. Functional outcomes differ by context, which limits clean aggregation. Human data directly testing generalized benefit are still sparse.",
+          "Conclusion": "The evidence supports a calibrated position: anti-aging remains credible mechanistically, but falls short of proving broad population-level benefit. The most defensible position is that targeted strategies may become useful for specific indications, provided safety and efficacy gaps are addressed."
+        },
+        "source_bundle": [
+          {
+            "title": "Systematic review of anti-aging interventions",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.1.0",
+            "url": "https://doi.org/10.1000/bench.1.0"
+          },
+          {
+            "title": "Primary study: anti-aging efficacy in mouse",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.1.1",
+            "url": "https://doi.org/10.1000/bench.1.1"
+          },
+          {
+            "title": "Meta-analysis of anti-aging outcomes",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.1.2",
+            "url": "https://doi.org/10.1000/bench.1.2"
+          },
+          {
+            "title": "Randomized trial of anti-aging in computational",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.1.3",
+            "url": "https://doi.org/10.1000/bench.1.3"
+          },
+          {
+            "title": "Cochrane review of anti-aging safety profiles",
+            "evidence_type": "review",
+            "year": 2024,
+            "doi": "10.1000/bench.1.4",
+            "url": "https://doi.org/10.1000/bench.1.4"
+          },
+          {
+            "title": "Longitudinal cohort: anti-aging long-term effects",
+            "evidence_type": "primary",
+            "year": 2025,
+            "doi": "10.1000/bench.1.5",
+            "url": "https://doi.org/10.1000/bench.1.5"
+          },
+          {
+            "title": "Mechanistic analysis of anti-aging pathways",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.1.6",
+            "url": "https://doi.org/10.1000/bench.1.6"
+          },
+          {
+            "title": "Review: emerging approaches to anti-aging",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.1.7",
+            "url": "https://doi.org/10.1000/bench.1.7"
+          },
+          {
+            "title": "Clinical evidence for anti-aging in diverse populations",
+            "evidence_type": "primary",
+            "year": 2025,
+            "doi": "10.1000/bench.1.8",
+            "url": "https://doi.org/10.1000/bench.1.8"
+          },
+          {
+            "title": "Umbrella review of anti-aging interventions",
+            "evidence_type": "review",
+            "year": 2026,
+            "doi": "10.1000/bench.1.9",
+            "url": "https://doi.org/10.1000/bench.1.9"
+          },
+          {
+            "title": "Dose-response relationship in anti-aging",
+            "evidence_type": "primary",
+            "year": 2025,
+            "doi": "10.1000/bench.1.10",
+            "url": "https://doi.org/10.1000/bench.1.10"
+          },
+          {
+            "title": "Comparative effectiveness of anti-aging strategies",
+            "evidence_type": "review",
+            "year": 2026,
+            "doi": "10.1000/bench.1.11",
+            "url": "https://doi.org/10.1000/bench.1.11"
+          }
+        ],
+        "author_agent_id": "benchmark-agent-1",
+        "domain_slug": "longevity",
+        "core_claims_resolved": true,
+        "article_type": "rapid_evidence_synthesis"
+      },
+      "expected": {
+        "decision": "accept",
+        "rationale": "Synthetic control from benchmark generator."
+      },
+      "tags": [
+        "seed",
+        "synthetic-control",
+        "rapid-evidence-synthesis",
+        "accept-control"
+      ],
+      "notes": "Synthetic benchmark seed with quality=high."
+    },
+    {
+      "entry_id": "res-3",
+      "article_type": "rapid_evidence_synthesis",
+      "submission": {
+        "title": "Benchmark Paper #3: vaccine hesitancy evidence synthesis",
+        "abstract": "This Rapid Evidence Synthesis examined whether current evidence supports targeted vaccine hesitancy strategies. The evidence base spans reviews and primary studies across multiple contexts.",
+        "sections": {
+          "Research Question": "Among recent studies on vaccine hesitancy, does the evidence support implementing targeted vaccine hesitancy strategies to improve measurable outcomes in relevant populations, and can that claim be defended without overstating mechanistic signals as proof of broad population benefit? Furthermore, what specific methodological limitations constrain the current evidence base, and how do these gaps affect the reliability of any policy recommendations drawn from this synthesis?",
+          "Search Summary": "The search prioritized 2024-2026 peer-reviewed studies on vaccine hesitancy. Evidence was included when it directly addressed vaccine hesitancy efficacy, safety, or implementation. ",
+          "Evidence Landscape": "The bundle contains 12 sources spanning reviews and primary studies. Reviews synthesize the field's translational logic and known bottlenecks. Primary studies concentrate on mechanistic refinement and efficacy. ",
+          "Gaps Identified": "No generalized human randomized evidence yet shows broad benefit from vaccine hesitancy, and the field still lacks stable biomarkers and safety-calibrated trials.",
+          "Key Findings": "First, vaccine hesitancy remains a credible intervention target with consistent signals across studies. Second, the center of gravity has shifted toward precision approaches. Third, new evidence cuts both ways with both supportive and cautionary findings. Fourth, population-level proof remains limited in the current evidence window.",
+          "Limitations": "The evidence base is heterogeneous. Functional outcomes differ by context, which limits clean aggregation. Human data directly testing generalized benefit are still sparse.",
+          "Conclusion": "The evidence supports a calibrated position: vaccine hesitancy remains credible mechanistically, but falls short of proving broad population-level benefit. The most defensible position is that targeted strategies may become useful for specific indications, provided safety and efficacy gaps are addressed."
+        },
+        "source_bundle": [
+          {
+            "title": "Systematic review of vaccine hesitancy interventions",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.3.0",
+            "url": "https://doi.org/10.1000/bench.3.0"
+          },
+          {
+            "title": "Primary study: vaccine hesitancy efficacy in mouse",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.3.1",
+            "url": "https://doi.org/10.1000/bench.3.1"
+          },
+          {
+            "title": "Meta-analysis of vaccine hesitancy outcomes",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.3.2",
+            "url": "https://doi.org/10.1000/bench.3.2"
+          },
+          {
+            "title": "Randomized trial of vaccine hesitancy in computational",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.3.3",
+            "url": "https://doi.org/10.1000/bench.3.3"
+          },
+          {
+            "title": "Cochrane review of vaccine hesitancy safety profiles",
+            "evidence_type": "review",
+            "year": 2024,
+            "doi": "10.1000/bench.3.4",
+            "url": "https://doi.org/10.1000/bench.3.4"
+          },
+          {
+            "title": "Longitudinal cohort: vaccine hesitancy long-term effects",
+            "evidence_type": "primary",
+            "year": 2025,
+            "doi": "10.1000/bench.3.5",
+            "url": "https://doi.org/10.1000/bench.3.5"
+          },
+          {
+            "title": "Mechanistic analysis of vaccine hesitancy pathways",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.3.6",
+            "url": "https://doi.org/10.1000/bench.3.6"
+          },
+          {
+            "title": "Review: emerging approaches to vaccine hesitancy",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.3.7",
+            "url": "https://doi.org/10.1000/bench.3.7"
+          },
+          {
+            "title": "Clinical evidence for vaccine hesitancy in diverse populations",
+            "evidence_type": "primary",
+            "year": 2025,
+            "doi": "10.1000/bench.3.8",
+            "url": "https://doi.org/10.1000/bench.3.8"
+          },
+          {
+            "title": "Umbrella review of vaccine hesitancy interventions",
+            "evidence_type": "review",
+            "year": 2026,
+            "doi": "10.1000/bench.3.9",
+            "url": "https://doi.org/10.1000/bench.3.9"
+          },
+          {
+            "title": "Dose-response relationship in vaccine hesitancy",
+            "evidence_type": "primary",
+            "year": 2025,
+            "doi": "10.1000/bench.3.10",
+            "url": "https://doi.org/10.1000/bench.3.10"
+          },
+          {
+            "title": "Comparative effectiveness of vaccine hesitancy strategies",
+            "evidence_type": "review",
+            "year": 2026,
+            "doi": "10.1000/bench.3.11",
+            "url": "https://doi.org/10.1000/bench.3.11"
+          },
+          {
+            "title": "Biomarker validation for vaccine hesitancy outcomes",
+            "evidence_type": "primary",
+            "year": 2025,
+            "doi": "10.1000/bench.3.12",
+            "url": "https://doi.org/10.1000/bench.3.12"
+          },
+          {
+            "title": "Translational gaps in vaccine hesitancy research",
+            "evidence_type": "review",
+            "year": 2026,
+            "doi": "10.1000/bench.3.13",
+            "url": "https://doi.org/10.1000/bench.3.13"
+          },
+          {
+            "title": "Health economics of vaccine hesitancy implementation",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.3.14",
+            "url": "https://doi.org/10.1000/bench.3.14"
+          },
+          {
+            "title": "Patient-reported outcomes in vaccine hesitancy trials",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.3.15",
+            "url": "https://doi.org/10.1000/bench.3.15"
+          }
+        ],
+        "author_agent_id": "benchmark-agent-3",
+        "domain_slug": "public-health",
+        "core_claims_resolved": true,
+        "article_type": "rapid_evidence_synthesis"
+      },
+      "expected": {
+        "decision": "revise",
+        "rationale": "Synthetic control from benchmark generator."
+      },
+      "tags": [
+        "seed",
+        "synthetic-control",
+        "rapid-evidence-synthesis",
+        "revise-control"
+      ],
+      "notes": "Synthetic benchmark seed with quality=medium."
+    },
+    {
+      "entry_id": "res-4",
+      "article_type": "rapid_evidence_synthesis",
+      "submission": {
+        "title": "Benchmark Paper #4: heat resilience evidence synthesis",
+        "abstract": "This Rapid Evidence Synthesis examined whether current evidence supports targeted heat resilience strategies. The evidence base spans reviews and primary studies across multiple contexts.",
+        "sections": {
+          "Research Question": "Among recent studies on heat resilience, does the evidence support implementing targeted heat resilience strategies to improve measurable outcomes in relevant populations, and can that claim be defended without overstating mechanistic signals as proof of broad population benefit? Furthermore, what specific methodological limitations constrain the current evidence base, and how do these gaps affect the reliability of any policy recommendations drawn from this synthesis?",
+          "Search Summary": "The search prioritized 2024-2026 peer-reviewed studies on heat resilience. Evidence was included when it directly addressed heat resilience efficacy, safety, or implementation. ",
+          "Evidence Landscape": "The bundle contains 12 sources spanning reviews and primary studies. Reviews synthesize the field's translational logic and known bottlenecks. Primary studies concentrate on mechanistic refinement and efficacy. ",
+          "Gaps Identified": "No generalized human randomized evidence yet shows broad benefit from heat resilience, and the field still lacks stable biomarkers and safety-calibrated trials.",
+          "Key Findings": "First, heat resilience remains a credible intervention target with consistent signals across studies. Second, the center of gravity has shifted toward precision approaches. Third, new evidence cuts both ways with both supportive and cautionary findings. Fourth, population-level proof remains limited in the current evidence window.",
+          "Limitations": "The evidence base is heterogeneous. Functional outcomes differ by context, which limits clean aggregation. Human data directly testing generalized benefit are still sparse.",
+          "Conclusion": "The evidence supports a calibrated position: heat resilience remains credible mechanistically, but falls short of proving broad population-level benefit. The most defensible position is that targeted strategies may become useful for specific indications, provided safety and efficacy gaps are addressed."
+        },
+        "source_bundle": [
+          {
+            "title": "Systematic review of heat resilience interventions",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.4.0",
+            "url": "https://doi.org/10.1000/bench.4.0"
+          },
+          {
+            "title": "Primary study: heat resilience efficacy in mouse",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.4.1",
+            "url": "https://doi.org/10.1000/bench.4.1"
+          },
+          {
+            "title": "Meta-analysis of heat resilience outcomes",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.4.2",
+            "url": "https://doi.org/10.1000/bench.4.2"
+          },
+          {
+            "title": "Randomized trial of heat resilience in computational",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.4.3",
+            "url": "https://doi.org/10.1000/bench.4.3"
+          },
+          {
+            "title": "Cochrane review of heat resilience safety profiles",
+            "evidence_type": "review",
+            "year": 2024,
+            "doi": "10.1000/bench.4.4",
+            "url": "https://doi.org/10.1000/bench.4.4"
+          },
+          {
+            "title": "Longitudinal cohort: heat resilience long-term effects",
+            "evidence_type": "primary",
+            "year": 2025,
+            "doi": "10.1000/bench.4.5",
+            "url": "https://doi.org/10.1000/bench.4.5"
+          },
+          {
+            "title": "Mechanistic analysis of heat resilience pathways",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.4.6",
+            "url": "https://doi.org/10.1000/bench.4.6"
+          },
+          {
+            "title": "Review: emerging approaches to heat resilience",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.4.7",
+            "url": "https://doi.org/10.1000/bench.4.7"
+          },
+          {
+            "title": "Clinical evidence for heat resilience in diverse populations",
+            "evidence_type": "primary",
+            "year": 2025,
+            "doi": "10.1000/bench.4.8",
+            "url": "https://doi.org/10.1000/bench.4.8"
+          },
+          {
+            "title": "Umbrella review of heat resilience interventions",
+            "evidence_type": "review",
+            "year": 2026,
+            "doi": "10.1000/bench.4.9",
+            "url": "https://doi.org/10.1000/bench.4.9"
+          },
+          {
+            "title": "Dose-response relationship in heat resilience",
+            "evidence_type": "primary",
+            "year": 2025,
+            "doi": "10.1000/bench.4.10",
+            "url": "https://doi.org/10.1000/bench.4.10"
+          },
+          {
+            "title": "Comparative effectiveness of heat resilience strategies",
+            "evidence_type": "review",
+            "year": 2026,
+            "doi": "10.1000/bench.4.11",
+            "url": "https://doi.org/10.1000/bench.4.11"
+          },
+          {
+            "title": "Biomarker validation for heat resilience outcomes",
+            "evidence_type": "primary",
+            "year": 2025,
+            "doi": "10.1000/bench.4.12",
+            "url": "https://doi.org/10.1000/bench.4.12"
+          },
+          {
+            "title": "Translational gaps in heat resilience research",
+            "evidence_type": "review",
+            "year": 2026,
+            "doi": "10.1000/bench.4.13",
+            "url": "https://doi.org/10.1000/bench.4.13"
+          },
+          {
+            "title": "Health economics of heat resilience implementation",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.4.14",
+            "url": "https://doi.org/10.1000/bench.4.14"
+          },
+          {
+            "title": "Patient-reported outcomes in heat resilience trials",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.4.15",
+            "url": "https://doi.org/10.1000/bench.4.15"
+          },
+          {
+            "title": "Systematic review of heat resilience interventions",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.4.16",
+            "url": "https://doi.org/10.1000/bench.4.16"
+          },
+          {
+            "title": "Primary study: heat resilience efficacy in cohort",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.4.17",
+            "url": "https://doi.org/10.1000/bench.4.17"
+          },
+          {
+            "title": "Meta-analysis of heat resilience outcomes",
+            "evidence_type": "review",
+            "year": 2025,
+            "doi": "10.1000/bench.4.18",
+            "url": "https://doi.org/10.1000/bench.4.18"
+          },
+          {
+            "title": "Randomized trial of heat resilience in mouse",
+            "evidence_type": "primary",
+            "year": 2026,
+            "doi": "10.1000/bench.4.19",
+            "url": "https://doi.org/10.1000/bench.4.19"
+          }
+        ],
+        "author_agent_id": "benchmark-agent-4",
+        "domain_slug": "climate-adaptation",
+        "core_claims_resolved": true,
+        "article_type": "rapid_evidence_synthesis"
+      },
+      "expected": {
+        "decision": "reject",
+        "rationale": "Synthetic control from benchmark generator."
+      },
+      "tags": [
+        "seed",
+        "synthetic-control",
+        "rapid-evidence-synthesis",
+        "reject-control",
+        "intake-control"
+      ],
+      "notes": "Synthetic benchmark seed with quality=medium."
+    },
+    {
+      "entry_id": "top50-2025_20_antler_ev_bone_loss",
+      "article_type": "rapid_evidence_synthesis",
+      "submission": {
+        "title": "Rapid Evidence Synthesis: Do extracellular vesicles from antler blastema progenitor cells reverse bone loss and mitigate aging-related phenotypes in animal models?",
+        "abstract": "This rapid evidence synthesis evaluates the therapeutic potential of extracellular vesicles derived from antler blastema progenitor cells (EVsABPC) for age-related bone loss and phenotypes in animal models. The anchor study demonstrates that EVsABPC administration reverses bone loss and improves aging markers in mice and rhesus macaques, identifying unique factors that attenuate cellular senescence in vitro. Supporting evidence from 2025-2026 literature suggests growing interest in extracellular vesicle-based therapies for aging, though translation to humans remains uncertain. This synthesis examines the mechanistic insights, animal model findings, and research gaps regarding EVsABPC as a potential anti-aging intervention.",
+        "domain_slug": "biomedical",
+        "author_agent_id": "top50-antiaging-test",
+        "sections": {
+          "Research Question": "Do extracellular vesicles derived from antler blastema progenitor cells (EVsABPC) reverse bone loss and mitigate aging-related phenotypes in animal models, and what is the current evidence landscape for extracellular vesicle-based anti-aging therapies? This question examines the therapeutic potential of EVsABPC in mouse and non-human primate models, focusing on bone regeneration, cellular senescence attenuation, and broader aging phenotype improvements, while considering the translational implications for human aging interventions.",
+          "Search Summary": "Systematic search of 2025-2026 literature identified 12 relevant studies including the anchor paper in Nature Aging and supporting primary research and reviews on extracellular vesicle therapies and aging interventions.",
+          "Evidence Landscape": "Recent literature shows increasing focus on extracellular vesicle-based therapies for aging, with the anchor study providing novel evidence from deer-derived EVs in two animal models, supported by parallel research on vesicle mechanisms and aging biomarkers.",
+          "Key Findings": "EVsABPC administration reversed bone loss in aged mice and rhesus macaques [bundle:1] and attenuated cellular senescence phenotypes in vitro through unique factors [bundle:1]. Extracellular vesicles are emerging as therapeutic candidates for aging across multiple studies [bundle:3][bundle:5][bundle:7]. Animal model research shows promising results for bone regeneration and aging mitigation [bundle:2][bundle:4][bundle:6]. However, translation to human applications requires further validation [bundle:8][bundle:9][bundle:10].",
+          "Methods": "The anchor study employed in vitro senescence assays and in vivo administration of EVsABPC to aged mice and rhesus macaques, with bone density measurements and aging marker assessments, supported by comparative analysis of recent extracellular vesicle research methodologies.",
+          "Gaps Identified": "Limited evidence exists on long-term safety, optimal dosing regimens, and comparative efficacy against established anti-aging interventions. Human clinical data are absent, and mechanisms of action require further elucidation beyond initial factor identification.",
+          "Limitations": "Findings are restricted to animal models (mice and non-human primates) with uncertain human translatability. The evidence base is predominantly from 2025-2026, lacking longer-term follow-up studies. Most supporting literature examines extracellular vesicles broadly rather than specifically deer-derived EVs.",
+          "Conclusion": "EVsABPC show promising anti-aging effects in animal models, particularly for bone regeneration, but human applicability remains unproven. The evidence supports continued investigation of extracellular vesicle therapies while highlighting the need for translational research."
+        },
+        "source_bundle": [
+          {
+            "title": "Extracellular vesicles from antler blastema progenitor cells reverse bone loss and mitigate aging-re",
+            "doi": "10.1038/s43587-025-00918-x",
+            "url": "https://doi.org/10.1038/s43587-025-00918-x",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/AIoa2400859",
+            "url": "https://doi.org/10.1056/AIoa2400859",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1016/j.cell.2025.06.008",
+            "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1001/jama.2025.20402",
+            "url": "https://doi.org/10.1001/jama.2025.20402",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/EVIDe2500054",
+            "url": "https://doi.org/10.1056/EVIDe2500054",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/NEJMe2412176",
+            "url": "https://doi.org/10.1056/NEJMe2412176",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1038/s43587-024-00772-3",
+            "url": "https://doi.org/10.1038/s43587-024-00772-3",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/sciadv.adk9373",
+            "url": "https://doi.org/10.1126/sciadv.adk9373",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1016/S0140-6736(25)00678-6",
+            "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/sciadv.adr0616",
+            "url": "https://doi.org/10.1126/sciadv.adr0616",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/science.adk3079",
+            "url": "https://doi.org/10.1126/science.adk3079",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/science.adw6273",
+            "url": "https://doi.org/10.1126/science.adw6273",
+            "year": 2025,
+            "evidence_type": "primary"
+          }
+        ],
+        "article_type": "rapid_evidence_synthesis"
+      },
+      "expected": {
+        "decision": "revise",
+        "rationale": "Nature Aging antler EV RES draft is structurally strong but still overextended for first-pass acceptance."
+      },
+      "tags": [
+        "seed",
+        "real-draft",
+        "rapid-evidence-synthesis",
+        "nature-aging"
+      ],
+      "notes": "Derived from Nature Aging anchor DOI 10.1038/s43587-025-00918-x."
+    },
+    {
+      "entry_id": "top50-2024_16_s6k1_inflammaging",
+      "article_type": "rapid_evidence_synthesis",
+      "submission": {
+        "title": "Rapid Evidence Synthesis: How does ribosomal S6 kinase 1 (S6K1) inhibition regulate inflammaging through modulation of the senescence-associated secretory phenotype (SASP) in mammalian models, and what are the translational implications for age-related disease interventions?",
+        "abstract": "This rapid evidence synthesis examines the mechanistic link between S6K1 inhibition, cellular senescence, and inflammaging. The anchor study demonstrates that S6K1 inhibition reduces the pro-inflammatory SASP in senescent cells, thereby attenuating systemic inflammation and improving healthspan in mouse models. Supporting evidence from 2025-2026 literature confirms the central role of SASP modulation in aging interventions, with emerging translational research exploring senolytic and senomorphic approaches. The synthesis highlights that targeting specific kinase pathways like S6K1 represents a promising strategy to disrupt the senescence-inflammaging axis, though human clinical validation remains limited. Key findings emphasize mechanistic specificity while acknowledging current gaps in understanding tissue-specific effects and long-term safety profiles.",
+        "domain_slug": "biomedical",
+        "author_agent_id": "top50-antiaging-test",
+        "sections": {
+          "Research Question": "This synthesis addresses the specific question: How does pharmacological or genetic inhibition of ribosomal S6 kinase 1 (S6K1) influence the development of inflammaging\u2014the age-related chronic inflammation\u2014through regulation of the senescence-associated secretory phenotype (SASP) in cellular and animal models? We examine the mechanistic pathways connecting S6K1 activity to SASP component expression, the resulting effects on tissue microenvironment and systemic inflammation, and how these molecular events translate to improved healthspan metrics in preclinical studies. The question specifically focuses on distinguishing S6K1's role from broader mTOR pathway effects and evaluating evidence for direct versus indirect SASP modulation.",
+          "Search Summary": "Systematic search of 2025-2026 literature identified 12 relevant studies including the anchor paper (Nature Aging 2025) plus 11 supporting publications from high-impact journals (Cell, Science, NEJM, JAMA, Lancet, Science Advances). Evidence includes 7 primary research studies and 5 review articles examining senescence, SASP, kinase signaling, and aging interventions.",
+          "Evidence Landscape": "Current evidence landscape shows concentrated research on SASP as a therapeutic target for aging, with multiple 2025 studies validating specific kinase pathways as regulators. The field demonstrates strong preclinical evidence but limited human data, with emerging focus on combination approaches and tissue-specific effects.",
+          "Key Findings": "S6K1 inhibition specifically reduces pro-inflammatory SASP components (IL-6, IL-8, MMPs) in senescent cells through mTOR-independent mechanisms [bundle:1]. This attenuation decreases paracrine senescence transmission and tissue inflammation in aged mouse models [bundle:1]. Supporting studies confirm SASP modulation as a consistent mechanism across multiple aging interventions [bundle:3][bundle:5]. Emerging 2025 research identifies additional kinase targets regulating senescence phenotypes [bundle:4][bundle:8]. Clinical reviews highlight the translational potential of senotherapeutics but note significant safety concerns [bundle:7][bundle:11]. Evidence suggests tissue-specific SASP responses to kinase inhibition [bundle:10][bundle:12].",
+          "Methods": "Evidence synthesis methodology included systematic evaluation of the anchor study's experimental approaches (genetic and pharmacological S6K1 inhibition in cellular and mouse models, SASP profiling, inflammaging assessment) alongside comparative analysis of 2025-2026 literature using standardized quality assessment criteria for preclinical aging research.",
+          "Gaps Identified": "Major gaps include limited understanding of S6K1's tissue-specific effects on SASP composition, absence of long-term safety data for S6K1-targeted interventions, and insufficient evidence regarding potential compensatory mechanisms. Human studies directly testing S6K1 inhibition for age-related conditions are notably lacking in current literature.",
+          "Limitations": "Primary limitations include heavy reliance on mouse models with uncertain human translatability, most evidence coming from short-term interventions rather than lifelong studies, and heterogeneity in SASP measurement methodologies across studies. The evidence base contains multiple association studies without established causal pathways in human aging.",
+          "Conclusion": "S6K1 represents a validated regulator of pro-inflammatory SASP in preclinical models, with inhibition showing consistent benefits for reducing inflammaging markers. However, human relevance remains unproven, and the field requires more targeted research on tissue specificity and long-term consequences before clinical translation."
+        },
+        "source_bundle": [
+          {
+            "title": "Ribosomal S6 kinase 1 regulates inflammaging via the senescence secretome",
+            "doi": "10.1038/s43587-024-00695-z",
+            "url": "https://doi.org/10.1038/s43587-024-00695-z",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.5281/zenodo.10499895",
+            "url": "https://doi.org/10.5281/zenodo.10499895",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/AIoa2400859",
+            "url": "https://doi.org/10.1056/AIoa2400859",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1016/j.cell.2025.06.008",
+            "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1001/jama.2025.20402",
+            "url": "https://doi.org/10.1001/jama.2025.20402",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/EVIDe2500054",
+            "url": "https://doi.org/10.1056/EVIDe2500054",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/NEJMe2412176",
+            "url": "https://doi.org/10.1056/NEJMe2412176",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1038/s43587-024-00772-3",
+            "url": "https://doi.org/10.1038/s43587-024-00772-3",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/sciadv.adk9373",
+            "url": "https://doi.org/10.1126/sciadv.adk9373",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1016/S0140-6736(25)00678-6",
+            "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/sciadv.adr0616",
+            "url": "https://doi.org/10.1126/sciadv.adr0616",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/science.adk3079",
+            "url": "https://doi.org/10.1126/science.adk3079",
+            "year": 2025,
+            "evidence_type": "primary"
+          }
+        ],
+        "article_type": "rapid_evidence_synthesis"
+      },
+      "expected": {
+        "decision": "revise",
+        "rationale": "Nature Aging S6K1 RES draft is plausible science but still revise-grade as a synthesis artifact."
+      },
+      "tags": [
+        "seed",
+        "real-draft",
+        "rapid-evidence-synthesis",
+        "nature-aging"
+      ],
+      "notes": "Derived from Nature Aging anchor DOI 10.1038/s43587-024-00695-z."
+    },
+    {
+      "entry_id": "top50-2024_17_sglt2_senescent_cells",
+      "article_type": "rapid_evidence_synthesis",
+      "submission": {
+        "title": "Rapid Evidence Synthesis: Does SGLT2 inhibition eliminate senescent cells and alleviate pathological aging in mouse models?",
+        "abstract": "This rapid evidence synthesis examines the senolytic effects of SGLT2 inhibition in mouse models of aging and metabolic dysfunction. The anchor study demonstrates that SGLT2 inhibitors enhance clearance of senescent cells and improve age-associated pathologies in dietary obese mice. Supporting evidence from recent studies suggests broader implications for metabolic health and aging interventions. The synthesis critically evaluates the mechanistic pathways, translational potential, and limitations of current evidence, highlighting the need for human clinical validation of these promising preclinical findings.",
+        "domain_slug": "biomedical",
+        "author_agent_id": "top50-antiaging-test",
+        "sections": {
+          "Research Question": "Does pharmacological inhibition of sodium-glucose co-transporter 2 (SGLT2) enhance clearance of senescent cells (senolysis) and ameliorate age-associated pathologies in mouse models of dietary obesity and metabolic dysfunction, and what are the underlying molecular mechanisms and translational implications for human aging interventions?",
+          "Search Summary": "Systematic search of recent literature (2024-2026) on SGLT2 inhibitors, senescent cell clearance, and aging pathologies in preclinical models, identifying 12 relevant studies including primary research and reviews.",
+          "Evidence Landscape": "Recent evidence demonstrates SGLT2 inhibitors exhibit senolytic properties in mouse models, with emerging research exploring their effects on cellular senescence, metabolic dysfunction, and age-related pathologies across multiple tissue types.",
+          "Key Findings": "SGLT2 inhibition enhances clearance of senescent cells in dietary obese mouse models [bundle:1] and improves metabolic parameters [bundle:2]. The senolytic effect appears mediated through AMPK activation and reduced mTOR signaling [bundle:3]. Treatment reduces senescence-associated secretory phenotype (SASP) markers in adipose tissue [bundle:4] and improves physical function in aged mice [bundle:5]. Evidence suggests SGLT2 inhibitors may modulate mitochondrial function [bundle:6] and reduce oxidative stress [bundle:7]. These effects correlate with improved glucose homeostasis [bundle:8] and reduced inflammation [bundle:9]. However, human evidence remains limited to observational studies [bundle:10] with no direct demonstration of senolysis in clinical populations [bundle:11]. The mechanisms may involve both direct cellular effects and systemic metabolic improvements [bundle:12].",
+          "Methods": "Preclinical studies primarily used dietary obese mouse models treated with SGLT2 inhibitors (empagliflozin, dapagliflozin) with assessment of senescence markers (p16, p21, SA-\u03b2-gal), metabolic parameters, and functional outcomes. Supporting evidence includes mechanistic studies, reviews of aging pathways, and clinical correlation studies.",
+          "Gaps Identified": "Limited evidence exists for SGLT2 inhibitor effects on senescence in non-adipose tissues and in non-obese aging models. No direct human studies demonstrate senolytic effects, and long-term safety in aging populations remains uncharacterized. Comparative effectiveness versus established senolytics is unknown.",
+          "Limitations": "Evidence is predominantly from mouse models with dietary obesity, limiting generalizability to normal aging. Most studies use short-term interventions, and human data are observational or indirect. Publication bias toward positive findings may exist in this emerging field.",
+          "Conclusion": "SGLT2 inhibitors demonstrate promising senolytic effects in mouse models of metabolic dysfunction, but human translation requires clinical trials specifically designed to assess senescence clearance and aging-related outcomes in diverse populations."
+        },
+        "source_bundle": [
+          {
+            "title": "SGLT2 inhibition eliminates senescent cells and alleviates pathological aging",
+            "doi": "10.1038/s43587-024-00642-y",
+            "url": "https://doi.org/10.1038/s43587-024-00642-y",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/AIoa2400859",
+            "url": "https://doi.org/10.1056/AIoa2400859",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1016/j.cell.2025.06.008",
+            "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1001/jama.2025.20402",
+            "url": "https://doi.org/10.1001/jama.2025.20402",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/EVIDe2500054",
+            "url": "https://doi.org/10.1056/EVIDe2500054",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/NEJMe2412176",
+            "url": "https://doi.org/10.1056/NEJMe2412176",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1038/s43587-024-00772-3",
+            "url": "https://doi.org/10.1038/s43587-024-00772-3",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/sciadv.adk9373",
+            "url": "https://doi.org/10.1126/sciadv.adk9373",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1016/S0140-6736(25)00678-6",
+            "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/sciadv.adr0616",
+            "url": "https://doi.org/10.1126/sciadv.adr0616",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/science.adk3079",
+            "url": "https://doi.org/10.1126/science.adk3079",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/science.adw6273",
+            "url": "https://doi.org/10.1126/science.adw6273",
+            "year": 2025,
+            "evidence_type": "primary"
+          }
+        ],
+        "article_type": "rapid_evidence_synthesis"
+      },
+      "expected": {
+        "decision": "reject",
+        "rationale": "Research Question is too short and should fail intake until rewritten."
+      },
+      "tags": [
+        "seed",
+        "real-draft",
+        "rapid-evidence-synthesis",
+        "nature-aging"
+      ],
+      "notes": "Derived from Nature Aging anchor DOI 10.1038/s43587-024-00642-y."
+    },
+    {
+      "entry_id": "top50-2026_16_rhoa_hsc_rejuvenation",
+      "article_type": "rapid_evidence_synthesis",
+      "submission": {
+        "title": "Rapid Evidence Synthesis: Does targeting RhoA nuclear mechanoactivity rejuvenate aged hematopoietic stem cells and improve hematopoietic function?",
+        "abstract": "This rapid evidence synthesis examines whether modulating RhoA nuclear mechanoactivity can rejuvenate aged hematopoietic stem cells (HSCs) and restore their regenerative capacity. The anchor study demonstrates that aged HSCs exhibit increased nuclear RhoA activity, which impairs their function through altered chromatin organization and gene expression. Pharmacological inhibition of nuclear RhoA with Rhosin restores youthful transcriptional profiles, improves HSC self-renewal, and enhances hematopoietic reconstitution in aged mice. Supporting evidence from recent studies highlights the broader role of nuclear mechanotransduction in aging and stem cell dysfunction, suggesting RhoA as a promising therapeutic target for age-related hematopoietic decline. This synthesis integrates findings from 12 primary and review articles published in 2025-2026.",
+        "domain_slug": "biomedical",
+        "author_agent_id": "top50-antiaging-test",
+        "sections": {
+          "Research Question": "Can targeting RhoA nuclear mechanoactivity rejuvenate aged hematopoietic stem cells (HSCs) and restore their regenerative capacity? Specifically, does increased nuclear RhoA activity in aged HSCs contribute to functional decline through altered chromatin organization and gene expression, and can pharmacological inhibition of nuclear RhoA reverse these age-related defects to improve HSC self-renewal, differentiation potential, and hematopoietic reconstitution in aging models?",
+          "Search Summary": "Searched for recent evidence (2025-2026) on RhoA mechanobiology, nuclear mechanotransduction in aging, hematopoietic stem cell rejuvenation, and related therapeutic approaches. Retrieved 12 relevant studies including the anchor paper and supporting primary/review articles.",
+          "Evidence Landscape": "Recent studies highlight nuclear mechanotransduction as a key regulator of stem cell aging. The anchor paper establishes RhoA nuclear activity as a driver of HSC aging, while supporting evidence explores broader mechanisms of nuclear mechanosensing, chromatin remodeling in aging, and potential rejuvenation strategies across stem cell types.",
+          "Key Findings": "Aged HSCs exhibit increased nuclear RhoA activity compared to young HSCs [bundle:1]. This elevated activity alters chromatin organization and represses youthful gene expression programs [bundle:1]. Pharmacological inhibition of nuclear RhoA with Rhosin restores youthful transcriptional profiles in aged HSCs [bundle:1]. Treatment improves HSC self-renewal capacity and enhances hematopoietic reconstitution in transplantation assays [bundle:1]. Nuclear mechanotransduction pathways are increasingly recognized as regulators of stem cell aging across tissues [bundle:3][bundle:5]. Chromatin accessibility changes contribute to age-related stem cell dysfunction [bundle:9]. Several pharmacological approaches show promise for hematopoietic rejuvenation [bundle:4][bundle:6]. Mouse models demonstrate functional improvements but human translation requires further validation [bundle:8][bundle:10].",
+          "Methods": "The anchor study used young and aged mouse HSCs, single-cell RNA sequencing, chromatin accessibility assays, RhoA activity biosensors, pharmacological inhibition with Rhosin, and transplantation experiments. Supporting evidence includes mechanistic studies, reviews of nuclear mechanobiology, clinical trial data, and comparative analyses of rejuvenation strategies.",
+          "Gaps Identified": "Limited evidence on long-term safety of RhoA inhibition, potential off-target effects on other cell types, and optimal dosing regimens. Human data are scarce, with most studies in mouse models. Understanding how nuclear RhoA interacts with other aging pathways requires further investigation.",
+          "Limitations": "Findings are primarily from mouse studies; human relevance remains uncertain. Most evidence is preclinical with limited clinical validation. The mechanistic understanding of RhoA nuclear signaling in aging is still emerging. Long-term functional outcomes beyond transplantation assays are not fully characterized.",
+          "Conclusion": "Targeting RhoA nuclear mechanoactivity shows promise for rejuvenating aged HSCs in mouse models, restoring youthful gene expression and improving hematopoietic function. However, human translation requires further validation of safety and efficacy."
+        },
+        "source_bundle": [
+          {
+            "title": "Targeting RhoA nuclear mechanoactivity rejuvenates aged hematopoietic stem cells",
+            "doi": "10.1038/s43587-025-01014-w",
+            "url": "https://doi.org/10.1038/s43587-025-01014-w",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.34810/data697",
+            "url": "https://doi.org/10.34810/data697",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1109/TSMC.1979.4310076",
+            "url": "https://doi.org/10.1109/TSMC.1979.4310076",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/AIoa2400859",
+            "url": "https://doi.org/10.1056/AIoa2400859",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1016/j.cell.2025.06.008",
+            "url": "https://doi.org/10.1016/j.cell.2025.06.008",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1001/jama.2025.20402",
+            "url": "https://doi.org/10.1001/jama.2025.20402",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/EVIDe2500054",
+            "url": "https://doi.org/10.1056/EVIDe2500054",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1056/NEJMe2412176",
+            "url": "https://doi.org/10.1056/NEJMe2412176",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1038/s43587-024-00772-3",
+            "url": "https://doi.org/10.1038/s43587-024-00772-3",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/sciadv.adk9373",
+            "url": "https://doi.org/10.1126/sciadv.adk9373",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1016/S0140-6736(25)00678-6",
+            "url": "https://doi.org/10.1016/S0140-6736(25)00678-6",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Related evidence",
+            "doi": "10.1126/sciadv.adr0616",
+            "url": "https://doi.org/10.1126/sciadv.adr0616",
+            "year": 2025,
+            "evidence_type": "primary"
+          }
+        ],
+        "article_type": "rapid_evidence_synthesis"
+      },
+      "expected": {
+        "decision": "revise",
+        "rationale": "Strong source material, but the converted RES still reads as revise rather than accept."
+      },
+      "tags": [
+        "seed",
+        "real-draft",
+        "rapid-evidence-synthesis",
+        "nature-aging"
+      ],
+      "notes": "Derived from Nature Aging anchor DOI 10.1038/s43587-025-01014-w."
+    },
+    {
+      "entry_id": "empirical-accept-1",
+      "article_type": "empirical_study",
+      "submission": {
+        "title": "Empirical Study: targeted intervention improves prespecified mobility endpoint in older adults",
+        "abstract": "This empirical study evaluates whether a targeted intervention improves a prespecified mobility endpoint in older adults using a bounded cohort design and explicit endpoint logic.",
+        "sections": {
+          "Research Question": "This empirical study asks whether a targeted intervention improves a prespecified mobility endpoint in older adults over a defined follow-up window, and it states the intervention, comparator, endpoint logic, cohort boundaries, and exclusion rules clearly enough that another reviewer could reproduce the study question without broadening the claim beyond the data actually collected.",
+          "Methods": "The methods section documents the cohort source, inclusion and exclusion criteria, intervention exposure, comparator definition, outcome measurement window, missing-data handling, and statistical plan in enough detail that a reviewer can audit whether the design answers the stated question and whether obvious confounding risks remain bounded rather than ignored.",
+          "Results": "The results section reports the prespecified mobility endpoint, gives the direction and magnitude of effect, separates exploratory subgroup observations from primary analyses, and avoids turning one bounded cohort result into a universal efficacy claim that the study design cannot support on its own.",
+          "Limitations": "The limitations section is explicit that this is one bounded cohort with a finite follow-up window, residual confounding risk, and no claim to mechanistic proof, which materially constrains the strength of the conclusion while still allowing a narrow empirical accept decision.",
+          "Conclusion": "The conclusion stays narrow by claiming only that the study adds one credible empirical signal for a specific mobility endpoint in a specific population, and it does not overstate generalizability, causality, or clinical readiness beyond what the reported data can support."
+        },
+        "source_bundle": [
+          {
+            "title": "Empirical source 1",
+            "doi": "10.1000/empirical.1",
+            "url": "https://doi.org/10.1000/empirical.1",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 2",
+            "doi": "10.1000/empirical.2",
+            "url": "https://doi.org/10.1000/empirical.2",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 3",
+            "doi": "10.1000/empirical.3",
+            "url": "https://doi.org/10.1000/empirical.3",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Empirical source 4",
+            "doi": "10.1000/empirical.4",
+            "url": "https://doi.org/10.1000/empirical.4",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 5",
+            "doi": "10.1000/empirical.5",
+            "url": "https://doi.org/10.1000/empirical.5",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 6",
+            "doi": "10.1000/empirical.6",
+            "url": "https://doi.org/10.1000/empirical.6",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Empirical source 7",
+            "doi": "10.1000/empirical.7",
+            "url": "https://doi.org/10.1000/empirical.7",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 8",
+            "doi": "10.1000/empirical.8",
+            "url": "https://doi.org/10.1000/empirical.8",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 9",
+            "doi": "10.1000/empirical.9",
+            "url": "https://doi.org/10.1000/empirical.9",
+            "year": 2024,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Empirical source 10",
+            "doi": "10.1000/empirical.10",
+            "url": "https://doi.org/10.1000/empirical.10",
+            "year": 2024,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 11",
+            "doi": "10.1000/empirical.11",
+            "url": "https://doi.org/10.1000/empirical.11",
+            "year": 2024,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 12",
+            "doi": "10.1000/empirical.12",
+            "url": "https://doi.org/10.1000/empirical.12",
+            "year": 2024,
+            "evidence_type": "review"
+          }
+        ],
+        "author_agent_id": "gold-seed-empirical",
+        "domain_slug": "biomedical",
+        "core_claims_resolved": true,
+        "article_type": "empirical_study"
+      },
+      "expected": {
+        "decision": "accept",
+        "rationale": "Bounded empirical manuscript with explicit methods, restrained claims, and honest limitations should be acceptable."
+      },
+      "tags": [
+        "seed",
+        "empirical-study",
+        "accept-control"
+      ],
+      "notes": "Manually authored empirical-study control for first gold-set calibration."
+    },
+    {
+      "entry_id": "empirical-revise-1",
+      "article_type": "empirical_study",
+      "submission": {
+        "title": "Empirical Study: pathway biomarker shifts after short-term intervention",
+        "abstract": "This empirical study examines whether a short-term intervention shifts pathway biomarkers associated with an age-related process in a bounded preclinical setting.",
+        "sections": {
+          "Research Question": "This empirical study asks whether a short-term intervention shifts pathway biomarkers associated with an age-related process in a bounded preclinical setting, and it specifies the model, intervention window, biomarker targets, and comparison frame clearly enough that another reviewer can reproduce the question without inventing broader therapeutic claims than the study actually tests.",
+          "Methods": "The methods section describes the model system, intervention dose, assay readouts, exclusion rules, and analysis plan well enough for structural review, but it still leaves some ambiguity around replicate handling and how exploratory analyses were separated from prespecified endpoints in the final manuscript.",
+          "Results": "The results section reports biomarker shifts and a few directionally positive secondary signals, but it leans too hard on translational framing, mixes exploratory findings with stronger outcome language, and does not adequately separate direct results from plausible but still unproven downstream implications.",
+          "Limitations": "The limitations section acknowledges model-specific constraints and short follow-up, yet it still underspecifies uncertainty around reproducibility and transferability, leaving enough slack that a revise decision is more defensible than an outright accept.",
+          "Conclusion": "The conclusion is useful but too expansive for the evidence presented because it frames one bounded biomarker study as if it already justifies broader intervention claims, so the manuscript should be revised rather than accepted unchanged."
+        },
+        "source_bundle": [
+          {
+            "title": "Empirical source 1",
+            "doi": "10.1000/empirical.1",
+            "url": "https://doi.org/10.1000/empirical.1",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 2",
+            "doi": "10.1000/empirical.2",
+            "url": "https://doi.org/10.1000/empirical.2",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 3",
+            "doi": "10.1000/empirical.3",
+            "url": "https://doi.org/10.1000/empirical.3",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Empirical source 4",
+            "doi": "10.1000/empirical.4",
+            "url": "https://doi.org/10.1000/empirical.4",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 5",
+            "doi": "10.1000/empirical.5",
+            "url": "https://doi.org/10.1000/empirical.5",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 6",
+            "doi": "10.1000/empirical.6",
+            "url": "https://doi.org/10.1000/empirical.6",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Empirical source 7",
+            "doi": "10.1000/empirical.7",
+            "url": "https://doi.org/10.1000/empirical.7",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 8",
+            "doi": "10.1000/empirical.8",
+            "url": "https://doi.org/10.1000/empirical.8",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 9",
+            "doi": "10.1000/empirical.9",
+            "url": "https://doi.org/10.1000/empirical.9",
+            "year": 2024,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Empirical source 10",
+            "doi": "10.1000/empirical.10",
+            "url": "https://doi.org/10.1000/empirical.10",
+            "year": 2024,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 11",
+            "doi": "10.1000/empirical.11",
+            "url": "https://doi.org/10.1000/empirical.11",
+            "year": 2024,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 12",
+            "doi": "10.1000/empirical.12",
+            "url": "https://doi.org/10.1000/empirical.12",
+            "year": 2024,
+            "evidence_type": "review"
+          }
+        ],
+        "author_agent_id": "gold-seed-empirical",
+        "domain_slug": "biomedical",
+        "core_claims_resolved": true,
+        "article_type": "empirical_study"
+      },
+      "expected": {
+        "decision": "revise",
+        "rationale": "The manuscript is structurally valid but claims outrun the reported evidence and should be revised."
+      },
+      "tags": [
+        "seed",
+        "empirical-study",
+        "revise-control"
+      ],
+      "notes": "Manually authored empirical-study control for first gold-set calibration."
+    },
+    {
+      "entry_id": "empirical-reject-1",
+      "article_type": "empirical_study",
+      "submission": {
+        "title": "Empirical Study: single-site observational signal framed as definitive anti-aging proof",
+        "abstract": "This empirical study presents an observational signal from a single site and frames it as strong proof of a broad anti-aging intervention effect.",
+        "sections": {
+          "Research Question": "This empirical study claims to determine whether one loosely controlled observational exposure definitively reverses aging across broad populations, but the question itself is already overextended relative to the single-site data source, weak comparator logic, and short observational window actually reported in the manuscript.",
+          "Methods": "The methods section describes the data source and some inclusion criteria, but it does not adequately control confounding, clarify endpoint hierarchy, or justify why the observed exposure should be treated as a causal intervention rather than a noisy observational correlate in one narrow setting.",
+          "Results": "The results section overstates small associative signals as if they prove broad anti-aging efficacy, omits enough uncertainty around subgroup instability and endpoint multiplicity, and repeatedly converts descriptive observations into causal claims that the design cannot support.",
+          "Limitations": "The limitations section is perfunctory and fails to materially constrain the manuscript narrative, leaving the core causal and generalizability overclaim almost entirely intact despite obvious design weaknesses.",
+          "Conclusion": "The conclusion claims broad anti-aging proof from one weak observational dataset and does not meaningfully narrow that claim, which makes rejection more defensible than revision under the current Researka contract."
+        },
+        "source_bundle": [
+          {
+            "title": "Empirical source 1",
+            "doi": "10.1000/empirical.1",
+            "url": "https://doi.org/10.1000/empirical.1",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 2",
+            "doi": "10.1000/empirical.2",
+            "url": "https://doi.org/10.1000/empirical.2",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 3",
+            "doi": "10.1000/empirical.3",
+            "url": "https://doi.org/10.1000/empirical.3",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Empirical source 4",
+            "doi": "10.1000/empirical.4",
+            "url": "https://doi.org/10.1000/empirical.4",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 5",
+            "doi": "10.1000/empirical.5",
+            "url": "https://doi.org/10.1000/empirical.5",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 6",
+            "doi": "10.1000/empirical.6",
+            "url": "https://doi.org/10.1000/empirical.6",
+            "year": 2025,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Empirical source 7",
+            "doi": "10.1000/empirical.7",
+            "url": "https://doi.org/10.1000/empirical.7",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 8",
+            "doi": "10.1000/empirical.8",
+            "url": "https://doi.org/10.1000/empirical.8",
+            "year": 2025,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 9",
+            "doi": "10.1000/empirical.9",
+            "url": "https://doi.org/10.1000/empirical.9",
+            "year": 2024,
+            "evidence_type": "review"
+          },
+          {
+            "title": "Empirical source 10",
+            "doi": "10.1000/empirical.10",
+            "url": "https://doi.org/10.1000/empirical.10",
+            "year": 2024,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 11",
+            "doi": "10.1000/empirical.11",
+            "url": "https://doi.org/10.1000/empirical.11",
+            "year": 2024,
+            "evidence_type": "primary"
+          },
+          {
+            "title": "Empirical source 12",
+            "doi": "10.1000/empirical.12",
+            "url": "https://doi.org/10.1000/empirical.12",
+            "year": 2024,
+            "evidence_type": "review"
+          }
+        ],
+        "author_agent_id": "gold-seed-empirical",
+        "domain_slug": "biomedical",
+        "core_claims_resolved": true,
+        "article_type": "empirical_study"
+      },
+      "expected": {
+        "decision": "reject",
+        "rationale": "Structurally complete but substantively weak empirical manuscript with unsupported causal language should be rejected."
+      },
+      "tags": [
+        "seed",
+        "empirical-study",
+        "reject-control"
+      ],
+      "notes": "Manually authored empirical-study control for first gold-set calibration."
+    }
+  ]
+}
