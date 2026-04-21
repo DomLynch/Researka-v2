@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException, Request
 
@@ -8,6 +10,31 @@ from apps.worker.main import WorkerApp
 from contracts import ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
+
+_calibration_cache: dict | None = None
+_calibration_path: str | None = None
+
+
+def reset_calibration_cache() -> None:
+    global _calibration_cache, _calibration_path
+    _calibration_cache = None
+    _calibration_path = None
+
+
+def _load_calibration_data() -> dict:
+    global _calibration_cache, _calibration_path
+    default_path = os.environ.get(
+        "RESEARKA_V2_CALIBRATION_PATH",
+        str(Path(__file__).resolve().parents[2] / "calibration_run_v1_results.json"),
+    )
+    if _calibration_cache is not None and _calibration_path == default_path:
+        return _calibration_cache
+    path = Path(default_path)
+    if not path.exists():
+        return {"summary": {}, "results": []}
+    _calibration_cache = json.loads(path.read_text())
+    _calibration_path = default_path
+    return _calibration_cache
 
 
 def _check_api_key(repo: RuntimeRepository, request: Request) -> str | None:
@@ -287,6 +314,25 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         if not ok:
             raise HTTPException(status_code=404, detail="key_not_found")
         return {"revoked": True, "key_hash": key_hash}
+
+    @app.get("/calibration")
+    def calibration() -> dict:
+        data = _load_calibration_data()
+        summary = data.get("summary", {})
+        mismatches = summary.get("mismatches", [])
+        return {
+            "overall": summary.get("overall", {}),
+            "by_category": summary.get("by_category", {}),
+            "gate_failures": summary.get("gate_failures", {}),
+            "mismatch_count": len(mismatches),
+        }
+
+    @app.get("/calibration/mismatches")
+    def calibration_mismatches() -> dict:
+        data = _load_calibration_data()
+        summary = data.get("summary", {})
+        mismatches = summary.get("mismatches", [])
+        return {"mismatches": mismatches}
 
     return app
 

@@ -629,3 +629,144 @@ def test_provenance_before_pipeline(client: TestClient) -> None:
     assert data["reviews"] == []
     assert data["decisions"] == []
     assert data["total_cost_usd"] == 0.0
+
+
+def test_calibration_no_file(client: TestClient, tmp_path, monkeypatch) -> None:
+    from apps.runtime_api.app import reset_calibration_cache
+
+    reset_calibration_cache()
+    monkeypatch.setenv("RESEARKA_V2_CALIBRATION_PATH", str(tmp_path / "missing.json"))
+    resp = client.get("/calibration")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["overall"] == {}
+    assert data["by_category"] == {}
+    assert data["gate_failures"] == {}
+    assert data["mismatch_count"] == 0
+
+
+def test_calibration_summary(client: TestClient, tmp_path, monkeypatch) -> None:
+    from apps.runtime_api.app import reset_calibration_cache
+
+    reset_calibration_cache()
+    test_data = {
+        "summary": {
+            "overall": {
+                "total": 50,
+                "correct": 30,
+                "expected_reject": 30,
+                "actual_reject": 50,
+                "expected_revise": 10,
+                "expected_accept": 10,
+                "accuracy": 0.6,
+                "cost_usd_total": 1.23,
+                "elapsed_sec": 10.0,
+            },
+            "by_category": {
+                "overclaim": {
+                    "total": 10,
+                    "correct": 10,
+                    "expected_reject": 10,
+                    "actual_reject": 10,
+                    "accuracy": 1.0,
+                },
+                "good_baseline": {
+                    "total": 10,
+                    "correct": 0,
+                    "expected_accept": 10,
+                    "actual_reject": 10,
+                    "accuracy": 0.0,
+                },
+            },
+            "gate_failures": {"research_question_word_budget": 50},
+            "mismatches": [
+                {
+                    "index": 1,
+                    "title": "Paper A",
+                    "category": "good_baseline",
+                    "expected": "accept",
+                    "actual": "reject",
+                    "route": "intake_gate",
+                    "stage": "intake",
+                    "gate_failures": ["research_question_word_budget"],
+                },
+            ],
+        },
+        "results": [],
+    }
+    cal_path = tmp_path / "calibration_run_v1_results.json"
+    cal_path.write_text(__import__("json").dumps(test_data))
+    monkeypatch.setenv("RESEARKA_V2_CALIBRATION_PATH", str(cal_path))
+
+    resp = client.get("/calibration")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["overall"]["total"] == 50
+    assert data["overall"]["correct"] == 30
+    assert data["overall"]["accuracy"] == 0.6
+    assert "overclaim" in data["by_category"]
+    assert data["by_category"]["overclaim"]["accuracy"] == 1.0
+    assert data["gate_failures"]["research_question_word_budget"] == 50
+    assert data["mismatch_count"] == 1
+
+
+def test_calibration_no_auth_required(client: TestClient) -> None:
+    """Calibration is public — test with a fresh client that has NO default api key."""
+    from apps.runtime_api.app import create_app, reset_calibration_cache
+    from runtime_core import InMemoryRuntimeRepository
+
+    reset_calibration_cache()
+    import importlib
+    import apps.runtime_api.app as app_mod
+
+    importlib.reload(app_mod)
+    no_auth_client = TestClient(create_app(InMemoryRuntimeRepository()))
+    resp = no_auth_client.get("/calibration")
+    assert resp.status_code == 200
+
+
+def test_calibration_mismatches(client: TestClient, tmp_path, monkeypatch) -> None:
+    from apps.runtime_api.app import reset_calibration_cache
+
+    reset_calibration_cache()
+    test_data = {
+        "summary": {
+            "overall": {},
+            "by_category": {},
+            "gate_failures": {},
+            "mismatches": [
+                {
+                    "index": 1,
+                    "title": "Paper A",
+                    "category": "good_baseline",
+                    "expected": "accept",
+                    "actual": "reject",
+                    "route": "intake_gate",
+                    "stage": "intake",
+                    "gate_failures": ["research_question_word_budget"],
+                },
+                {
+                    "index": 2,
+                    "title": "Paper B",
+                    "category": "overclaim",
+                    "expected": "reject",
+                    "actual": "reject",
+                    "route": "review",
+                    "stage": "review",
+                    "gate_failures": [],
+                },
+            ],
+        },
+        "results": [],
+    }
+    cal_path = tmp_path / "calibration_run_v1_results.json"
+    cal_path.write_text(__import__("json").dumps(test_data))
+    monkeypatch.setenv("RESEARKA_V2_CALIBRATION_PATH", str(cal_path))
+
+    resp = client.get("/calibration/mismatches")
+    assert resp.status_code == 200
+    data = resp.json()
+    mismatches = data["mismatches"]
+    assert len(mismatches) == 2
+    assert mismatches[0]["title"] == "Paper A"
+    assert mismatches[1]["expected"] == "reject"
