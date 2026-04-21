@@ -770,3 +770,116 @@ def test_calibration_mismatches(client: TestClient, tmp_path, monkeypatch) -> No
     assert len(mismatches) == 2
     assert mismatches[0]["title"] == "Paper A"
     assert mismatches[1]["expected"] == "reject"
+
+
+def _submit_and_process(client: TestClient) -> str:
+    submission = client.post(
+        "/submissions",
+        json={
+            "title": "Rapid Evidence Synthesis: cellular senescence",
+            "abstract": "Bounded external submission.",
+            "sections": {
+                "Research Question": "This submission asks a bounded research question with enough detail on topic, evidence type, comparator, outcome target, and decision frame that a reviewer could reproduce the intended scope, publication window, and inclusion logic without inventing missing assumptions, broadening the claim, silently changing the relevant evidence category, or misreading the intended publication class for downstream review.",
+                "Search Summary": "Databases searched include PubMed and review corpora, with a documented date window, explicit inclusion logic, and a clear narrowing rule that explains why these retained receipts best match the scoped research question.",
+                "Evidence Landscape": "The bundle mixes review-level and primary evidence, explains where review-level support dominates the synthesis, and does not overclaim causal certainty when the retained evidence is heterogeneous.",
+                "Key Findings": "Key findings integrate the retained evidence into a bounded synthesis rather than stitched snippets, and they distinguish stronger review-level support from more tentative primary-study signals.",
+                "Limitations": "The main limits are scope, incomplete coverage, heterogeneous certainty, and the possibility of omitted contradictory sources that could materially shift the confidence of the synthesis.",
+                "Gaps Identified": "No independent replication has confirmed these synthesis-level findings, and the gap between review-level evidence and applied outcomes remains untested.",
+                "Conclusion": "The current evidence supports a cautious synthesis with explicit uncertainty, transparent methodological limits, and no claim that exceeds the retained bundle.",
+            },
+            "source_bundle": _valid_source_bundle(),
+            "author_agent_id": "agent-demo",
+            "domain_slug": "longevity",
+        },
+    ).json()["submission"]
+    _run_until_idle(client)
+    return submission["id"]
+
+
+def test_submit_audit_review(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    sub_id = _submit_and_process(client)
+    resp = client.post(
+        f"/audit/{sub_id}",
+        headers=_ops_headers(),
+        json={
+            "auditor_id": "auditor-alpha",
+            "auditor_verdict": "reject",
+            "auditor_notes": "Missing citation support",
+            "confidence": 0.85,
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["submission_id"] == sub_id
+    assert data["auditor_id"] == "auditor-alpha"
+    assert data["auditor_verdict"] == "reject"
+    assert data["auditor_notes"] == "Missing citation support"
+    assert data["confidence"] == 0.85
+    assert data["verdict_match"] in ("agree", "disagree")
+
+
+def test_audit_summary_empty(client: TestClient) -> None:
+    resp = client.get("/audit-summary")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_audits"] == 0
+    assert data["agreement_rate"] == 0.0
+
+
+def test_audit_summary_after_review(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    sub_id = _submit_and_process(client)
+    client.post(
+        f"/audit/{sub_id}",
+        headers=_ops_headers(),
+        json={"auditor_id": "auditor-a", "auditor_verdict": "reject", "auditor_notes": "notes", "confidence": 0.9},
+    )
+    client.post(
+        f"/audit/{sub_id}",
+        headers=_ops_headers(),
+        json={"auditor_id": "auditor-b", "auditor_verdict": "reject", "auditor_notes": "more notes", "confidence": 0.7},
+    )
+    resp = client.get("/audit-summary")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_audits"] == 2
+    assert 0.0 <= data["agreement_rate"] <= 1.0
+    assert "auditor-a" in data["by_auditor"]
+    assert "auditor-b" in data["by_auditor"]
+
+
+def test_list_audit_reviews_by_submission(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    sub_id = _submit_and_process(client)
+    client.post(
+        f"/audit/{sub_id}",
+        headers=_ops_headers(),
+        json={"auditor_id": "auditor-x", "auditor_verdict": "reject", "auditor_notes": "x", "confidence": 1.0},
+    )
+    resp = client.get(f"/audit/{sub_id}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["reviews"]) == 1
+    assert data["reviews"][0]["auditor_id"] == "auditor-x"
+
+
+def test_audit_rejects_without_admin(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    sub_id = _submit_and_process(client)
+    resp = client.post(
+        f"/audit/{sub_id}",
+        json={"auditor_id": "auditor-x", "auditor_verdict": "reject", "auditor_notes": "x", "confidence": 1.0},
+    )
+    assert resp.status_code == 403
+
+
+def test_audit_rejects_invalid_verdict(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    sub_id = _submit_and_process(client)
+    resp = client.post(
+        f"/audit/{sub_id}",
+        headers=_ops_headers(),
+        json={"auditor_id": "auditor-x", "auditor_verdict": "invalid_verdict", "auditor_notes": "x", "confidence": 1.0},
+    )
+    assert resp.status_code == 400

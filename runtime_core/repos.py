@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
-from contracts import ApiKeyCreateResponse, ApiKeyInfo, FailureClass, EventType, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob
+from contracts import ApiKeyCreateResponse, ApiKeyInfo, AuditReview, AuditVerdict, FailureClass, EventType, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob
 
 
 class RuntimeRepository(Protocol):
@@ -35,6 +35,11 @@ class RuntimeRepository(Protocol):
     def record_api_key_usage(self, key_hash: str) -> None: ...
     def get_api_key_usage_today(self, key_hash: str) -> int: ...
 
+    # Audit review management
+    def create_audit_review(self, review: AuditReview) -> AuditReview: ...
+    def list_audit_reviews(self, submission_id: str | None = None) -> list[AuditReview]: ...
+    def audit_summary(self, submission_id: str | None = None) -> dict: ...
+
 
 class InMemoryRuntimeRepository:
     def __init__(self, *, lease_ttl_seconds: int = 300) -> None:
@@ -46,6 +51,7 @@ class InMemoryRuntimeRepository:
         self.publication_by_target: dict[str, str] = {}
         self.api_keys: dict[str, ApiKeyInfo] = {}
         self.api_key_usage: dict[tuple[str, str], int] = {}
+        self.audit_reviews: list[AuditReview] = []
         self.lease_ttl_seconds = lease_ttl_seconds
 
     def reset(self) -> None:
@@ -57,6 +63,7 @@ class InMemoryRuntimeRepository:
         self.publication_by_target.clear()
         self.api_keys.clear()
         self.api_key_usage.clear()
+        self.audit_reviews.clear()
 
     def create_object(self, obj: ResearchObject) -> ResearchObject:
         self.objects[obj.id] = obj
@@ -207,6 +214,37 @@ class InMemoryRuntimeRepository:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         return self.api_key_usage.get((key_hash, today), 0)
 
+    def create_audit_review(self, review: AuditReview) -> AuditReview:
+        self.audit_reviews.append(review)
+        return review
+
+    def list_audit_reviews(self, submission_id: str | None = None) -> list[AuditReview]:
+        if submission_id is None:
+            return list(self.audit_reviews)
+        return [r for r in self.audit_reviews if r.submission_id == submission_id]
+
+    def audit_summary(self, submission_id: str | None = None) -> dict:
+        reviews = self.list_audit_reviews(submission_id)
+        total = len(reviews)
+        if total == 0:
+            return {"total_audits": 0, "agreement_rate": 0.0, "by_auditor": {}, "by_verdict": {}}
+        agree = sum(1 for r in reviews if r.verdict_match == AuditVerdict.AGREE)
+        by_auditor: dict[str, dict] = {}
+        by_verdict: dict[str, int] = {}
+        for r in reviews:
+            by_auditor.setdefault(r.auditor_id, {"total": 0, "agree": 0})
+            by_auditor[r.auditor_id]["total"] += 1
+            if r.verdict_match == AuditVerdict.AGREE:
+                by_auditor[r.auditor_id]["agree"] += 1
+            v = r.auditor_verdict.value if r.auditor_verdict else "unknown"
+            by_verdict[v] = by_verdict.get(v, 0) + 1
+        return {
+            "total_audits": total,
+            "agreement_rate": round(agree / total, 4),
+            "by_auditor": by_auditor,
+            "by_verdict": by_verdict,
+        }
+
 
 def postgres_dsn_from_env() -> str | None:
     return os.environ.get("TEST_POSTGRES_DSN") or os.environ.get("RESEARKA_V2_POSTGRES_DSN")
@@ -339,12 +377,26 @@ class PostgresRuntimeRepository:
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS audit_reviews (
+                    submission_id TEXT NOT NULL,
+                    auditor_id TEXT NOT NULL,
+                    auditor_verdict TEXT NOT NULL,
+                    auditor_notes TEXT NOT NULL DEFAULT '',
+                    system_verdict TEXT NULL,
+                    verdict_match TEXT NULL,
+                    confidence REAL NOT NULL DEFAULT 0.0,
+                    created_at TIMESTAMPTZ NOT NULL
+                )
+                """
+            )
             cur.execute("SELECT pg_advisory_unlock(62004201)")
             conn.commit()
 
     def reset(self) -> None:
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("TRUNCATE api_key_usage, api_keys, runtime_events, runtime_jobs, research_objects;")
+            cur.execute("TRUNCATE audit_reviews, api_key_usage, api_keys, runtime_events, runtime_jobs, research_objects;")
             conn.commit()
 
     def _object_from_row(self, row: dict | None) -> ResearchObject | None:
@@ -681,3 +733,73 @@ class PostgresRuntimeRepository:
             )
             row = cur.fetchone()
             return row["count"] if row else 0
+
+    def _audit_from_row(self, row: dict) -> AuditReview:
+        return AuditReview(
+            submission_id=row["submission_id"],
+            auditor_id=row["auditor_id"],
+            auditor_verdict=row["auditor_verdict"],
+            auditor_notes=row["auditor_notes"],
+            system_verdict=row["system_verdict"],
+            verdict_match=row["verdict_match"],
+            confidence=row["confidence"],
+            created_at=row["created_at"],
+        )
+
+    def create_audit_review(self, review: AuditReview) -> AuditReview:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO audit_reviews (submission_id, auditor_id, auditor_verdict, auditor_notes, system_verdict, verdict_match, confidence, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    review.submission_id,
+                    review.auditor_id,
+                    review.auditor_verdict,
+                    review.auditor_notes,
+                    review.system_verdict,
+                    review.verdict_match,
+                    review.confidence,
+                    review.created_at,
+                ),
+            )
+            conn.commit()
+        return review
+
+    def list_audit_reviews(self, submission_id: str | None = None) -> list[AuditReview]:
+        with self._connect() as conn, conn.cursor() as cur:
+            if submission_id:
+                cur.execute("SELECT * FROM audit_reviews WHERE submission_id = %s ORDER BY created_at ASC", (submission_id,))
+            else:
+                cur.execute("SELECT * FROM audit_reviews ORDER BY created_at ASC")
+            rows = cur.fetchall()
+        return [self._audit_from_row(r) for r in rows]
+
+    def audit_summary(self, submission_id: str | None = None) -> dict:
+        with self._connect() as conn, conn.cursor() as cur:
+            if submission_id:
+                cur.execute("SELECT * FROM audit_reviews WHERE submission_id = %s", (submission_id,))
+            else:
+                cur.execute("SELECT * FROM audit_reviews")
+            rows = cur.fetchall()
+        reviews = [self._audit_from_row(r) for r in rows]
+        total = len(reviews)
+        if total == 0:
+            return {"total_audits": 0, "agreement_rate": 0.0, "by_auditor": {}, "by_verdict": {}}
+        agree = sum(1 for r in reviews if r.verdict_match == AuditVerdict.AGREE)
+        by_auditor: dict[str, dict] = {}
+        by_verdict: dict[str, int] = {}
+        for r in reviews:
+            by_auditor.setdefault(r.auditor_id, {"total": 0, "agree": 0})
+            by_auditor[r.auditor_id]["total"] += 1
+            if r.verdict_match == AuditVerdict.AGREE:
+                by_auditor[r.auditor_id]["agree"] += 1
+            v = r.auditor_verdict.value if r.auditor_verdict else "unknown"
+            by_verdict[v] = by_verdict.get(v, 0) + 1
+        return {
+            "total_audits": total,
+            "agreement_rate": round(agree / total, 4),
+            "by_auditor": by_auditor,
+            "by_verdict": by_verdict,
+        }

@@ -1,6 +1,8 @@
 from .models import (
     ApiKeyCreateResponse,
     ApiKeyInfo,
+    AuditReview,
+    AuditVerdict,
     Decision,
     EventType,
     FailureClass,
@@ -26,6 +28,8 @@ from .frozen import IntakeRejectReason, INTAKE_REJECT_REASONS, SUBMISSION_CONTRA
 __all__ = [
     "ApiKeyCreateResponse",
     "ApiKeyInfo",
+    "AuditReview",
+    "AuditVerdict",
     "Decision",
     "EventType",
     "FailureClass",

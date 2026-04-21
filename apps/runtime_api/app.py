@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import Body, FastAPI, HTTPException, Request
 
 from apps.worker.main import WorkerApp
-from contracts import ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
+from contracts import AuditReview, AuditVerdict, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 
@@ -333,6 +333,55 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         summary = data.get("summary", {})
         mismatches = summary.get("mismatches", [])
         return {"mismatches": mismatches}
+
+    @app.post("/audit/{submission_id}")
+    def submit_audit_review(submission_id: str, request: Request, body: dict = Body(...)) -> dict:
+        _check_admin(request)
+        auditor_id = body.get("auditor_id", "")
+        if not auditor_id:
+            raise HTTPException(status_code=400, detail="auditor_id required")
+        auditor_verdict_str = body.get("auditor_verdict", "")
+        try:
+            auditor_verdict = Decision(auditor_verdict_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid auditor_verdict; must be accept|reject|revise|desk_reject")
+        auditor_notes = body.get("auditor_notes", "")
+        confidence = float(body.get("confidence", 0.0))
+        decisions = app.state.repository.children_of(submission_id, ObjectType.DECISION)
+        system_verdict = None
+        if decisions:
+            system_verdict = decisions[-1].metadata.get("decision")
+        if system_verdict and system_verdict != auditor_verdict:
+            verdict_match = AuditVerdict.DISAGREE
+        elif system_verdict and system_verdict == auditor_verdict:
+            verdict_match = AuditVerdict.AGREE
+        else:
+            verdict_match = None
+        if system_verdict and isinstance(system_verdict, str):
+            try:
+                system_verdict = Decision(system_verdict)
+            except ValueError:
+                system_verdict = None
+        review = AuditReview(
+            submission_id=submission_id,
+            auditor_id=auditor_id,
+            auditor_verdict=auditor_verdict,
+            auditor_notes=auditor_notes,
+            system_verdict=system_verdict,
+            verdict_match=verdict_match,
+            confidence=confidence,
+        )
+        saved = app.state.repository.create_audit_review(review)
+        return saved.model_dump(mode="json")
+
+    @app.get("/audit/{submission_id}")
+    def get_audit_reviews(submission_id: str) -> dict:
+        reviews = app.state.repository.list_audit_reviews(submission_id)
+        return {"reviews": [r.model_dump(mode="json") for r in reviews]}
+
+    @app.get("/audit-summary")
+    def get_audit_summary(submission_id: str | None = None) -> dict:
+        return app.state.repository.audit_summary(submission_id)
 
     return app
 

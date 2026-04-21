@@ -36,6 +36,7 @@ class ObjectType(StrEnum):
     REVIEW = "review"
     DECISION = "decision"
     PUBLICATION = "publication"
+    AUDIT_REVIEW = "audit_review"
 
 
 class EventType(StrEnum):
@@ -170,4 +171,22 @@ class ApiKeyCreateResponse(BaseModel):
     label: str = ""
     daily_limit: int = 0
     raw_key: str
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class AuditVerdict(StrEnum):
+    AGREE = "agree"
+    DISAGREE = "disagree"
+    PARTIAL = "partial"
+
+
+class AuditReview(BaseModel):
+    """External auditor review of a system decision."""
+    submission_id: str
+    auditor_id: str
+    auditor_verdict: Decision
+    auditor_notes: str = ""
+    system_verdict: Decision | None = None
+    verdict_match: AuditVerdict | None = None
+    confidence: float = 0.0  # 0.0-1.0
     created_at: datetime = Field(default_factory=utc_now)
