@@ -1,4 +1,6 @@
+from .goldset import GoldSetCorpus, GoldSetEntry, GoldSetExpectation
 from .models import (
+    ArticleType,
     ApiKeyCreateResponse,
     ApiKeyInfo,
     AuditReview,
@@ -21,25 +23,31 @@ from .models import (
     WorkflowContext,
     WorkflowOutcome,
 )
-from .templates import PublicationTemplate, RAPID_EVIDENCE_SYNTHESIS
-from .submissions import SourceBundleEntry, SubmissionTemplateV1, run_submission_template_checks
+from .templates import EMPIRICAL_STUDY, PUBLICATION_TEMPLATES, PublicationTemplate, RAPID_EVIDENCE_SYNTHESIS, publication_template_for
+from .submissions import SourceBundleEntry, SubmissionTemplateV1, run_submission_template_checks, submission_template_for
 from .frozen import IntakeRejectReason, INTAKE_REJECT_REASONS, SUBMISSION_CONTRACT
 
 __all__ = [
+    "ArticleType",
     "ApiKeyCreateResponse",
     "ApiKeyInfo",
     "AuditReview",
     "AuditVerdict",
     "Decision",
+    "EMPIRICAL_STUDY",
     "EventType",
     "FailureClass",
     "GateResult",
+    "GoldSetCorpus",
+    "GoldSetEntry",
+    "GoldSetExpectation",
     "INTAKE_REJECT_REASONS",
     "IntakeRejectReason",
     "JobStatus",
     "ObjectType",
     "ProviderErrorClass",
     "ProviderUsage",
+    "PUBLICATION_TEMPLATES",
     "PublicationArtifact",
     "PublicationCounts",
     "PublicationTemplate",
@@ -49,7 +57,9 @@ __all__ = [
     "SourceBundleEntry",
     "SubmissionPayload",
     "SubmissionTemplateV1",
+    "publication_template_for",
     "run_submission_template_checks",
+    "submission_template_for",
     "RuntimeEvent",
     "RuntimeJob",
     "Stage",

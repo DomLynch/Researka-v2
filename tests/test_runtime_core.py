@@ -14,7 +14,7 @@ from runtime_core.workflow import (
     WorkflowEngine,
 )
 
-from contracts import Decision, FailureClass, ObjectType, ProviderUsage, ResearchObject, RuntimeJob, Stage, WorkflowContext
+from contracts import ArticleType, Decision, FailureClass, ObjectType, ProviderUsage, ResearchObject, RuntimeJob, Stage, WorkflowContext
 
 
 def _full_sections(
@@ -161,6 +161,24 @@ def test_compile_publication_strips_leakage_lines() -> None:
     assert "Legit retained summary line" in artifact.body_markdown
 
 
+def test_compile_publication_supports_empirical_study_sections() -> None:
+    artifact = compile_publication(
+        title="Empirical manuscript",
+        abstract="A",
+        article_type=ArticleType.EMPIRICAL_STUDY.value,
+        sections={
+            "Research Question": "This empirical study asks whether a bounded intervention changes a measurable outcome in a defined population, and it specifies the comparison frame, endpoint logic, and exclusion boundaries clearly enough that another reviewer could reproduce the intended question without silently broadening the claim.",
+            "Methods": "The methods section documents the cohort, intervention assignment, outcome definitions, exclusion rules, and analytic plan in enough detail that a reviewer can audit whether the reported estimates actually answer the stated question and whether obvious confounders remain unresolved.",
+            "Results": "The results section reports the primary outcome, notes uncertainty around exploratory subgroup estimates, distinguishes descriptive observations from stronger inferential claims, and avoids pretending that a single dataset proves general benefit across every context that might matter downstream.",
+            "Limitations": "The limitations section is honest about sample narrowness, short follow-up, and residual confounding, which materially constrains the force of any extrapolation even if the top-line direction of effect looks directionally favorable.",
+            "Conclusion": "The conclusion stays narrow by claiming only that the study contributes one bounded empirical signal and justifies follow-up work, not that it proves universal efficacy or policy readiness.",
+        },
+        source_bundle=_valid_source_bundle(),
+    )
+    assert "## Methods" in artifact.body_markdown
+    assert "## Results" in artifact.body_markdown
+
+
 def test_canonical_bundle_facts_reconcile_counts() -> None:
     counts = canonical_bundle_facts(
         [
@@ -248,6 +266,51 @@ def test_workflow_uses_provider_contract_for_trace_metadata() -> None:
     assert review.metadata["tokens_in"] == 11
     assert review.metadata["tokens_out"] == 7
     assert review.metadata["cost_usd"] == 0.42
+
+
+def test_workflow_marks_empirical_study_in_review_metadata() -> None:
+    class EmpiricalProvider:
+        def complete(self, request: ProviderRequest) -> ProviderResult:
+            assert "empirical study reviewer" in request.system_prompt.lower()
+            return ProviderResult(
+                ok=True,
+                response=ProviderResponse(
+                    text=json.dumps(_review_payload("accept", review_markdown="Empirical manuscript accepted.")),
+                    provider="stub-provider",
+                    model="stub-model",
+                    usage=ProviderUsage(input_tokens=9, output_tokens=6, cost_usd=0.21),
+                ),
+            )
+
+    repo = InMemoryRuntimeRepository()
+    submission = repo.create_object(
+        ResearchObject(
+            object_type="submission",
+            title="Empirical Study: bounded cohort",
+            metadata={
+                "article_type": ArticleType.EMPIRICAL_STUDY.value,
+                "domain_slug": "longevity",
+                "title": "Empirical Study: bounded cohort",
+                "abstract": "Bounded empirical submission.",
+                "sections": {
+                    "Research Question": "This empirical study asks whether a bounded intervention changes a measurable outcome in a defined population, and it specifies the comparison frame, endpoint logic, measurement window, exclusion boundaries, and uncertainty tolerance clearly enough that another reviewer could reproduce the intended question without silently broadening the claim or swapping the relevant evidence unit.",
+                    "Methods": "The methods section documents the cohort, intervention assignment, outcome definitions, exclusion rules, and analytic plan in enough detail that a reviewer can audit whether the reported estimates actually answer the stated question and whether obvious confounders remain unresolved.",
+                    "Results": "The results section reports the primary outcome, notes uncertainty around exploratory subgroup estimates, distinguishes descriptive observations from stronger inferential claims, and avoids pretending that a single dataset proves general benefit across every context that might matter downstream.",
+                    "Limitations": "The limitations section is honest about sample narrowness, short follow-up, and residual confounding, which materially constrains the force of any extrapolation even if the top-line direction of effect looks directionally favorable.",
+                    "Conclusion": "The conclusion stays narrow by claiming only that the study contributes one bounded empirical signal and justifies follow-up work, not that it proves universal efficacy or policy readiness.",
+                },
+                "source_bundle": _valid_source_bundle(),
+                "core_claims_resolved": True,
+                "author_agent_id": "agent-demo",
+            },
+        )
+    )
+    engine = WorkflowEngine(provider=EmpiricalProvider())
+    engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={}), repo)
+    review_job = repo.queued_jobs()[0]
+    engine.handle_job(review_job, repo)
+    review = repo.children_of(submission.id, "review")[0]
+    assert review.metadata["article_type"] == ArticleType.EMPIRICAL_STUDY.value
 
 
 def test_sanitize_source_ledger_drops_polluted_revision_hints() -> None:

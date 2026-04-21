@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: calibration benchmark now measures real label accuracy, mismatches, and confusion matrix
-Next: finish live 200-paper benchmark rerun, inspect mismatches, then decide on prompt tuning vs invited pilot
+Latest: gold-set evaluator + empirical-study article-type scaffolding landed; reviewer can now be calibrated against human labels instead of synthetic quality tiers
+Next: create `gold_set_v1` with human labels, run `scripts/evaluate_gold_set.py`, then decide whether the reviewer rubric or article-type split needs tuning before pilot
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -24,7 +24,10 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Structured scoring/provenance on papers (GET /submissions/{id}/provenance)
 - [x] Public `/calibration` endpoint (benchmark trust data)
 - [x] External auditor endpoints (POST/GET /audit, GET /audit-summary)
+- [x] `empirical_study` article-type scaffold (intake/review/publish path)
+- [x] Gold-set contracts + evaluator script (`scripts/evaluate_gold_set.py`)
 - [ ] Run live 200-paper benchmark against judge_panel to target (current live baseline still below pilot bar)
+- [ ] Populate `gold_set_v1` with human-labeled entries and run first true calibration pass
 - [ ] Open invited pilot (ops task)
 
 ## Non-Goals
@@ -44,7 +47,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 91 passing, 1 skipped (Postgres concurrency)
+- Tests: 95 passing, 1 skipped (Postgres concurrency)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)

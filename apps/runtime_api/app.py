@@ -262,6 +262,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         return {
             "submission_id": submission_id,
             "title": submission.title,
+            "article_type": submission.metadata.get("article_type", "rapid_evidence_synthesis"),
             "reviews": reviews_out,
             "decisions": decisions_out,
             "total_cost_usd": round(total_cost, 4),

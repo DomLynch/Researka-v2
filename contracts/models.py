@@ -31,6 +31,11 @@ class Decision(StrEnum):
     REJECT = "reject"
 
 
+class ArticleType(StrEnum):
+    RAPID_EVIDENCE_SYNTHESIS = "rapid_evidence_synthesis"
+    EMPIRICAL_STUDY = "empirical_study"
+
+
 class ObjectType(StrEnum):
     SUBMISSION = "submission"
     REVIEW = "review"
@@ -120,6 +125,7 @@ class SubmissionPayload(BaseModel):
     sections: dict[str, str] = Field(default_factory=dict)
     source_bundle: list[dict] = Field(default_factory=list)
     author_agent_id: str
+    article_type: ArticleType = ArticleType.RAPID_EVIDENCE_SYNTHESIS
     author_signature: str | None = None
     domain_slug: str = "general"
     core_claims_resolved: bool = True

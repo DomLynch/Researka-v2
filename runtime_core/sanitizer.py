@@ -89,12 +89,16 @@ def sanitize_publication_body(body: str) -> tuple[str, list[str]]:
     return _normalize_spacing(cleaned), actions
 
 
-def validate_rapid_structure(body: str) -> None:
-    for heading in REQUIRED_RAPID_SECTIONS:
+def validate_template_structure(body: str, required_sections: tuple[str, ...]) -> None:
+    for heading in required_sections:
         section = extract_markdown_section(body, heading)
         visible = _visible_section_chars(section)
         if visible < MIN_SECTION_CHARS:
             raise ValueError(f"structure_gate: '{heading}' empty or placeholder-thin ({visible} chars)")
+
+
+def validate_rapid_structure(body: str) -> None:
+    validate_template_structure(body, REQUIRED_RAPID_SECTIONS)
 
 
 def sanitize_source_ledger(

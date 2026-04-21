@@ -1,29 +1,19 @@
 from __future__ import annotations
 
-from contracts import GateResult, PublicationArtifact, PublicationCounts
+from contracts import GateResult, PublicationArtifact, PublicationCounts, publication_template_for
 
 from .gates import run_publish_gates
-from .sanitizer import sanitize_publication_body, validate_rapid_structure
-
-SECTION_ORDER = (
-    "Research Question",
-    "Search Summary",
-    "Evidence Landscape",
-    "Key Findings",
-    "Limitations",
-    "Gaps Identified",
-    "Conclusion",
-)
+from .sanitizer import sanitize_publication_body, validate_template_structure
 
 
-def _ordered_sections(sections: dict[str, str]) -> list[tuple[str, str]]:
+def _ordered_sections(sections: dict[str, str], *, required_sections: tuple[str, ...]) -> list[tuple[str, str]]:
     cleaned = {
         name.strip(): str(text or "").strip()
         for name, text in sections.items()
         if str(name or "").strip() and str(text or "").strip()
     }
     ordered: list[tuple[str, str]] = []
-    for heading in SECTION_ORDER:
+    for heading in required_sections:
         if heading in cleaned:
             ordered.append((heading, cleaned.pop(heading)))
     for name in sorted(cleaned):
@@ -54,14 +44,16 @@ def compile_publication(
     abstract: str,
     sections: dict[str, str],
     source_bundle: list[dict],
+    article_type: str = "rapid_evidence_synthesis",
     core_claims_resolved: bool = True,
 ) -> PublicationArtifact:
+    template = publication_template_for(article_type)
     ordered_sections = []
-    for name, text in _ordered_sections(sections):
+    for name, text in _ordered_sections(sections, required_sections=template.required_sections):
         ordered_sections.append(f"## {name}\n\n{text.strip()}".strip())
     body_markdown = "\n\n".join(ordered_sections).strip()
     body_markdown, _ = sanitize_publication_body(body_markdown)
-    validate_rapid_structure(body_markdown)
+    validate_template_structure(body_markdown, template.required_sections)
     counts = canonical_bundle_facts(source_bundle)
     gates: list[GateResult] = run_publish_gates(
         body_markdown=body_markdown,

@@ -5,8 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-from .models import GateResult
-from .templates import RAPID_EVIDENCE_SYNTHESIS
+from .models import ArticleType, GateResult
+from .templates import RAPID_EVIDENCE_SYNTHESIS, publication_template_for
 
 _DOI_PATTERN = re.compile(r"^10\.\d{4,}/\S+$")
 
@@ -21,7 +21,7 @@ class SourceBundleEntry(BaseModel):
 
 
 class SubmissionTemplateV1(BaseModel):
-    article_type: str = "rapid_evidence_synthesis"
+    article_type: str = ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
     required_sections: tuple[str, ...] = RAPID_EVIDENCE_SYNTHESIS.required_sections
     review_checks: tuple[str, ...] = RAPID_EVIDENCE_SYNTHESIS.review_checks
     minimum_citations: int = 12
@@ -31,6 +31,15 @@ class SubmissionTemplateV1(BaseModel):
 
 SUBMISSION_TEMPLATE_V1 = SubmissionTemplateV1()
 RECENT_PUBLICATION_YEAR_FLOOR = 2020
+
+
+def submission_template_for(article_type: str) -> SubmissionTemplateV1:
+    publication_template = publication_template_for(article_type)
+    return SubmissionTemplateV1(
+        article_type=publication_template.article_type,
+        required_sections=publication_template.required_sections,
+        review_checks=publication_template.review_checks,
+    )
 
 
 def _normalize_source_bundle(source_bundle: list[dict]) -> list[SourceBundleEntry]:
@@ -47,9 +56,10 @@ def run_submission_template_checks(
     *,
     sections: dict[str, str],
     source_bundle: list[dict],
+    article_type: str = ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
     template: SubmissionTemplateV1 | None = None,
 ) -> list[GateResult]:
-    active_template = template or SUBMISSION_TEMPLATE_V1
+    active_template = template or submission_template_for(article_type)
     results: list[GateResult] = []
 
     research_question = str(sections.get("Research Question", "")).strip()

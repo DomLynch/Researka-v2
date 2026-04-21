@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from contracts import Decision, ObjectType, ResearchObject, RuntimeJob, Stage, WorkflowContext, WorkflowOutcome, run_submission_template_checks
+from contracts import ArticleType, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, WorkflowContext, WorkflowOutcome, publication_template_for, run_submission_template_checks
 
 from .compiler import compile_publication
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
@@ -28,6 +28,51 @@ class WorkflowEngine:
     def __init__(self, provider: LanguageModelProvider | None = None) -> None:
         self.provider = provider or reviewer_from_env()
 
+    def _review_system_prompt(self, article_type: str) -> str:
+        template = publication_template_for(article_type)
+        if article_type == ArticleType.EMPIRICAL_STUDY.value:
+            article_specific = (
+                "You are the Researka empirical study reviewer. Judge this as a manuscript that reports one study or dataset, "
+                "not as a rapid evidence synthesis. Reward clear methods, bounded claims, honest limits, and results that match the stated question.\n\n"
+                "Empirical-study review checks:\n"
+                "- Check whether methods, measurements, and inclusion logic are explicit enough to audit the study design.\n"
+                "- Score whether results and conclusions stay proportionate to the data actually reported in the manuscript.\n"
+                "- Flag unsupported leaps from one dataset, cohort, or model system to broad policy, deployment, or causal claims.\n\n"
+            )
+        else:
+            article_specific = (
+                "You are the Researka rapid evidence synthesis reviewer. Judge this as a source-grounded synthesis, "
+                "not as a primary empirical study. Reward explicit search scope, bounded claims, honest limits, and synthesis over summary.\n\n"
+                "Rapid-synthesis review checks:\n"
+                "- Check whether the search summary is explicit enough to audit the scope of the rapid synthesis.\n"
+                "- Score whether key findings stay proportionate to the directly cited evidence.\n"
+                "- Flag unsupported escalation from a narrow bundle to broad causal, deployment, or policy claims.\n\n"
+            )
+        return (
+            f"{article_specific}"
+            "Output JSON ONLY. No reasoning. No analysis. No preambles. No markdown fences. No prose. "
+            "Output one JSON object, nothing else.\n\n"
+            "Rubric (score each 1-5):\n"
+            "- research_question_quality: specific and directly answered?\n"
+            "- synthesis_quality: does the body integrate methods, results, or evidence into a coherent argument rather than a loose summary?\n"
+            "- claim_evidence_alignment: are claims proportionate to the cited bundle or reported results?\n"
+            "- limitations_quality: do limitations materially constrain the conclusion?\n"
+            "- gaps_quality: are next-step gaps or unresolved uncertainties real and relevant?\n"
+            "- source_grounding: do citations or reported results actually support the thesis?\n\n"
+            "accept = all scores >= 4, zero major_issues, claim_support=supported, overclaim=none. Rare.\n"
+            "revise = default for valid but weak.\n"
+            "reject = empty sections, claims outrun bundle, speculative extrapolation, or structurally broken manuscripts.\n\n"
+            '{"recommendation":"accept|revise|reject","rubric_scores":{'
+            '"research_question_quality":1-5,"synthesis_quality":1-5,'
+            '"claim_evidence_alignment":1-5,"limitations_quality":1-5,'
+            '"gaps_quality":1-5,"source_grounding":1-5},'
+            '"major_issues":["..."],"minor_issues":["..."],"required_revisions":["..."],'
+            '"claim_support_verdict":"supported|partially_supported|unsupported",'
+            '"overclaim_verdict":"none|mild|significant",'
+            '"synthesis_quality_verdict":"strong|adequate|weak|empty",'
+            '"review_markdown":"..."}'
+        )
+
     def _static_provider_metadata(self, *, prompt_version: str) -> dict[str, str | int | float]:
         provider = getattr(self.provider, "provider", self.provider.__class__.__name__.lower())
         model = getattr(self.provider, "model", provider)
@@ -41,33 +86,15 @@ class WorkflowEngine:
         }
 
     def _review_submission(self, submission: ResearchObject) -> tuple[str, str, dict[str, object]]:
-        system_prompt = (
-            "You are the Researka rapid evidence synthesis reviewer. Output JSON ONLY. "
-            "No reasoning. No analysis. No preambles. No markdown fences. No prose. "
-            "Output one JSON object, nothing else.\n\n"
-            "Rubric (score each 1-5):\n"
-            "- research_question_quality: specific and directly answered?\n"
-            "- synthesis_quality: synthesizes, not just summarizes?\n"
-            "- claim_evidence_alignment: claims proportionate to bundle?\n"
-            "- limitations_quality: materially constrains conclusion?\n"
-            "- gaps_quality: real and relevant?\n"
-            "- source_grounding: citations support thesis?\n\n"
-            "accept = all scores >= 4, zero major_issues, claim_support=supported, overclaim=none. Rare.\n"
-            "revise = default for valid but weak.\n"
-            "reject = empty sections, claims outrun bundle, speculative extrapolation.\n\n"
-            '{"recommendation":"accept|revise|reject","rubric_scores":{'
-            '"research_question_quality":1-5,"synthesis_quality":1-5,'
-            '"claim_evidence_alignment":1-5,"limitations_quality":1-5,'
-            '"gaps_quality":1-5,"source_grounding":1-5},'
-            '"major_issues":["..."],"minor_issues":["..."],"required_revisions":["..."],'
-            '"claim_support_verdict":"supported|partially_supported|unsupported",'
-            '"overclaim_verdict":"none|mild|significant",'
-            '"synthesis_quality_verdict":"strong|adequate|weak|empty",'
-            '"review_markdown":"..."}'
-        )
+        article_type = str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value))
+        template = publication_template_for(article_type)
+        system_prompt = self._review_system_prompt(article_type)
         submission_summary = json.dumps(
             {
                 "title": submission.title,
+                "article_type": article_type,
+                "template_label": template.label,
+                "review_checks": list(template.review_checks),
                 "abstract": submission.metadata.get("abstract", ""),
                 "sections": submission.metadata.get("sections", {}),
                 "source_bundle": submission.metadata.get("source_bundle", []),
@@ -107,6 +134,7 @@ class WorkflowEngine:
             "tokens_out": result.response.usage.output_tokens,
             "cost_usd": result.response.usage.cost_usd,
             **result.response.metadata,
+            "article_type": article_type,
             "rubric_scores": rubric_scores,
             "major_issues": major_issues,
             "minor_issues": minor_issues,
@@ -250,7 +278,11 @@ class WorkflowEngine:
         source_bundle = list(submission.metadata.get("source_bundle", []))
         failed = [
             gate.model_dump(mode="json")
-            for gate in run_submission_template_checks(sections=sections, source_bundle=source_bundle)
+            for gate in run_submission_template_checks(
+                sections=sections,
+                source_bundle=source_bundle,
+                article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
+            )
             if not gate.passed
         ]
         try:
@@ -260,6 +292,7 @@ class WorkflowEngine:
                     abstract=str(submission.metadata.get("abstract", "")).strip(),
                     sections=sections,
                     source_bundle=source_bundle,
+                    article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
                     core_claims_resolved=bool(submission.metadata.get("core_claims_resolved", True)),
                 )
                 failed = [gate.model_dump(mode="json") for gate in artifact.gates if not gate.passed]
@@ -275,6 +308,7 @@ class WorkflowEngine:
                     metadata={
                         "decision": Decision.REJECT.value,
                         "notes": ["intake gate rejection"],
+                        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
                         "gate_failures": failed,
                         **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
                     },
@@ -303,6 +337,7 @@ class WorkflowEngine:
                 body_markdown=review_markdown,
                 metadata={
                     "recommendation": recommendation,
+                    "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
                     "core_claims_resolved": submission.metadata.get("core_claims_resolved", True),
                     **provider_metadata,
                 },
@@ -349,6 +384,7 @@ class WorkflowEngine:
                 body_markdown=f"Editorial decision: {decision.value}",
                 metadata={
                     "decision": decision.value,
+                    "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
                     "notes": outcome.notes,
                     "review_id": review.id,
                     **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
@@ -379,6 +415,7 @@ class WorkflowEngine:
             abstract=str(submission.metadata.get("abstract", "")).strip(),
             sections=dict(submission.metadata.get("sections", {})),
             source_bundle=list(submission.metadata.get("source_bundle", [])),
+            article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
             core_claims_resolved=bool(submission.metadata.get("core_claims_resolved", True)),
         )
         failed = [gate.name for gate in artifact.gates if not gate.passed]
@@ -392,6 +429,7 @@ class WorkflowEngine:
                 body_markdown=artifact.body_markdown,
                 metadata={
                     "abstract": artifact.abstract,
+                    "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
                     "counts": artifact.counts.model_dump(mode="json"),
                     "gates": [gate.model_dump(mode="json") for gate in artifact.gates],
                     "author_agent_id": submission.metadata.get("author_agent_id"),
