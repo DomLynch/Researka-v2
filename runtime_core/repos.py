@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import secrets
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
-from contracts import FailureClass, EventType, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob
+from contracts import ApiKeyCreateResponse, ApiKeyInfo, FailureClass, EventType, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob
 
 
 class RuntimeRepository(Protocol):
@@ -25,6 +27,14 @@ class RuntimeRepository(Protocol):
     def record_event(self, event: RuntimeEvent) -> None: ...
     def list_events(self) -> list[RuntimeEvent]: ...
 
+    # API key management
+    def create_api_key(self, agent_id: str, *, label: str = "", daily_limit: int = 0) -> ApiKeyCreateResponse: ...
+    def validate_api_key(self, raw_key: str) -> str | None: ...
+    def revoke_api_key(self, key_hash: str) -> bool: ...
+    def list_api_keys(self) -> list[ApiKeyInfo]: ...
+    def record_api_key_usage(self, key_hash: str) -> None: ...
+    def get_api_key_usage_today(self, key_hash: str) -> int: ...
+
 
 class InMemoryRuntimeRepository:
     def __init__(self, *, lease_ttl_seconds: int = 300) -> None:
@@ -34,6 +44,8 @@ class InMemoryRuntimeRepository:
         self.jobs_by_target: dict[str, list[str]] = defaultdict(list)
         self.objects_by_parent: dict[str, list[str]] = defaultdict(list)
         self.publication_by_target: dict[str, str] = {}
+        self.api_keys: dict[str, ApiKeyInfo] = {}
+        self.api_key_usage: dict[tuple[str, str], int] = {}
         self.lease_ttl_seconds = lease_ttl_seconds
 
     def reset(self) -> None:
@@ -43,6 +55,8 @@ class InMemoryRuntimeRepository:
         self.jobs_by_target.clear()
         self.objects_by_parent.clear()
         self.publication_by_target.clear()
+        self.api_keys.clear()
+        self.api_key_usage.clear()
 
     def create_object(self, obj: ResearchObject) -> ResearchObject:
         self.objects[obj.id] = obj
@@ -138,6 +152,61 @@ class InMemoryRuntimeRepository:
     def list_events(self) -> list[RuntimeEvent]:
         return list(self.events)
 
+    # --- API key management (in-memory) ---
+
+    def _hash_key(self, raw_key: str) -> str:
+        return hashlib.sha256(raw_key.encode()).hexdigest()
+
+    def create_api_key(self, agent_id: str, *, label: str = "", daily_limit: int = 0) -> ApiKeyCreateResponse:
+        raw_key = f"rk_{secrets.token_urlsafe(32)}"
+        key_hash = self._hash_key(raw_key)
+        info = ApiKeyInfo(
+            key_hash=key_hash,
+            agent_id=agent_id,
+            label=label,
+            daily_limit=daily_limit,
+            created_at=datetime.now(timezone.utc),
+        )
+        self.api_keys[key_hash] = info
+        return ApiKeyCreateResponse(
+            key_hash=key_hash,
+            agent_id=agent_id,
+            label=label,
+            daily_limit=daily_limit,
+            raw_key=raw_key,
+            created_at=info.created_at,
+        )
+
+    def validate_api_key(self, raw_key: str) -> str | None:
+        key_hash = self._hash_key(raw_key)
+        info = self.api_keys.get(key_hash)
+        if info is None or info.revoked:
+            return None
+        if info.daily_limit > 0:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            used = self.api_key_usage.get((key_hash, today), 0)
+            if used >= info.daily_limit:
+                return None
+        return info.agent_id
+
+    def revoke_api_key(self, key_hash: str) -> bool:
+        info = self.api_keys.get(key_hash)
+        if info is None or info.revoked:
+            return False
+        info.revoked = True
+        return True
+
+    def list_api_keys(self) -> list[ApiKeyInfo]:
+        return list(self.api_keys.values())
+
+    def record_api_key_usage(self, key_hash: str) -> None:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        self.api_key_usage[(key_hash, today)] = self.api_key_usage.get((key_hash, today), 0) + 1
+
+    def get_api_key_usage_today(self, key_hash: str) -> int:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return self.api_key_usage.get((key_hash, today), 0)
+
 
 def postgres_dsn_from_env() -> str | None:
     return os.environ.get("TEST_POSTGRES_DSN") or os.environ.get("RESEARKA_V2_POSTGRES_DSN")
@@ -210,12 +279,34 @@ class PostgresRuntimeRepository:
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS api_keys (
+                    key_hash TEXT PRIMARY KEY,
+                    agent_id TEXT NOT NULL,
+                    label TEXT NOT NULL DEFAULT '',
+                    daily_limit INTEGER NOT NULL DEFAULT 0,
+                    revoked BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMPTZ NOT NULL
+                )
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS api_key_usage (
+                    key_hash TEXT NOT NULL,
+                    day TEXT NOT NULL,
+                    count INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (key_hash, day)
+                )
+                """
+            )
             cur.execute("SELECT pg_advisory_unlock(62004201)")
             conn.commit()
 
     def reset(self) -> None:
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("TRUNCATE runtime_events, runtime_jobs, research_objects;")
+            cur.execute("TRUNCATE api_key_usage, api_keys, runtime_events, runtime_jobs, research_objects;")
             conn.commit()
 
     def _object_from_row(self, row: dict | None) -> ResearchObject | None:
@@ -455,3 +546,100 @@ class PostgresRuntimeRepository:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT * FROM runtime_events ORDER BY ts ASC")
             return [self._event_from_row(row) for row in cur.fetchall()]
+
+    # --- API key management (postgres) ---
+
+    def _hash_key(self, raw_key: str) -> str:
+        return hashlib.sha256(raw_key.encode()).hexdigest()
+
+    def create_api_key(self, agent_id: str, *, label: str = "", daily_limit: int = 0) -> ApiKeyCreateResponse:
+        raw_key = f"rk_{secrets.token_urlsafe(32)}"
+        key_hash = self._hash_key(raw_key)
+        created_at = datetime.now(timezone.utc)
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO api_keys (key_hash, agent_id, label, daily_limit, revoked, created_at)
+                VALUES (%s, %s, %s, %s, FALSE, %s)
+                """,
+                (key_hash, agent_id, label, daily_limit, created_at),
+            )
+            conn.commit()
+        return ApiKeyCreateResponse(
+            key_hash=key_hash,
+            agent_id=agent_id,
+            label=label,
+            daily_limit=daily_limit,
+            raw_key=raw_key,
+            created_at=created_at,
+        )
+
+    def validate_api_key(self, raw_key: str) -> str | None:
+        key_hash = self._hash_key(raw_key)
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT * FROM api_keys WHERE key_hash = %s", (key_hash,))
+            row = cur.fetchone()
+            if row is None or row["revoked"]:
+                return None
+            daily_limit = row["daily_limit"]
+            agent_id = row["agent_id"]
+            if daily_limit > 0:
+                cur.execute(
+                    "SELECT count FROM api_key_usage WHERE key_hash = %s AND day = %s",
+                    (key_hash, today),
+                )
+                usage_row = cur.fetchone()
+                used = usage_row["count"] if usage_row else 0
+                if used >= daily_limit:
+                    return None
+            return agent_id
+
+    def revoke_api_key(self, key_hash: str) -> bool:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE api_keys SET revoked = TRUE WHERE key_hash = %s AND revoked = FALSE",
+                (key_hash,),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def list_api_keys(self) -> list[ApiKeyInfo]:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT * FROM api_keys ORDER BY created_at ASC")
+            rows = cur.fetchall()
+        return [
+            ApiKeyInfo(
+                key_hash=r["key_hash"],
+                agent_id=r["agent_id"],
+                label=r["label"],
+                daily_limit=r["daily_limit"],
+                revoked=r["revoked"],
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
+
+    def record_api_key_usage(self, key_hash: str) -> None:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO api_key_usage (key_hash, day, count)
+                VALUES (%s, %s, 1)
+                ON CONFLICT (key_hash, day)
+                DO UPDATE SET count = api_key_usage.count + 1
+                """,
+                (key_hash, today),
+            )
+            conn.commit()
+
+    def get_api_key_usage_today(self, key_hash: str) -> int:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT count FROM api_key_usage WHERE key_hash = %s AND day = %s",
+                (key_hash, today),
+            )
+            row = cur.fetchone()
+            return row["count"] if row else 0

@@ -1,4 +1,6 @@
 from .models import (
+    ApiKeyCreateResponse,
+    ApiKeyInfo,
     Decision,
     EventType,
     FailureClass,
@@ -22,6 +24,8 @@ from .submissions import SourceBundleEntry, SubmissionTemplateV1, run_submission
 from .frozen import IntakeRejectReason, INTAKE_REJECT_REASONS, SUBMISSION_CONTRACT
 
 __all__ = [
+    "ApiKeyCreateResponse",
+    "ApiKeyInfo",
     "Decision",
     "EventType",
     "FailureClass",

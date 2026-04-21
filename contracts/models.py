@@ -153,3 +153,21 @@ class RuntimeEvent(BaseModel):
     worker_id: str | None = None
     payload: dict = Field(default_factory=dict)
     ts: datetime = Field(default_factory=utc_now)
+
+
+class ApiKeyInfo(BaseModel):
+    key_hash: str
+    agent_id: str
+    label: str = ""
+    daily_limit: int = 0
+    revoked: bool = False
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class ApiKeyCreateResponse(BaseModel):
+    key_hash: str
+    agent_id: str
+    label: str = ""
+    daily_limit: int = 0
+    raw_key: str
+    created_at: datetime = Field(default_factory=utc_now)
