@@ -15,10 +15,40 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate a human-labeled gold set against the current reviewer.")
     parser.add_argument("input", help="Path to gold set JSON")
     parser.add_argument("--output", default="artifacts/gold_set_eval.json", help="Output artifact path")
+    parser.add_argument("--progress-log", default="", help="Optional JSONL progress log path")
+    parser.add_argument("--partial-output", default="", help="Optional path for partial artifact flushes")
     args = parser.parse_args()
 
     corpus = load_gold_set(args.input)
-    artifact = evaluate_gold_set(corpus)
+    progress_log = args.progress_log.strip()
+    partial_output = args.partial_output.strip()
+
+    def _progress(index: int, total: int, record: dict, artifact: dict) -> None:
+        line = {
+            "index": index,
+            "total": total,
+            "entry_id": record.get("entry_id"),
+            "article_type": record.get("article_type"),
+            "expected_decision": record.get("expected_decision"),
+            "actual_decision": record.get("actual_decision"),
+            "stage_reached": record.get("stage_reached"),
+            "error": record.get("error"),
+            "accuracy_so_far": artifact["summary"]["accuracy"],
+        }
+        print(
+            f"[{index}/{total}] {record.get('entry_id')} -> {record.get('actual_decision') or 'pending'} "
+            f"stage={record.get('stage_reached')} accuracy={artifact['summary']['accuracy']:.1%}"
+        )
+        if progress_log:
+            os.makedirs(os.path.dirname(progress_log), exist_ok=True)
+            with open(progress_log, "a") as handle:
+                handle.write(json.dumps(line) + "\n")
+        if partial_output:
+            os.makedirs(os.path.dirname(partial_output), exist_ok=True)
+            with open(partial_output, "w") as handle:
+                json.dump(artifact, handle, indent=2)
+
+    artifact = evaluate_gold_set(corpus, progress_callback=_progress if (progress_log or partial_output) else None)
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     with open(args.output, "w") as handle:
