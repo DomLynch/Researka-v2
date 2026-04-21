@@ -239,6 +239,44 @@ class PostgresRuntimeRepository:
         return self._psycopg.connect(self.dsn, row_factory=self._dict_row)
 
     def _ensure_schema(self) -> None:
+        if self._alembic_manages_schema():
+            return
+        self._create_tables_raw()
+
+    def _alembic_manages_schema(self) -> bool:
+        """Return True if alembic_version table exists and is current.
+
+        When True, Alembic owns schema lifecycle — skip raw table creation.
+        """
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                    "WHERE table_name = 'alembic_version')"
+                )
+                row = cur.fetchone()
+                has_version_table = bool(row and row.get("exists"))
+            if not has_version_table:
+                return False
+            # Version table exists — assume managed.  Auto-migrate handles upgrades.
+            self._auto_migrate()
+            return True
+        except Exception:
+            return False
+
+    def _auto_migrate(self) -> None:
+        """Run alembic upgrade head if available. Best-effort."""
+        try:
+            from alembic.env import auto_migrate  # type: ignore[import-untyped]
+            auto_migrate(dsn=self.dsn)
+        except ImportError:
+            pass
+
+    def _create_tables_raw(self) -> None:
+        """Fallback: create all tables via raw SQL (no Alembic dependency).
+
+        Used by tests and local dev when alembic is not installed.
+        """
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT pg_advisory_lock(62004201)")
             cur.execute(
