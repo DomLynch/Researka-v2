@@ -16,7 +16,7 @@ class ProviderRequest(BaseModel):
     system_prompt: str
     user_prompt: str
     prompt_version: str
-    timeout_sec: int = 30
+    timeout_sec: int = 60
     max_input_tokens: int = 12000
     max_output_tokens: int = 1200
     response_format: str | None = None

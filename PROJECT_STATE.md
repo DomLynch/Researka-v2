@@ -3,7 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: b76c89f (normalize benchmark artifact for /calibration endpoint)
+Latest: f236e61 (add target_object_id filter to run-once to prevent stale job cross-contamination)
+Next: timeout 30→60s, benchmark delay 0.5→5s (MIMO reliability + shared VPS)
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -50,3 +51,6 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Service: `researka-v2.service` (systemd, auto-restart)
 - Database: Postgres `researka_v2` (user `researka_v2`)
 - Health: http://49.12.7.18:8000/health
+- **Shared with elite-trader benchmark** — other dev running 64-paper test against same LLM providers
+- LLM providers: MiniMax (primary), MIMO (sparring, ~15s baseline), DeepSeek (fallback)
+- Timeout: 60s per provider call (was 30s, MIMO needs headroom under shared load)

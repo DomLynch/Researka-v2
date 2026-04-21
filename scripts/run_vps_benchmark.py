@@ -302,8 +302,8 @@ def main() -> None:
                   f"cost=${agg_so_far['total_cost_usd']:.4f} elapsed={elapsed:.1f}s")
             _save_checkpoint(output, records, agg_so_far)
 
-        # Rate limiting: 0.5s between submissions to not overwhelm VPS
-        time.sleep(0.5)
+        # Rate limiting: 5s between submissions to avoid provider rate-limiting
+        time.sleep(5.0)
 
     elapsed = round(time.time() - t_start, 2)
     agg = aggregate(records)
