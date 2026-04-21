@@ -555,3 +555,77 @@ def test_ops_summary_cost_from_reviews(client: TestClient, monkeypatch) -> None:
     data = resp.json()
     assert data["avg_cost_usd"] > 0
     assert data["total_cost_usd"] > 0
+
+
+def test_provenance_returns_structured_scoring(client: TestClient) -> None:
+    submission = client.post(
+        "/submissions",
+        json=_minimal_submission_payload(),
+    ).json()["submission"]
+    _run_until_idle(client)
+    resp = client.get(f"/submissions/{submission['id']}/provenance")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["submission_id"] == submission["id"]
+    assert len(data["reviews"]) >= 1
+    review = data["reviews"][0]
+    assert "rubric_scores" in review
+    assert isinstance(review["rubric_scores"], dict)
+    assert len(review["rubric_scores"]) == 6
+    assert review["recommendation"] in {"accept", "revise", "reject"}
+    assert review["claim_support_verdict"] is not None
+    assert review["overclaim_verdict"] is not None
+    assert review["synthesis_quality_verdict"] is not None
+    assert isinstance(review["major_issues"], list)
+    assert isinstance(review["minor_issues"], list)
+    assert review["provider"] is not None
+    assert review["created_at"] is not None
+
+
+def test_provenance_returns_decisions(client: TestClient) -> None:
+    submission = client.post(
+        "/submissions",
+        json=_minimal_submission_payload(),
+    ).json()["submission"]
+    _run_until_idle(client)
+    resp = client.get(f"/submissions/{submission['id']}/provenance")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["decisions"]) >= 1
+    decision = data["decisions"][0]
+    assert decision["decision"] in {"accept", "revise", "reject"}
+    assert isinstance(decision["notes"], list)
+    assert decision["review_id"] is not None
+    assert decision["created_at"] is not None
+
+
+def test_provenance_totals_cost(client: TestClient) -> None:
+    submission = client.post(
+        "/submissions",
+        json=_minimal_submission_payload(),
+    ).json()["submission"]
+    _run_until_idle(client)
+    resp = client.get(f"/submissions/{submission['id']}/provenance")
+    data = resp.json()
+    expected_cost = sum(r.get("cost_usd", 0.0) for r in data["reviews"])
+    assert round(data["total_cost_usd"], 4) == round(expected_cost, 4)
+
+
+def test_provenance_404_for_missing_submission(client: TestClient) -> None:
+    resp = client.get("/submissions/nonexistent-id/provenance")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "submission_not_found"
+
+
+def test_provenance_before_pipeline(client: TestClient) -> None:
+    submission = client.post(
+        "/submissions",
+        json=_minimal_submission_payload(),
+    ).json()["submission"]
+    # Don't run pipeline — provenance should still return with empty reviews
+    resp = client.get(f"/submissions/{submission['id']}/provenance")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["reviews"] == []
+    assert data["decisions"] == []
+    assert data["total_cost_usd"] == 0.0

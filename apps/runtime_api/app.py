@@ -132,6 +132,59 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="publication_not_found")
         return publication.model_dump(mode="json")
 
+    @app.get("/submissions/{submission_id}/provenance")
+    def get_submission_provenance(submission_id: str) -> dict:
+        submission = app.state.repository.get_object(submission_id)
+        if submission is None or submission.object_type != ObjectType.SUBMISSION:
+            raise HTTPException(status_code=404, detail="submission_not_found")
+        reviews = app.state.repository.children_of(submission_id, ObjectType.REVIEW)
+        decisions = app.state.repository.children_of(submission_id, ObjectType.DECISION)
+        reviews_out = []
+        for r in reviews:
+            m = r.metadata
+            reviews_out.append({
+                "review_id": r.id,
+                "recommendation": m.get("recommendation"),
+                "rubric_scores": m.get("rubric_scores", {}),
+                "major_issues": m.get("major_issues", []),
+                "minor_issues": m.get("minor_issues", []),
+                "required_revisions": m.get("required_revisions", []),
+                "claim_support_verdict": m.get("claim_support_verdict"),
+                "overclaim_verdict": m.get("overclaim_verdict"),
+                "synthesis_quality_verdict": m.get("synthesis_quality_verdict"),
+                "provider": m.get("provider"),
+                "model": m.get("model"),
+                "tokens_in": m.get("tokens_in", 0),
+                "tokens_out": m.get("tokens_out", 0),
+                "cost_usd": m.get("cost_usd", 0.0),
+                "prompt_version": m.get("prompt_version"),
+                "created_at": r.created_at.isoformat(),
+            })
+        decisions_out = []
+        for d in decisions:
+            m = d.metadata
+            decisions_out.append({
+                "decision_id": d.id,
+                "decision": m.get("decision"),
+                "notes": m.get("notes", []),
+                "gate_failures": m.get("gate_failures", []),
+                "review_id": m.get("review_id"),
+                "provider": m.get("provider"),
+                "model": m.get("model"),
+                "cost_usd": m.get("cost_usd", 0.0),
+                "prompt_version": m.get("prompt_version"),
+                "created_at": d.created_at.isoformat(),
+            })
+        total_cost = sum(r.get("cost_usd", 0.0) for r in reviews_out)
+        return {
+            "submission_id": submission_id,
+            "title": submission.title,
+            "reviews": reviews_out,
+            "decisions": decisions_out,
+            "total_cost_usd": round(total_cost, 4),
+            "pipeline_stages_completed": len([d for d in decisions_out if d.get("decision")]),
+        }
+
     @app.get("/submissions/{submission_id}/timeline")
     def get_submission_timeline(submission_id: str) -> dict:
         submission = app.state.repository.get_object(submission_id)
