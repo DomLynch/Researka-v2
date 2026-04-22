@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: `gold_set_v1` has been expanded into the 30-entry working corpus (`gold-set-v1-working`), and the live judge-panel baseline is now frozen on disk (`artifacts/gold_set_eval_v2_working_baseline.json`, `artifacts/gold_set_eval_v2_working_baseline.md`) at 30/30 correct across both `rapid_evidence_synthesis` and `empirical_study`
-Next: expand the working corpus into a true human/domain-labeled gold set, then rerun the 200-paper benchmark against the current reviewer to measure pilot readiness on a broader non-curated slice
+Latest: the live 200-paper VPS benchmark has completed and the stage-1 artifact is now frozen on disk (`artifacts/benchmark_vps_200_stage1.json`): `110/200` correct (`55%`), `0` accepts, `178` revises, `22` rejects/intake rejects. The 30-entry working gold set still passes 30/30, so the broad benchmark failure is specifically a revise-collapse on the wider synthetic corpus.
+Next: build a small challenge set from the benchmark failures (`high -> revise`, `low -> revise`, plus anchor controls), then run a tight reviewer/editorial calibration loop before rerunning the full 200-paper benchmark.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -30,9 +30,10 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] First live gold-set eval artifact committed (`artifacts/gold_set_eval_v1.json`)
 - [x] `gold_set_v1` working corpus builder and execution board (`scripts/build_gold_set_v1.py`, `calibration/week1_execution_board.md`)
 - [x] Live 30-entry working gold-set baseline frozen (`artifacts/gold_set_eval_v2_working_baseline.json`, `.md`)
-- [ ] Run live 200-paper benchmark against judge_panel to target (working gold set passes, broader calibration still unproven)
+- [x] Run live 200-paper benchmark against judge_panel and freeze stage-1 artifact (`artifacts/benchmark_vps_200_stage1.json`)
 - [ ] Expand `gold_set_v1` from seed corpus to a true human/domain-labeled gold set
 - [ ] Open invited pilot (ops task)
+- [ ] Build a focused challenge set from the 200-paper benchmark failures and tune the reviewer/editorial seam against it
 
 ## Non-Goals
 - Frontend rebuild
