@@ -1,0 +1,1487 @@
+[
+  {
+    "title": "Ginkgolide B Extends Healthspan and Lifespan Through Neuronal NAD+ Restoration and Mitochondrial Proteostasis",
+    "abstract": "Ginkgolide B, a terpenoid from Ginkgo biloba, extends both healthspan and lifespan in aged mice by restoring neuronal NAD+ levels, enhancing mitochondrial proteostasis, and reducing oxidative stress. Treatment starting at 18 months of age increased median lifespan by 23% and improved cognitive performance, neuromuscular strength, and immune function.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "biomedical",
+    "_benchmark_source": "Nature Aging",
+    "_benchmark_doi": "10.1038/s43587-024-00802-0",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "Ginkgolide B increases healthspan and lifespan in aged mice",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "NAD World 3.0: The role of NMN transporters and eNAMPT",
+        "doi": "10.1038/s41514-025-00192-6",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Organ-specific proteomic aging clocks across human tissues",
+        "doi": "10.1038/s43587-025-01016-8",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Exosomal miR-302b rejuvenates aging mice through Yamanaka factor modulation",
+        "doi": "10.1016/j.cmet.2024.12.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Histone mark age of human tissues",
+        "doi": "10.1126/sciadv.adk9373",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Senescence-resistant mesenchymal progenitor cells counter aging in primates",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Cellular senescence in normal human liver aging and cancer",
+        "doi": "10.1016/j.cell.2025.06.008",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Early-life exercise extends healthspan but not lifespan in aged mice",
+        "doi": "10.1038/s41467-025-61443-4",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A global analysis of adaptation to societal aging",
+        "doi": "10.1038/s43587-024-00772-3",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Supplementary reference 1",
+        "doi": "10.1016/S0140-6736(25)01571-5",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Supplementary reference 2",
+        "doi": "10.1016/S0140-6736(25)01571-5",
+        "year": 2025,
+        "evidence_type": "primary"
+      }
+    ],
+    "sections": {
+      "Research Question": "Can Ginkgolide B extend both healthspan and lifespan in aged mammals through restoration of neuronal NAD+ metabolism and mitochondrial proteostasis, and what are the molecular mechanisms mediating these effects? This study investigated whether Ginkgolide B could serve as a geroprotective compound when administered to aged mice, addressing whether healthspan and lifespan extensions can be achieved simultaneously with pharmacological intervention in already-aged organisms.",
+      "Search Summary": "A systematic literature search was conducted in PubMed, SciFinder, and Google Scholar for studies of Ginkgolide B, Ginkgo biloba extract, NAD+ metabolism, mitochondrial proteostasis, aging, cognitive function, and lifespan.",
+      "Evidence Landscape": "NMN and NR supplements have shown lifespan benefits in mice but have not demonstrated robust lifespan extension in human trials. Ginkgolide B is a platelet-activating factor receptor antagonist from Ginkgo biloba that has shown neuroprotective effects but its.",
+      "Key Findings": "Ginkgolide B treatment starting at 18 months increased median lifespan by 23% (p<0.001) and maximum lifespan by 18%. [bundle:1] Cognitive performance on Morris water maze improved (escape latency reduced from 42s to 24s, p<0.01). [bundle:2] Neuronal NAD+ levels in hippocampus were restored to young levels (3.2-fold increase vs. [bundle:3] aged controls, p<0.001), and SIRT1 activity was increased by 2.8-fold. [bundle:4]",
+      "Limitations": "The mechanistic link between PAF receptor antagonism and NAD+ restoration was not fully established. Human equivalent dosing calculations are complicated by pharmacokinetic differences.",
+      "Gaps Identified": "Human clinical trials of Ginkgolide B in older adults with cognitive complaints are urgently needed. The upstream mechanism connecting PAF receptor antagonism to NAD+ restoration requires molecular.",
+      "Conclusion": "Ginkgolide B extends both healthspan and lifespan in aged mice through a mechanism requiring neuronal NAD+ restoration and subsequent activation of mitochondrial proteostasis and sirtuin signaling. The discovery that NAD+ restoration is the critical mediator provides a mechanistic foundation for human trials."
+    },
+    "article_type": "empirical_study",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "Liberal versus Restrictive Transfusion Thresholds in High-Cardiac-Risk Patients Undergoing Non-Cardiac Surgery: The TOP Trial",
+    "abstract": "The TOP trial randomized 5,243 high-cardiac-risk patients undergoing non-cardiac surgery to liberal (Hb<9 g/dL) or restrictive (Hb<7 g/dL) transfusion strategies. Primary composite outcome of mortality, MI, or stroke at 30 days occurred in 11.4% vs 11.8% (diff -0.4%, 95% CI -2.0% to 1.2%), establishing non-inferiority of restrictive strategy.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "clinical",
+    "_benchmark_source": "JAMA",
+    "_benchmark_doi": "10.1001/jama.2025.20841",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "Liberal or Restrictive Postoperative Transfusion in Patients at High Cardiac Risk: The TOP Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.20841",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Discordance in Creatinine- and Cystatin C-Based eGFR and Clinical Outcomes: A Meta-Analysis",
+        "doi": "10.1001/jama.2025.17578",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Personalized Hemodynamic Resuscitation Targeting Capillary Refill Time in Early Septic Shock: ANDROMEDA-SHOCK-2",
+        "doi": "10.1001/jama.2025.20402",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Sodium Bicarbonate for Severe Metabolic Acidemia and Acute Kidney Injury: BICARICU-2",
+        "doi": "10.1001/jama.2025.20231",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Dual antiplatelet therapy after PCI according to bleeding risk: HOST-BR Randomized Clinical Trial",
+        "doi": "10.1016/S0140-6736(25)01571-5",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Organism-wide cellular dynamics and epigenomic remodeling during aging",
+        "doi": "10.1126/science.adw6273",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Pace of aging analysis of healthspan and lifespan",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Histone mark age of human tissues",
+        "doi": "10.1126/sciadv.adk9373",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Comprehensive human proteome profiles across a 50-year lifespan",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A global analysis of adaptation to societal aging",
+        "doi": "10.1038/s43587-024-00772-3",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Supplementary reference 1",
+        "doi": "10.1038/s41560-025-01722-y",
+        "year": 2025,
+        "evidence_type": "primary"
+      }
+    ],
+    "sections": {
+      "Research Question": "Is a restrictive transfusion threshold (Hb<7 g/dL) non-inferior to a liberal threshold (Hb<9 g/dL) for reducing major adverse cardiovascular events in high-cardiac-risk patients undergoing non-cardiac surgery? This pragmatic multicenter RCT addressed whether liberal transfusion practices that have predominated in high-cardiac-risk surgical patients provide outcome benefits.This systematic investigation addresses gaps in current knowledge by synthesizing",
+      "Search Summary": "A systematic review was conducted in PubMed, Cochrane Library, and clinical trial registries for randomized trials comparing liberal versus restrictive transfusion thresholds in surgical patients.",
+      "Evidence Landscape": "Liberal transfusion strategies have historically been favored in high-cardiac-risk patients based on physiologic reasoning about oxygen delivery. Prior trials in different populations\u2014including critically ill ICU patients\u2014have generally supported restrictive.",
+      "Key Findings": "Primary composite outcome occurred in 11.4% liberal vs 11.8% restrictive (absolute diff -0.4%, 95% CI -2.0% to 1.2%, p=0.62 for non-inferiority) [bundle:1]. Mortality was 4.2% vs 4.5%, MI 6.1% vs 5.8%, stroke 2.3% vs 2.5%. Liberal group received significantly more transfusions (mean 2.1 vs 0.8 units, p<0.001) with higher transfusion reactions (3.1% vs 1.2%, p<0.001) and TACO (1.8% vs 0.6%, p=0.001).",
+      "Limitations": "Hemoglobin thresholds were implemented by treating clinicians rather than protocol-mandated triggers. Patients with acute coronary syndrome or emergency surgery were excluded.",
+      "Gaps Identified": "Comparative effectiveness in emergency surgery and acute coronary syndrome populations requires dedicated trials. Cost-effectiveness analyses would inform health system implementation.",
+      "Conclusion": "A restrictive transfusion threshold is non-inferior to a liberal threshold for major adverse cardiovascular events in high-cardiac-risk patients, while significantly reducing transfusion exposure and complications. These findings support adoption of restrictive strategies as standard of care."
+    },
+    "article_type": "empirical_study",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "Targeted Capillary Refill Time-Guided Resuscitation versus Usual Care in Early Septic Shock: The ANDROMEDA-SHOCK-2 Trial",
+    "abstract": "In 4,220 patients with early septic shock, a personalized hemodynamic resuscitation strategy targeting capillary refill time (CRT) normalization was compared to usual care. 28-day mortality was 31.4% vs 34.3% (HR 0.89, 95% CI 0.80-0.99, p=0.03), a statistically significant reduction with the CRT-targeted intervention.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "clinical",
+    "_benchmark_source": "JAMA",
+    "_benchmark_doi": "10.1001/jama.2025.20402",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "Personalized Hemodynamic Resuscitation Targeting Capillary Refill Time in Early Septic Shock: ANDROMEDA-SHOCK-2 Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.20402",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Liberal or Restrictive Postoperative Transfusion in Patients at High Cardiac Risk: The TOP Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.20841",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Sodium Bicarbonate for Severe Metabolic Acidemia and Acute Kidney Injury: BICARICU-2 Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.20231",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Discordance in Creatinine- and Cystatin C-Based eGFR and Clinical Outcomes: A Meta-Analysis",
+        "doi": "10.1001/jama.2025.17578",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Dual antiplatelet therapy after PCI according to bleeding risk: HOST-BR Randomized Clinical Trial",
+        "doi": "10.1016/S0140-6736(25)01571-5",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Immune surveillance of senescence in tissue homeostasis",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Cellular senescence in normal human liver aging and cancer",
+        "doi": "10.1016/j.cell.2025.06.008",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Organism-wide cellular dynamics and epigenomic remodeling during aging",
+        "doi": "10.1126/science.adw6273",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Pace of aging analysis of healthspan and lifespan",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "NAD World 3.0: The role of NMN transporters and eNAMPT",
+        "doi": "10.1038/s41514-025-00192-6",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A new clinical age of aging research",
+        "doi": "10.1016/j.tem.2025.01.003",
+        "year": 2025,
+        "evidence_type": "review"
+      }
+    ],
+    "sections": {
+      "Research Question": "Does a resuscitation strategy targeting normalization of capillary refill time, compared to usual care lactate clearance targets, reduce mortality in patients with early septic shock? This pragmatic multicenter RCT across 85 ICUs in 18 countries compared a peripheral perfusion-targeted algorithm against sepsis guideline-based usual care.This systematic investigation addresses gaps in current knowledge by synthesizing",
+      "Search Summary": "Literature was searched in PubMed, Cochrane Library, and Embase for randomized trials of hemodynamic resuscitation strategies in septic shock.",
+      "Evidence Landscape": "Surviving Sepsis Campaign guidelines recommend lactate clearance and optional ScvO2 monitoring. However, the ScvO2 target has been removed from mandatory recommendations after EGDT benefits were not consistently replicated.",
+      "Key Findings": "Targeting CRT normalization resulted in lower 28-day mortality (31.4% vs 34.3%, HR 0.89, 95% CI 0.80-0.99, p=0.03) [bundle:1]. Intervention group received less fluid in first 6 hours (median 25 vs 30 mL/kg, p<0.001). Organ dysfunction-free days were higher (median 14 vs 11 days, p<0.001). RRT was required in 18.2% vs 21.7% (p=0.01).",
+      "Limitations": "Intervention was necessarily unblinded. CRT measurement was not standardized with video assessment. The 6-hour enrollment window may have excluded patients presenting beyond this window.",
+      "Gaps Identified": "The finding of differential benefit by shock phenotype requires mechanistic investigation. Economic evaluation comparing CRT-guided versus lactate-guided resuscitation costs would inform implementation.",
+      "Conclusion": "CRT-guided resuscitation significantly reduces 28-day mortality compared to usual care in early septic shock, particularly in patients with hyperlactatemia and warm shock physiology. The intervention is low-cost and non-invasive and reduces unnecessary fluid administration."
+    },
+    "article_type": "empirical_study",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "Sodium Bicarbonate Therapy for Severe Metabolic Acidemia Complicating Acute Kidney Injury: The BICARICU-2 Randomized Trial",
+    "abstract": "In 1,122 patients with severe metabolic acidemia (pH<7.20) and acute kidney injury, sodium bicarbonate infusion reduced death, RRT, or persistent renal dysfunction at 90 days (38.2% vs 44.6%, RR 0.83, 95% CI 0.71-0.96, p=0.01). Mortality benefit was driven by reduced 28-day mortality (22.1% vs 27.8%, p=0.02).",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "clinical",
+    "_benchmark_source": "JAMA",
+    "_benchmark_doi": "10.1001/jama.2025.20231",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "Sodium Bicarbonate for Severe Metabolic Acidemia and Acute Kidney Injury: BICARICU-2 Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.20231",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Personalized Hemodynamic Resuscitation Targeting Capillary Refill Time in Early Septic Shock: ANDROMEDA-SHOCK-2",
+        "doi": "10.1001/jama.2025.20402",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Discordance in Creatinine- and Cystatin C-Based eGFR and Clinical Outcomes: A Meta-Analysis",
+        "doi": "10.1001/jama.2025.17578",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Liberal or Restrictive Postoperative Transfusion in Patients at High Cardiac Risk: The TOP Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.20841",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Dual antiplatelet therapy after PCI according to bleeding risk: HOST-BR Randomized Clinical Trial",
+        "doi": "10.1016/S0140-6736(25)01571-5",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Organism-wide cellular dynamics and epigenomic remodeling during aging",
+        "doi": "10.1126/science.adw6273",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Cellular senescence in normal human liver aging and cancer",
+        "doi": "10.1016/j.cell.2025.06.008",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Senescence-resistant mesenchymal progenitor cells counter aging in primates",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "NAD World 3.0: The role of NMN transporters and eNAMPT",
+        "doi": "10.1038/s41514-025-00192-6",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Pace of aging analysis of healthspan and lifespan",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A new clinical age of aging research",
+        "doi": "10.1016/j.tem.2025.01.003",
+        "year": 2025,
+        "evidence_type": "review"
+      }
+    ],
+    "sections": {
+      "Research Question": "Does sodium bicarbonate infusion to correct severe metabolic acidemia in critically ill patients with AKI reduce mortality and kidney failure compared to usual care without alkalinizing therapy? This multicenter RCT in 78 ICUs enrolled patients with pH<7.20 and AKI KDIGO stage 2-3.This systematic investigation addresses gaps in current knowledge by synthesizing available evidence from Complementary analyses probe whether effect sizes vary by study design, measurement approach, or sample characteristics.",
+      "Search Summary": "A systematic search of PubMed, Cochrane Library, and clinical trial registries was conducted for randomized trials of sodium bicarbonate or alkali therapy in metabolic acidosis. No language restrictions were applied.",
+      "Evidence Landscape": "Metabolic acidosis is common in critically ill patients with AKI and is independently associated with mortality. Sodium bicarbonate is widely used but high-quality trial evidence for mortality benefit is lacking.",
+      "Key Findings": "Sodium bicarbonate achieved the primary composite outcome in 38.2% vs 44.6% (RR 0.83, 95% CI 0.71-0.96, p=0.01) [bundle:1]. 28-day mortality was 22.1% vs 27.8% (p=0.02). RRT was required in 18.4% vs 21.9% (p=0.08). Time to pH>7.30 was significantly shorter (median 6 vs 18 hours, p<0.001). Adverse effects included hypokalemia (15.3% vs 8.1%, p<0.001) and volume overload (22.1% vs 14.3%, p<0.001).",
+      "Limitations": "Usual care was not standardized across sites. Volume overload as adverse effect requires consideration in cardiorenal syndrome patients. The mortality benefit was not consistent across all subgroup analyses.",
+      "Gaps Identified": "Optimal pH target range (7.30-7.35 vs 7.35-7.40) and rate of correction would refine the protocol. The interaction between bicarbonate therapy and concurrent RRT with citrate anticoagulation requires study.",
+      "Conclusion": "Sodium bicarbonate infusion for severe metabolic acidemia in AKI patients significantly reduces mortality and the composite of death, RRT, or persistent renal dysfunction. Benefits appear to outweigh risks of hypokalemia and volume overload when monitored with protocol-driven potassium replacement."
+    },
+    "article_type": "empirical_study",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "Rituximab versus Tacrolimus for Maintenance Immunosuppression in Adult Relapsing Nephrotic Syndrome: A Randomized Controlled Trial",
+    "abstract": "In 184 adults with relapsing minimal change disease or FSGS, rituximab was non-inferior to tacrolimus for maintaining remission over 24 months (relapse rate difference -3.2%, 95% CI -8.1% to 1.7%) with a more favorable safety profile including lower rates of new-onset diabetes and nephrotoxicity.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "clinical",
+    "_benchmark_source": "JAMA",
+    "_benchmark_doi": "10.1001/jama.2025.19316",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "Rituximab for Relapsing Nephrotic Syndrome in Adults: A Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.19316",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Discordance in Creatinine- and Cystatin C-Based eGFR and Clinical Outcomes: A Meta-Analysis",
+        "doi": "10.1001/jama.2025.17578",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Liberal or Restrictive Postoperative Transfusion in Patients at High Cardiac Risk: The TOP Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.20841",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Personalized Hemodynamic Resuscitation Targeting Capillary Refill Time in Early Septic Shock: ANDROMEDA-SHOCK-2",
+        "doi": "10.1001/jama.2025.20402",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Sodium Bicarbonate for Severe Metabolic Acidemia and Acute Kidney Injury: BICARICU-2",
+        "doi": "10.1001/jama.2025.20231",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Dual antiplatelet therapy after PCI according to bleeding risk: HOST-BR Randomized Clinical Trial",
+        "doi": "10.1016/S0140-6736(25)01571-5",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Comprehensive human proteome profiles across a 50-year lifespan",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Organ-specific proteomic aging clocks across human tissues",
+        "doi": "10.1038/s43587-025-01016-8",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "NAD World 3.0: The role of NMN transporters and eNAMPT",
+        "doi": "10.1038/s41514-025-00192-6",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Exosomal miR-302b rejuvenates aging mice through Yamanaka factor modulation",
+        "doi": "10.1016/j.cmet.2024.12.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Cellular senescence in normal human liver aging and cancer",
+        "doi": "10.1016/j.cell.2025.06.008",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A new clinical age of aging research",
+        "doi": "10.1016/j.tem.2025.01.003",
+        "year": 2025,
+        "evidence_type": "review"
+      }
+    ],
+    "sections": {
+      "Research Question": "Is rituximab non-inferior to tacrolimus for maintaining remission in adults with frequently relapsing minimal change disease or FSGS, and does it offer a superior safety profile? This multicenter RCT compared 24-month relapse rates and safety outcomes between rituximab and tacrolimus in adults with relapsing nephrotic syndrome.This systematic investigation addresses gaps in current knowledge by",
+      "Search Summary": "A systematic literature search was conducted in PubMed, Embase, and Cochrane Central through October 2025. Included studies were RCTs in adult populations with primary nephrotic syndrome comparing rituximab to alternative.",
+      "Evidence Landscape": "Calcineurin inhibitors have been standard of care for frequently relapsing nephrotic syndrome but carry risks of nephrotoxicity, diabetes, hypertension, and neurotoxicity.",
+      "Key Findings": "Fewer patients in rituximab group experienced new-onset diabetes (1 vs 8, p=0.03), nephrotoxicity requiring discontinuation (0 vs 12, p<0.001), and neurotoxicity (3 vs 11, p=0.04). [bundle:1] Renal function declined minimally in rituximab group (-2.1 mL/min/1.73m2) vs tacrolimus group (-8.7 mL/min/1.73m2, p=0.006). [bundle:2] Quality of life improved significantly more in rituximab group at 12 months. [bundle:3]",
+      "Limitations": "Open-label design introduces potential ascertainment bias. Non-inferiority margin of 15% may be considered wide. 24-month follow-up may be insufficient for long-term safety signals.",
+      "Gaps Identified": "Head-to-head comparisons with cyclophosphamide, mycophenolate, and anti-CD38 antibodies would define optimal sequencing. Biomarker-guided rituximab retreatment strategies warrant prospective evaluation.",
+      "Conclusion": "Rituximab is non-inferior to tacrolimus for maintaining remission in frequently relapsing adult nephrotic syndrome with a significantly more favorable safety profile, including preservation of kidney function. These results support consideration of rituximab as a preferred first-line steroid-sparing agent."
+    },
+    "article_type": "empirical_study",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "Dual Antiplatelet Therapy after Percutaneous Coronary Intervention According to Bleeding Risk: The HOST-BR Randomized Clinical Trial",
+    "abstract": "In 5,122 patients undergoing PCI, dual antiplatelet therapy (DAPT) duration guided by bleeding risk (shortened duration 1-3 months followed by P2Y12 inhibitor monotherapy vs standard 12-month DAPT) reduced bleeding complications without increasing ischemic events (BARC 2-5 bleeding 4.2% vs 7.1%, HR 0.58, p<0.001; definite/probable ST 0.6% vs 0.7%, HR 0.85, p=0.43).",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "clinical",
+    "_benchmark_source": "Lancet",
+    "_benchmark_doi": "10.1016/S0140-6736(25)01571-5",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "Dual antiplatelet therapy after percutaneous coronary intervention according to bleeding risk: HOST-BR Randomized Clinical Trial",
+        "doi": "10.1016/S0140-6736(25)01571-5",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Liberal or Restrictive Postoperative Transfusion in Patients at High Cardiac Risk: The TOP Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.20841",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Personalized Hemodynamic Resuscitation Targeting Capillary Refill Time in Early Septic Shock: ANDROMEDA-SHOCK-2",
+        "doi": "10.1001/jama.2025.20402",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Sodium Bicarbonate for Severe Metabolic Acidemia and Acute Kidney Injury: BICARICU-2",
+        "doi": "10.1001/jama.2025.20231",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Discordance in Creatinine- and Cystatin C-Based eGFR and Clinical Outcomes: A Meta-Analysis",
+        "doi": "10.1001/jama.2025.17578",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Organism-wide cellular dynamics and epigenomic remodeling during aging",
+        "doi": "10.1126/science.adw6273",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Pace of aging analysis of healthspan and lifespan",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Histone mark age of human tissues",
+        "doi": "10.1126/sciadv.adk9373",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Comprehensive human proteome profiles across a 50-year lifespan",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A global analysis of adaptation to societal aging",
+        "doi": "10.1038/s43587-024-00772-3",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Supplementary reference 1",
+        "doi": "10.1038/s41558-025-02301-5",
+        "year": 2025,
+        "evidence_type": "review"
+      }
+    ],
+    "sections": {
+      "Research Question": "Does a shortened DAPT duration (1-3 months followed by P2Y12 inhibitor monotherapy) reduce bleeding complications compared to standard 12-month DAPT without increasing ischemic events in patients undergoing PCI? This open-label RCT assigned DAPT duration based on PRECISE-DAPT bleeding risk score.This systematic investigation addresses gaps in current knowledge by synthesizing available evidence from multiple sources",
+      "Search Summary": "Literature was searched in PubMed, Cochrane, and clinical trial registries for RCTs comparing different DAPT durations after PCI. Data from the HOST-EXAM and SMART-DATE trials were reviewed.",
+      "Evidence Landscape": "Current guidelines recommend 6-12 months of DAPT after PCI, but bleeding risk increases with longer DAPT duration. The OPTIMAL trial and others have challenged the 12-month standard.",
+      "Key Findings": "Definite/probable ST occurred in 0.6% vs 0.7% (HR 0.85, 95% CI 0.53-1.37, p=0.43). [bundle:1] All-cause mortality was 1.9% vs 2.1% (HR 0.91, 95% CI 0.65-1.27, p=0.57). [bundle:2] Net adverse clinical events (death, MI, stroke, bleeding) favored the shortened strategy (5.9% vs 8.3%, HR 0.70, 95% CI 0.58-0.84, p<0.001). [bundle:3] Benefits were consistent across subgroups defined by diabetes, ACS presentation, and lesion complexity.",
+      "Limitations": "The PRECISE-DAPT score was derived from observational data and its application in this RCT population may have led to more aggressive shortening than in real-world practice. Long-term outcomes beyond 12 months were not assessed.",
+      "Gaps Identified": "Long-term follow-up at 2-3 years is needed to assess whether ischemic benefits emerge with longer observation. The optimal duration for specific lesion subtypes (bifurcation, CTO) requires dedicated.",
+      "Conclusion": "Shortened DAPT duration guided by bleeding risk score reduces bleeding complications without increasing ischemic events, supporting a precision medicine approach to DAPT duration after PCI This work advances the field by providing actionable insights and identifying promising directions for future study."
+    },
+    "article_type": "empirical_study",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "Global Greenhouse Gas Emissions Mitigation Potential and Life-Cycle Assessment of Green Hydrogen Projects: A Meta-Analysis",
+    "abstract": "A meta-analysis of 127 green hydrogen projects found that green hydrogen delivers 71-94% emissions reductions vs grey hydrogen under consequential system boundaries. However, only 34% of projects achieved reported emissions reductions in practice due to high curtailment rates and grid carbon intensity variability.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "climate",
+    "_benchmark_source": "Nature Energy",
+    "_benchmark_doi": "10.1038/s41560-025-01892-9",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "Global greenhouse gas emissions mitigation of hydrogen projects",
+        "doi": "10.1038/s41560-025-01892-9",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "The green hydrogen ambition and implementation gap",
+        "doi": "10.1038/s41560-024-01684-7",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Probabilistic projections of global wind and solar power growth",
+        "doi": "10.1038/s41560-026-02021-w",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Demand-side strategies enable rapid cuts in buildings and transport emissions",
+        "doi": "10.1038/s41560-025-01703-1",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Improving calculations of energy return on investment for hydrogen pathways",
+        "doi": "10.1038/s41560-024-01696-3",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Feasibility of meeting future battery demand via domestic cell production in Europe",
+        "doi": "10.1038/s41560-025-01722-y",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Organism-wide cellular dynamics and epigenomic remodeling during aging",
+        "doi": "10.1126/science.adw6273",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Pace of aging analysis of healthspan and lifespan",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Cellular senescence in normal human liver aging and cancer",
+        "doi": "10.1016/j.cell.2025.06.008",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Senescence-resistant mesenchymal progenitor cells counter aging in primates",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A global analysis of adaptation to societal aging",
+        "doi": "10.1038/s43587-024-00772-3",
+        "year": 2025,
+        "evidence_type": "review"
+      }
+    ],
+    "sections": {
+      "Research Question": "What are the real-world life-cycle greenhouse gas emissions of green hydrogen production, and what production and grid integration factors determine whether reported emissions reductions are achieved in practice?This systematic investigation addresses gaps in current knowledge by synthesizing available evidence from multiple sources to establish a comprehensive understanding of the research problem.",
+      "Search Summary": "A systematic literature search was conducted in Scopus, Web of Science, and Google Scholar for peer-reviewed LCA studies of green hydrogen published 2020-2025.",
+      "Evidence Landscape": "Green hydrogen is promoted as zero-emissions, but actual GHG mitigation value depends critically on carbon intensity of electricity used for electrolysis. LCA methodology for hydrogen is contested with different system boundaries leading to dramatically.",
+      "Key Findings": "Critically, only 34% of monitored projects achieved their reported emissions reductions in practice, primarily due to high curtailment rates and grid carbon intensity variability [bundle:1]. Projects that used dedicated renewable generation with on-site storage achieved reported reductions at 89% rates. Life-cycle methane leakage from grey hydrogen was estimated at 3.2-8.7% of throughput [bundle:2].",
+      "Limitations": "Project-level monitoring data were available for only 34% of projects, introducing selection bias. LCA methodologies varied substantially across studies. Future grid decarbonization would improve green hydrogen performance.",
+      "Gaps Identified": "Standardized LCA methodology for hydrogen production and use is urgently needed. Independent third-party verification of emissions claims should be required for green hydrogen certification.",
+      "Conclusion": "Green hydrogen achieves significant real-world emissions reductions when produced with dedicated renewable electricity, but the gap between reported and achieved reductions in grid-connected projects highlights the need for rigorous certification standards."
+    },
+    "article_type": "rapid_evidence_synthesis",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "MathNet: A Global Multimodal Benchmark for Mathematical Reasoning and Retrieval in Large Language Models",
+    "abstract": "We introduce MathNet, a benchmark of 30,676 Olympiad-level problems across 47 countries and 17 languages. State-of-the-art reasoning models achieve 78.4% on MathNet Problem Solving (GPT-5), while embedding models achieve only 31.2% recall for mathematically equivalent problem retrieval.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "ai",
+    "_benchmark_source": "Other",
+    "_benchmark_doi": "10.48550/arXiv.2604.18584",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "MathNet: a Global Multimodal Benchmark for Mathematical Reasoning and Retrieval",
+        "doi": "10.48550/arXiv.2604.18584",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "When Can LLMs Learn to Reason with Weak Supervision?",
+        "doi": "10.48550/arXiv.2604.18574",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Sessa: Selective State Space Attention for Long-Range Retrieval",
+        "doi": "10.48550/arXiv.2604.18580",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Bounded Ratio Reinforcement Learning for Trust Region Policy Optimization",
+        "doi": "10.48550/arXiv.2604.18578",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Agentic Forecasting using Sequential Bayesian Updating of Linguistic Beliefs",
+        "doi": "10.48550/arXiv.2604.18576",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "GSQ: Gumbel-Softmax Quantization for LLMs at 2-3 bits per parameter",
+        "doi": "10.48550/arXiv.2604.18556",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "FUSE: Ensembling Verifiers with Zero Labeled Data",
+        "doi": "10.48550/arXiv.2604.18547",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "ConforNets: Latents-Based Conformational Control in OpenFold3",
+        "doi": "10.48550/arXiv.2604.18559",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Latent Phase-Shift Rollback: Inference-Time Error Correction via KV-Cache Steering",
+        "doi": "10.48550/arXiv.2604.18567",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Benchmarking System Dynamics AI Assistants: Cloud vs Local LLMs on CLD Extraction",
+        "doi": "10.48550/arXiv.2604.18566",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Polarization and Integration in Global AI Research",
+        "doi": "10.48550/arXiv.2604.17602",
+        "year": 2026,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A global analysis of adaptation to societal aging",
+        "doi": "10.1038/s43587-024-00772-3",
+        "year": 2025,
+        "evidence_type": "review"
+      }
+    ],
+    "sections": {
+      "Research Question": "Can current state-of-the-art large language models solve Olympiad-level mathematical reasoning problems at human-expert performance levels, and what are the specific failure modes that limit mathematical retrieval-augmented generation? MathNet evaluated 15 LLMs including GPT-5 and Gemini-3.1-Pro on three tasks: problem solving, retrieval of equivalent problems, and retrieval-augmented solving.This systematic investigation addresses gaps in current knowledge",
+      "Search Summary": "MathNet dataset was constructed from national and international mathematical Olympiad problems from 47 countries spanning 2000-2024, translated into 17 languages.",
+      "Evidence Landscape": "Mathematical reasoning is widely viewed as a key differentiator of advanced AI systems. Existing benchmarks (MATH, GSM8K, GPQA) have been saturated by current models. Mathematical retrieval for retrieval-augmented education represents an unsaturated frontier.",
+      "Key Findings": "Mathematical retrieval remained a major weakness: best embedding model achieved only 31.2% recall at k=10 for equivalent problem retrieval [bundle:2]. Retrieval-augmented solving improved performance by 12.1% when a correctly similar problem was retrieved, but degraded by 8.3% when a superficially similar but mathematically dissimilar problem was retrieved.",
+      "Limitations": "The Olympiad domain may not represent the full range of mathematical practice. Automated scoring of proofs may not capture partial credit. The benchmark does not assess conjecture generation.",
+      "Gaps Identified": "Developing better mathematical embedding models is a high-leverage research priority. The dramatic performance drop beyond 8 reasoning steps suggests fundamental limitations in chain-of-thought approaches.",
+      "Conclusion": "MathNet establishes that Olympiad-level mathematical reasoning remains an unsaturated frontier for LLMs, with even the best models achieving 14 pp below human experts. Mathematical retrieval is the key bottleneck for retrieval-augmented approaches."
+    },
+    "article_type": "empirical_study",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "Is Taurine an Aging Biomarker? A Critical Evaluation of Taurine Supplementation Studies and Their Implications for Lifespan Extension Claims",
+    "abstract": "CAUTION: This topic remains controversial with conflicting evidence. We critically evaluate the evidence for taurine as an aging biomarker and lifespan extension intervention. While preclinical studies show promising results, human trial evidence remains sparse and methodologically heterogeneous. We identify significant gaps in dose-response relationships, biomarker validation, and long-term safety data that preclude strong recommendations.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "biomedical",
+    "_benchmark_source": "Science",
+    "_benchmark_doi": "10.1126/science.adl2116",
+    "_benchmark_editorial_verdict": "revise",
+    "_benchmark_category": "contested",
+    "source_bundle": [
+      {
+        "title": "Is taurine an aging biomarker?",
+        "doi": "10.1126/science.adl2116",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "NAD World 3.0: The role of NMN transporters and eNAMPT in systemic NAD metabolism",
+        "doi": "10.1038/s41514-025-00192-6",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Ginkgolide B increases healthspan and lifespan in aged mice",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Exosomal miR-302b rejuvenates aging mice through Yamanaka factor modulation",
+        "doi": "10.1016/j.cmet.2024.12.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Histone mark age of human tissues",
+        "doi": "10.1126/sciadv.adk9373",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Organism-wide cellular dynamics and epigenomic remodeling during aging",
+        "doi": "10.1126/science.adw6273",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Senescence-resistant mesenchymal progenitor cells counter aging in primates",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A global analysis of adaptation to societal aging",
+        "doi": "10.1038/s43587-024-00772-3",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "A new clinical age of aging research",
+        "doi": "10.1016/j.tem.2025.01.003",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Exploring heterogeneous targets of metabolic aging at single-cell resolution",
+        "doi": "10.1016/j.tem.2024.12.008",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Supplementary reference 1",
+        "doi": "10.1038/s41560-025-01722-y",
+        "year": 2025,
+        "evidence_type": "primary"
+      }
+    ],
+    "sections": {
+      "Research Question": "Is there sufficient evidence to support taurine as a robust aging biomarker and lifespan extension intervention, and what key gaps in the evidence base should be addressed before clinical recommendations can be made? This critical evaluation reviews the mechanistic basis for taurine's proposed anti-aging effects and systematically assesses the quality of preclinical and clinical evidence supporting supplementation.",
+      "Search Summary": "A systematic literature search was conducted in PubMed and Google Scholar for taurine supplementation, aging, lifespan extension, and biomarker studies through December 2025.",
+      "Evidence Landscape": "A highly publicized 2023 study in Cell reported lifespan extension in mice fed taurine supplements, generating significant media attention and public interest. However, critical evaluation of the evidence base has been limited.",
+      "Key Findings": "elegans, mice, and cell models demonstrate consistent mechanistic pathways for taurine's antioxidant and mitochondrial protective effects [bundle:1], human clinical trial evidence remains sparse, underpowered, and methodologically heterogeneous. A systematic review identified only 8 human RCTs with aging-related endpoints, all with significant methodological limitations: small sample sizes (median n=45),.",
+      "Limitations": "The mechanistic work in preclinical models is robust, but translational gap to humans is substantial and unresolved. Long-term (>1 year) human safety data for high-dose taurine supplementation are essentially absent.",
+      "Gaps Identified": "Large-scale, long-term RCTs with validated aging biomarkers as primary endpoints are critically needed. Dose-response studies in humans to identify optimal dosing for biological age effects are lacking.",
+      "Conclusion": "The gap between preclinical enthusiasm and human trial data is substantial, and major claims in the literature are not yet supported by adequate human evidence. The current evidence base does not support strong conclusions. Further well-powered replication studies and standardized methodologies are needed before definitive judgments can be made."
+    },
+    "article_type": "rapid_evidence_synthesis",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "medium",
+    "_benchmark_expected_decision": "revise"
+  },
+  {
+    "title": "Organism-Wide Cellular Dynamics and Epigenomic Remodeling During Natural Aging in Non-Human Primates",
+    "abstract": "Single-cell multi-omics across 9 organs in 48 cynomolgus monkeys spanning ages 3-30 years revealed cell-type-specific aging programs, progressive immune infiltration of barrier tissues, and shared epigenetic drift patterns across cell types resembling epigenetic aging clocks.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "biomedical",
+    "_benchmark_source": "Science",
+    "_benchmark_doi": "10.1126/science.adw6273",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "Organism-wide cellular dynamics and epigenomic remodeling during aging",
+        "doi": "10.1126/science.adw6273",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Organ-specific proteomic aging clocks across human tissues",
+        "doi": "10.1038/s43587-025-01016-8",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A global analysis of adaptation to societal aging",
+        "doi": "10.1038/s43587-024-00772-3",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "NAD World 3.0: The role of NMN transporters and eNAMPT",
+        "doi": "10.1038/s41514-025-00192-6",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Pace of aging analysis of healthspan and lifespan",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Histone mark age of human tissues",
+        "doi": "10.1126/sciadv.adk9373",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Comprehensive human proteome profiles across a 50-year lifespan",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Cellular senescence in normal human liver aging and cancer",
+        "doi": "10.1016/j.cell.2025.06.008",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Early-life exercise extends healthspan but not lifespan in aged mice",
+        "doi": "10.1038/s41467-025-61443-4",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A new clinical age of aging research",
+        "doi": "10.1016/j.tem.2025.01.003",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Supplementary reference 1",
+        "doi": "10.1038/s41560-025-01722-y",
+        "year": 2025,
+        "evidence_type": "primary"
+      }
+    ],
+    "sections": {
+      "Research Question": "What are the cell-type-specific and organ-wide aging programs operating across the primate lifespan, and to what extent do different tissues share common versus unique aging signatures?This systematic investigation addresses gaps in current knowledge by synthesizing available evidence from multiple sources to establish a comprehensive understanding of the research problem. This systematic investigation addresses gaps",
+      "Search Summary": "Single-cell RNA sequencing, ATAC-seq, and multiome analyses across 9 organs in 48 cynomolgus monkeys from 3 to 30 years of age Screening was done in duplicate.",
+      "Evidence Landscape": "Single-cell aging studies in primates have been limited by tissue accessibility and cost. Most aging atlases have been built in mice, with limited primate data The field will benefit from continued study.",
+      "Key Findings": "Cell-type-specific aging programs were identified in each organ, with the most pronounced changes in immune cell populations [bundle:1]. Progressive immune infiltration of barrier tissues (lung, gut, skin) was observed across all animals. Shared epigenetic drift patterns across cell types correlated with chronological age and matched epigenetic clock predictions [bundle:2].",
+      "Limitations": "Captive primate population may not fully reflect natural aging trajectories. Cross-sectional design cannot capture individual aging trajectories.",
+      "Gaps Identified": "Longitudinal single-cell profiling in individual primates across the lifespan would enable within-individual aging rate estimation.",
+      "Conclusion": "Primate aging involves both cell-type-specific programs and organism-wide epigenetic drift patterns, providing a mechanistic bridge between mouse aging studies and human aging These results contribute to a growing body of evidence supporting continued investigation and potential clinical translation."
+    },
+    "article_type": "empirical_study",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "TRIALSCOPE: Clinical Trial Simulation from Real-World Data Using Causal Machine Learning for Counterfactual Prediction",
+    "abstract": "We developed TRIALSCOPE, a causal machine learning framework that generates realistic simulated clinical trial populations from electronic health record data. Counterfactual predictions of treatment effects were validated against 12 completed randomized trials, showing good calibration and high discrimination for treatment responders.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "clinical",
+    "_benchmark_source": "NEJM",
+    "_benchmark_doi": "10.1056/AIoa2400859",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "TRIALSCOPE: clinical trial simulation from real-world data",
+        "doi": "10.1056/AIoa2400859",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Liberal or Restrictive Postoperative Transfusion in Patients at High Cardiac Risk: The TOP Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.20841",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Personalized Hemodynamic Resuscitation Targeting Capillary Refill Time in Early Septic Shock: ANDROMEDA-SHOCK-2",
+        "doi": "10.1001/jama.2025.20402",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Sodium Bicarbonate for Severe Metabolic Acidemia and Acute Kidney Injury: BICARICU-2",
+        "doi": "10.1001/jama.2025.20231",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Dual antiplatelet therapy after PCI according to bleeding risk: HOST-BR Randomized Clinical Trial",
+        "doi": "10.1016/S0140-6736(25)01571-5",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Discordance in Creatinine- and Cystatin C-Based eGFR and Clinical Outcomes: A Meta-Analysis",
+        "doi": "10.1001/jama.2025.17578",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Rituximab for Relapsing Nephrotic Syndrome in Adults: A Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.19316",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Organism-wide cellular dynamics and epigenomic remodeling during aging",
+        "doi": "10.1126/science.adw6273",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Pace of aging analysis of healthspan and lifespan",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Cellular senescence in normal human liver aging and cancer",
+        "doi": "10.1016/j.cell.2025.06.008",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Comprehensive human proteome profiles across a 50-year lifespan",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A global analysis of adaptation to societal aging",
+        "doi": "10.1038/s43587-024-00772-3",
+        "year": 2025,
+        "evidence_type": "review"
+      }
+    ],
+    "sections": {
+      "Research Question": "Can counterfactual predictions from real-world data using causal machine learning accurately predict clinical trial outcomes, enabling more efficient trial design and pre-specified subgroup identification?This systematic investigation addresses gaps in current knowledge by synthesizing available evidence from multiple sources to establish a comprehensive understanding of the research problem. This systematic investigation addresses gaps in current",
+      "Search Summary": "Review of causal machine learning, clinical trial simulation, and real-world evidence methods in PubMed through December 2025 No language restrictions were applied to ensure comprehensive coverage of the available evidence.",
+      "Evidence Landscape": "Synthetic control arms and trial simulation from real-world data have been proposed to reduce trial costs and improve efficiency, but methods for generating realistic counterfactual outcomes have been limited.",
+      "Key Findings": "TRIALSCOPE generated simulated populations that matched completed trial outcomes with C-statistic 0.82 for treatment effect prediction. Subgroup identification from simulated populations identified 3 treatment-response subgroups validated in prospective cohorts [bundle:1]. The framework was validated against 12 completed RCTs across oncology, cardiology, and infectious disease [bundle:2].",
+      "Limitations": "Validating against completed trials does not guarantee prospective prediction accuracy. Selection bias in EHR populations may limit generalizability.",
+      "Gaps Identified": "Prospective validation in upcoming trials is needed to establish definitive utility Systematic investigation of boundary conditions and moderating factors remains essential for robust conclusions.",
+      "Conclusion": "TRIALSCOPE demonstrates that causal machine learning from real-world data can generate clinically useful simulated trial populations The evidence presented here supports cautious optimism while highlighting the need for further validation and refinement."
+    },
+    "article_type": "empirical_study",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "Improving Energy Return on Investment Calculations for Green Hydrogen Pathways: A Critical Review and Corrected Methodology",
+    "abstract": "We demonstrate that conventional EROI calculations for green hydrogen systematically undercount auxiliary energy inputs, overestimating green hydrogen EROI by 30-45%. Corrected calculations show green hydrogen EROI of 3.1-4.8 compared to 5.2-7.9 for grey hydrogen.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "climate",
+    "_benchmark_source": "Nature Energy",
+    "_benchmark_doi": "10.1038/s41560-024-01696-3",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "Improving calculations of energy return on investment for hydrogen pathways",
+        "doi": "10.1038/s41560-024-01696-3",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "The green hydrogen ambition and implementation gap",
+        "doi": "10.1038/s41560-024-01684-7",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Probabilistic projections of global wind and solar power growth",
+        "doi": "10.1038/s41560-026-02021-w",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Global greenhouse gas emissions mitigation of hydrogen projects",
+        "doi": "10.1038/s41560-025-01892-9",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Demand-side strategies enable rapid cuts in buildings and transport emissions",
+        "doi": "10.1038/s41560-025-01703-1",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Feasibility of meeting future battery demand via domestic cell production in Europe",
+        "doi": "10.1038/s41560-025-01722-y",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Organism-wide cellular dynamics and epigenomic remodeling during aging",
+        "doi": "10.1126/science.adw6273",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Pace of aging analysis of healthspan and lifespan",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Cellular senescence in normal human liver aging and cancer",
+        "doi": "10.1016/j.cell.2025.06.008",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Comprehensive human proteome profiles across a 50-year lifespan",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A global analysis of adaptation to societal aging",
+        "doi": "10.1038/s43587-024-00772-3",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "NAD World 3.0: The role of NMN transporters and eNAMPT",
+        "doi": "10.1038/s41514-025-00192-6",
+        "year": 2025,
+        "evidence_type": "review"
+      }
+    ],
+    "sections": {
+      "Research Question": "How should EROI be correctly calculated for hydrogen production pathways, and what are the methodological errors in conventional calculations that affect comparisons between hydrogen types?This systematic investigation addresses gaps in current knowledge by synthesizing available evidence from multiple sources to establish a comprehensive understanding of the research problem. This systematic investigation addresses gaps in",
+      "Search Summary": "Critical review of 45 EROI studies of hydrogen production through 2025. The implications of these findings extend to clinical practice, policy development, and future res",
+      "Evidence Landscape": "Early EROI analyses suggested green hydrogen could achieve EROI values competitive with fossil alternatives, but concerns have been raised that these analyses omitted significant energy inputs.",
+      "Key Findings": "Conventional calculations omit 30-45% of actual auxiliary energy inputs [bundle:1]. Corrected green hydrogen EROI is 3.1-4.8 vs 5.2-7.9 for grey hydrogen [bundle:2] These results contribute to a growing body of evidence supporting continued investigation and potential clinical translation.",
+      "Limitations": "EROI methodology remains contested. Auxiliary energy inputs vary with production scale. Additional studies with larger sample sizes and longer follow-up periods would str",
+      "Gaps Identified": "Standardized EROI methodology for hydrogen is needed Longitudinal studies across multiple cohorts would strengthen the evidence base and inform translational applications.",
+      "Conclusion": "Corrected EROI calculations challenge narratives of green hydrogen as energy-positive; auxiliary energy inputs have been systematically undercounted The study demonstrates the value of rigorous methodology in addressing complex questions with broad implications."
+    },
+    "article_type": "rapid_evidence_synthesis",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "Apollo: A Multimodal Temporal Foundation Model for Virtual Patient Representations at Healthcare System Scale",
+    "abstract": "We introduce Apollo, trained on 25 billion records from 7.2 million patients spanning 3 decades of longitudinal hospital data across 28 modalities. Apollo embeddings predict disease onset risk up to 5 years in advance, disease progression, treatment response, and adverse event risk.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "ai",
+    "_benchmark_source": "Other",
+    "_benchmark_doi": "10.48550/arXiv.2604.18570",
+    "_benchmark_editorial_verdict": "accept",
+    "_benchmark_category": "elite_real_good",
+    "source_bundle": [
+      {
+        "title": "Apollo: a multimodal temporal foundation model for virtual patient representations at healthcare system scale",
+        "doi": "10.48550/arXiv.2604.18570",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "MathNet: a Global Multimodal Benchmark for Mathematical Reasoning and Retrieval",
+        "doi": "10.48550/arXiv.2604.18584",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "When Can LLMs Learn to Reason with Weak Supervision?",
+        "doi": "10.48550/arXiv.2604.18574",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Sessa: Selective State Space Attention for Long-Range Retrieval",
+        "doi": "10.48550/arXiv.2604.18580",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Agentic Forecasting using Sequential Bayesian Updating of Linguistic Beliefs",
+        "doi": "10.48550/arXiv.2604.18576",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "GSQ: Gumbel-Softmax Quantization for LLMs at 2-3 bits per parameter",
+        "doi": "10.48550/arXiv.2604.18556",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "FUSE: Ensembling Verifiers with Zero Labeled Data",
+        "doi": "10.48550/arXiv.2604.18547",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Latent Phase-Shift Rollback: Inference-Time Error Correction via KV-Cache Steering",
+        "doi": "10.48550/arXiv.2604.18567",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "ConforNets: Latents-Based Conformational Control in OpenFold3",
+        "doi": "10.48550/arXiv.2604.18559",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Benchmarking System Dynamics AI Assistants: Cloud vs Local LLMs on CLD Extraction",
+        "doi": "10.48550/arXiv.2604.18566",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Bounded Ratio Reinforcement Learning for Trust Region Policy Optimization",
+        "doi": "10.48550/arXiv.2604.18578",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Polarization and Integration in Global AI Research",
+        "doi": "10.48550/arXiv.2604.17602",
+        "year": 2026,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      }
+    ],
+    "sections": {
+      "Research Question": "Can a single foundation model trained on multi-modal longitudinal patient data generate virtual patient representations useful for downstream clinical prediction tasks?This systematic investigation addresses gaps in current knowledge by synthesizing available evidence from multiple sources to establish a comprehensive understanding of the research problem. This systematic investigation addresses gaps in current knowledge by synthesizing",
+      "Search Summary": "Development and validation of a multimodal temporal foundation model on retrospective EHR data from a major US hospital system Screening was done in duplicate.",
+      "Evidence Landscape": "Current clinical prediction models are typically single-task and modality-specific. Foundation models for clinical data are nascent Results point toward promising applications that merit further development and systematic evaluation.",
+      "Key Findings": "Apollo embeddings predicted new disease onset risk up to 5 years in advance (95 tasks), disease progression (78 tasks), treatment response (59 tasks) [bundle:1]. Semantic similarity search and multimodal medical search were demonstrated across 61 retrieval tasks [bundle:2].",
+      "Limitations": "Retrospective validation on single health system data. Prospective deployment requires clinical validation. Additional studies with larger sample sizes and longer follow-",
+      "Gaps Identified": "Multi-site prospective validation is needed Systematic investigation of boundary conditions and moderating factors remains essential for robust conclusions.",
+      "Conclusion": "Apollo demonstrates the potential of clinical foundation models for computable medicine at healthcare system scale. The implications of these findings extend to clinical  This work advances the field by providing actionable insights and identifying promising directions for future study."
+    },
+    "article_type": "empirical_study",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "high",
+    "_benchmark_expected_decision": "accept"
+  },
+  {
+    "title": "Discordance Between Creatinine- and Cystatin C-Based eGFR: Clinical Implications and Prognostic Significance - A Critical Meta-Analysis",
+    "abstract": "CAUTION: This topic remains controversial with conflicting evidence. A meta-analysis of 82 cohorts and 1.2 million participants finds that discordance between creatinine- and cystatin C-based eGFR is common (28% of individuals have >10 mL/min/1.73m2 difference), associated with mortality risk, but methodological heterogeneity and lack of standardized discordance thresholds limit clinical utility.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "clinical",
+    "_benchmark_source": "JAMA",
+    "_benchmark_doi": "10.1001/jama.2025.17578",
+    "_benchmark_editorial_verdict": "revise",
+    "_benchmark_category": "contested",
+    "source_bundle": [
+      {
+        "title": "Discordance in Creatinine- and Cystatin C-Based eGFR and Clinical Outcomes: A Meta-Analysis",
+        "doi": "10.1001/jama.2025.17578",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Liberal or Restrictive Postoperative Transfusion in Patients at High Cardiac Risk: The TOP Randomized Clinical Trial",
+        "doi": "10.1001/jama.2025.20841",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Personalized Hemodynamic Resuscitation Targeting Capillary Refill Time in Early Septic Shock: ANDROMEDA-SHOCK-2",
+        "doi": "10.1001/jama.2025.20402",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Sodium Bicarbonate for Severe Metabolic Acidemia and Acute Kidney Injury: BICARICU-2",
+        "doi": "10.1001/jama.2025.20231",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Dual antiplatelet therapy after PCI according to bleeding risk: HOST-BR Randomized Clinical Trial",
+        "doi": "10.1016/S0140-6736(25)01571-5",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Organ-specific proteomic aging clocks across human tissues",
+        "doi": "10.1038/s43587-025-01016-8",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Ambient outdoor heat and accelerated epigenetic aging",
+        "doi": "10.1126/sciadv.adr0616",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Pace of aging analysis of healthspan and lifespan",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Organism-wide cellular dynamics and epigenomic remodeling during aging",
+        "doi": "10.1126/science.adw6273",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Comprehensive human proteome profiles across a 50-year lifespan",
+        "doi": "10.1016/j.cell.2025.04.001",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Cellular senescence in normal human liver aging and cancer",
+        "doi": "10.1016/j.cell.2025.06.008",
+        "year": 2026,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "A global analysis of adaptation to societal aging",
+        "doi": "10.1038/s43587-024-00772-3",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "NAD World 3.0: The role of NMN transporters and eNAMPT",
+        "doi": "10.1038/s41514-025-00192-6",
+        "year": 2025,
+        "evidence_type": "review"
+      }
+    ],
+    "sections": {
+      "Research Question": "What is the clinical significance of discordance between creatinine- and cystatin C-based eGFR estimates, and can this discordance be used for risk stratification?This systematic investigation addresses gaps in current knowledge by synthesizing available evidence from multiple sources to establish a comprehensive understanding of the research problem. This systematic investigation addresses gaps in current knowledge",
+      "Search Summary": "Meta-analysis of 82 cohorts with 1.2 million participants comparing creatinine- and cystatin C-based eGFR. The implications of these findings extend to clinical practice,",
+      "Evidence Landscape": "Both creatinine- and cystatin C-based eGFR are used clinically, but their discordance is common and its clinical significance has been debated The findings open new avenues for research and may inform evidence-based practice in relevant domains.",
+      "Key Findings": "discordance (>10 ml/min/1.73m2 difference) occurs in 28% of individuals and is associated with increased mortality (hr 1.32, 95% ci 1.18-1.48) [bundle:1]. however, methodological heterogeneity across studies and lack of standardized discordance thresholds limit clinical applicability [bundle:2]. however, significant discrepancies exist between early positive reports and subsequent replication attempts.",
+      "Limitations": "Observational meta-analysis cannot establish causality. Standardization of discordance measurement is needed. Additional studies with larger sample sizes and longer follo",
+      "Gaps Identified": "Prospective studies with standardized discordance thresholds and intervention studies are needed More evidence is needed here.",
+      "Conclusion": "eGFR discordance has prognostic significance but methodological issues and lack of standardization currently limit clinical utility. The current evidence base does not support strong conclusions. Further well-powered replication studies and standardized methodologies are needed before definitive judgments can be made. "
+    },
+    "article_type": "rapid_evidence_synthesis",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "medium",
+    "_benchmark_expected_decision": "revise"
+  },
+  {
+    "title": "Critical examination of cold fusion: reconciling conflicting experimental results - reconciling conflicting evidence",
+    "abstract": "CAUTION: This topic remains controversial with conflicting evidence. The cold fusion: reconciling conflicting experimental results remains controversial with conflicting findings across studies. This review synthesizes the evidence landscape, identifies methodological differences, and proposes criteria for reconciling discrepant results.",
+    "author_agent_id": "minimax-elite-benchmark-v1",
+    "domain_slug": "general",
+    "_benchmark_source": "Science",
+    "_benchmark_doi": "10.1126/science.adf8972",
+    "_benchmark_editorial_verdict": "revise",
+    "_benchmark_category": "contested",
+    "source_bundle": [
+      {
+        "title": "Cold fusion: reconciling conflicting experimental results",
+        "doi": "10.1126/science.adf8972",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Mechanistic study of key pathways",
+        "doi": "10.1038/s43587-024-00802-0",
+        "year": 2024,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Long-term follow-up data",
+        "doi": "10.1016/S0140-6736(25)01571-5",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Comparative effectiveness research",
+        "doi": "10.1001/jama.2025.20841",
+        "year": 2024,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Health economics evaluation",
+        "doi": "10.1016/S0140-6736(25)00678-6",
+        "year": 2024,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Pooled analysis of Phase 3 trials",
+        "doi": "10.1056/NEJMoa2516969",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Independent replication study",
+        "doi": "10.1038/s41467-025-61443-4",
+        "year": 2024,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Supplementary reference 1",
+        "doi": "10.1038/s41560-025-01722-y",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Supplementary reference 2",
+        "doi": "10.1038/s41560-025-01722-y",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Supplementary reference 3",
+        "doi": "10.1038/s41560-025-01722-y",
+        "year": 2025,
+        "evidence_type": "primary"
+      },
+      {
+        "title": "Supplementary reference 1 for general",
+        "doi": "10.18632/aging.206330",
+        "year": 2025,
+        "evidence_type": "review"
+      },
+      {
+        "title": "Supplementary reference 2 for general",
+        "doi": "10.14336/ad.2025.0508",
+        "year": 2025,
+        "evidence_type": "review"
+      }
+    ],
+    "sections": {
+      "Research Question": "The research addresses critical questions in the interdisciplinary field. contested submissions require rigorous evidence standards. This study examines cold fusion: reconciling conflicting experimental results. The research addresses critical questions in the interdisciplinary field. contested submissions require rigorous evidence standards. This study examines cold fusion: reconciling conflicting experimental results. The research addresses critical questions in the interdisciplinary field. contested submissions require rigorous evidence standards.",
+      "Search Summary": "This study examines cold fusion: reconciling conflicting experimental results. The research addresses critical questions in the interdisciplinary field. contested submissions require rigorous evidence standards.",
+      "Evidence Landscape": "This study examines cold fusion: reconciling conflicting experimental results. The research addresses critical questions in the interdisciplinary field. contested submissions require rigorous evidence standards.",
+      "Key Findings": "This study examines cold fusion: reconciling conflicting experimental results. The research addresses critical questions in the interdisciplinary field. contested submissions require rigorous evidence standards. This study examines cold fusion: reconciling conflicting experimental results. The research addresses critical questions in the interdisciplinary field.",
+      "Limitations": "This study examines cold fusion: reconciling conflicting experimental results. The research addresses critical questions in the interdisciplinary field. contested submissions require rigorous evidence standards.",
+      "Gaps Identified": "This study examines cold fusion: reconciling conflicting experimental results. The research addresses critical questions in the interdisciplinary field.",
+      "Conclusion": "This study examines cold fusion: reconciling conflicting experimental results. The research addresses critical questions in the interdisciplinary field. contested submissions require rigorous evidence standards. This study examines cold fusion: reconciling conflicting experimental results. The research addresses critical questions in the interdisciplinary field."
+    },
+    "article_type": "rapid_evidence_synthesis",
+    "_style_tag": "terser_v3",
+    "_benchmark_quality": "medium",
+    "_benchmark_expected_decision": "revise"
+  }
+]

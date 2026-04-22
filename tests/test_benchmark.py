@@ -6,6 +6,12 @@ from scripts.run_benchmark import (
     aggregate,
     expected_decision_for_paper,
     generate_papers,
+    submission_payload_for_paper,
+)
+from scripts.backfill_v3_article_type import (
+    build_micro_test,
+    backfill_v3_entries,
+    infer_v3_article_type,
 )
 from scripts.build_style_diverse_set_v1 import STYLE_ORDER, build_style_diverse_set
 from scripts.calibrate_reviewer import build_micro_papers, compare_aggregates, load_micro_set, ordered_micro_ids
@@ -35,6 +41,82 @@ def test_expected_decision_defaults_from_quality() -> None:
     assert expected_decision_for_paper({"_benchmark_quality": "broken"}) == EXPECTED_BY_QUALITY["broken"]
     assert expected_decision_for_paper({"_benchmark_expected_decision": "accept", "_benchmark_quality": "low"}) == "accept"
     assert expected_decision_for_paper({"_benchmark_editorial_verdict": "reject", "_benchmark_quality": "high"}) == "reject"
+
+
+def test_submission_payload_preserves_article_type() -> None:
+    payload = submission_payload_for_paper(
+        {
+            "title": "Paper",
+            "abstract": "A",
+            "sections": {"Research Question": "Q"},
+            "source_bundle": [],
+            "author_agent_id": "agent",
+            "article_type": "empirical_study",
+            "domain_slug": "clinical",
+        }
+    )
+    assert payload["article_type"] == "empirical_study"
+    assert payload["domain_slug"] == "clinical"
+
+
+def test_backfill_v3_routes_review_like_titles_to_synthesis() -> None:
+    assert (
+        infer_v3_article_type(
+            {"title": "Global Greenhouse Gas Emissions Mitigation Potential and Life-Cycle Assessment of Green Hydrogen Projects: A Meta-Analysis"}
+        )
+        == "rapid_evidence_synthesis"
+    )
+    assert (
+        infer_v3_article_type(
+            {"title": "Liberal versus Restrictive Transfusion Thresholds in High-Cardiac-Risk Patients Undergoing Non-Cardiac Surgery: The TOP Trial"}
+        )
+        == "empirical_study"
+    )
+
+
+def test_backfill_v3_entries_adds_article_type_and_micro_metadata() -> None:
+    papers = [
+        {
+            "title": "Liberal versus Restrictive Transfusion Thresholds in High-Cardiac-Risk Patients Undergoing Non-Cardiac Surgery: The TOP Trial",
+            "_benchmark_editorial_verdict": "accept",
+            "sections": {},
+            "source_bundle": [],
+        },
+        {
+            "title": "Discordance Between Creatinine- and Cystatin C-Based eGFR: Clinical Implications and Prognostic Significance - A Critical Meta-Analysis",
+            "_benchmark_editorial_verdict": "revise",
+            "sections": {},
+            "source_bundle": [],
+        },
+    ]
+    routed = backfill_v3_entries(papers)
+    assert routed[0]["article_type"] == "empirical_study"
+    assert routed[0]["_style_tag"] == "terser_v3"
+    assert routed[0]["_benchmark_quality"] == "high"
+    assert routed[1]["article_type"] == "rapid_evidence_synthesis"
+    assert routed[1]["_benchmark_quality"] == "medium"
+
+
+def test_build_v3_micro_test_selects_expected_titles() -> None:
+    titles = [
+        "Ginkgolide B Extends Healthspan and Lifespan Through Neuronal NAD+ Restoration and Mitochondrial Proteostasis",
+        "Liberal versus Restrictive Transfusion Thresholds in High-Cardiac-Risk Patients Undergoing Non-Cardiac Surgery: The TOP Trial",
+        "Targeted Capillary Refill Time-Guided Resuscitation versus Usual Care in Early Septic Shock: The ANDROMEDA-SHOCK-2 Trial",
+        "Sodium Bicarbonate Therapy for Severe Metabolic Acidemia Complicating Acute Kidney Injury: The BICARICU-2 Randomized Trial",
+        "Rituximab versus Tacrolimus for Maintenance Immunosuppression in Adult Relapsing Nephrotic Syndrome: A Randomized Controlled Trial",
+        "Dual Antiplatelet Therapy after Percutaneous Coronary Intervention According to Bleeding Risk: The HOST-BR Randomized Clinical Trial",
+        "MathNet: A Global Multimodal Benchmark for Mathematical Reasoning and Retrieval in Large Language Models",
+        "TRIALSCOPE: Clinical Trial Simulation from Real-World Data Using Causal Machine Learning for Counterfactual Prediction",
+        "Apollo: A Multimodal Temporal Foundation Model for Virtual Patient Representations at Healthcare System Scale",
+        "Organism-Wide Cellular Dynamics and Epigenomic Remodeling During Natural Aging in Non-Human Primates",
+        "Global Greenhouse Gas Emissions Mitigation Potential and Life-Cycle Assessment of Green Hydrogen Projects: A Meta-Analysis",
+        "Improving Energy Return on Investment Calculations for Green Hydrogen Pathways: A Critical Review and Corrected Methodology",
+        "Is Taurine an Aging Biomarker? A Critical Evaluation of Taurine Supplementation Studies and Their Implications for Lifespan Extension Claims",
+        "Discordance Between Creatinine- and Cystatin C-Based eGFR: Clinical Implications and Prognostic Significance - A Critical Meta-Analysis",
+        "Critical examination of cold fusion: reconciling conflicting experimental results - reconciling conflicting evidence",
+    ]
+    micro = build_micro_test([{"title": title} for title in titles])
+    assert len(micro) == 15
 
 
 def test_aggregate_emits_real_accuracy_and_confusion_matrix() -> None:
