@@ -229,6 +229,9 @@ def expected_decision_for_paper(paper: dict) -> str:
     expected = paper.get("_benchmark_expected_decision")
     if isinstance(expected, str) and expected:
         return expected
+    editorial = paper.get("_benchmark_editorial_verdict")
+    if isinstance(editorial, str) and editorial in DECISION_LABELS:
+        return editorial
     quality = paper.get("_benchmark_quality", "medium")
     return EXPECTED_BY_QUALITY.get(quality, Decision.REVISE.value)
 
