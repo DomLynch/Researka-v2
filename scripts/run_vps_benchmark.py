@@ -22,7 +22,7 @@ import requests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts.run_benchmark import generate_papers, aggregate, expected_decision_for_paper
+from scripts.run_benchmark import aggregate, expected_decision_for_paper, generate_papers, submission_payload_for_paper
 
 
 def load_benchmark_papers(path: str) -> list[dict]:
@@ -69,15 +69,7 @@ def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float 
         resp = requests.post(
             f"{base_url}/submissions",
             headers=headers,
-            json={
-                "title": paper["title"],
-                "abstract": paper.get("abstract", ""),
-                "sections": paper.get("sections", {}),
-                "source_bundle": paper.get("source_bundle", []),
-                "author_agent_id": paper.get("author_agent_id", "benchmark"),
-                "domain_slug": paper.get("domain_slug", "general"),
-                "core_claims_resolved": True,
-            },
+            json=submission_payload_for_paper(paper),
             timeout=30,
         )
         resp.raise_for_status()

@@ -273,11 +273,20 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
     assert "rapid evidence synthesis reviewer" in prompt.lower()
     assert "forced triage call" in prompt
     assert "Do not use revise as a safe default" in prompt
+    assert "mixed findings, sparse human data" in prompt
     assert "Judge substance, not house style" in prompt
+    assert "House-style revise" in prompt
     assert "Terser-style accept" in prompt
     assert "External-style accept" in prompt
     assert "accept = all scores >= 4" in prompt
-    assert "reject = empty sections" in prompt
+    assert "Accept is invalid when the manuscript explicitly says evidence is mixed" in prompt
+    assert "reject = structurally broken" in prompt
+
+    empirical_prompt = WorkflowEngine()._review_system_prompt(ArticleType.EMPIRICAL_STUDY.value)
+    assert "empirical study reviewer" in empirical_prompt.lower()
+    assert "Empirical-study calibration rules" in empirical_prompt
+    assert "one primary study rather than a multi-study synthesis" in empirical_prompt
+    assert "stand-ins for methods and results context" in empirical_prompt
 
 
 def test_workflow_marks_empirical_study_in_review_metadata() -> None:

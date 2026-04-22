@@ -236,6 +236,19 @@ def expected_decision_for_paper(paper: dict) -> str:
     return EXPECTED_BY_QUALITY.get(quality, Decision.REVISE.value)
 
 
+def submission_payload_for_paper(paper: dict) -> dict:
+    return {
+        "title": paper["title"],
+        "abstract": paper.get("abstract", ""),
+        "sections": paper.get("sections", {}),
+        "source_bundle": paper.get("source_bundle", []),
+        "author_agent_id": paper.get("author_agent_id", "benchmark"),
+        "article_type": paper.get("article_type", "rapid_evidence_synthesis"),
+        "domain_slug": paper.get("domain_slug", "general"),
+        "core_claims_resolved": True,
+    }
+
+
 def actual_label_for_record(record: dict) -> str:
     decision = record.get("decision")
     if isinstance(decision, str) and decision in DECISION_LABELS:
@@ -290,14 +303,7 @@ def run_paper(submission_data: dict, engine: WorkflowEngine, repo: InMemoryRunti
             object_type=ObjectType.SUBMISSION,
             title=title,
             body_markdown=submission_data.get("abstract", ""),
-            metadata={
-                "abstract": submission_data.get("abstract", ""),
-                "sections": submission_data.get("sections", {}),
-                "source_bundle": submission_data.get("source_bundle", []),
-                "domain_slug": submission_data.get("domain_slug", "general"),
-                "author_agent_id": submission_data.get("author_agent_id", "benchmark"),
-                "core_claims_resolved": True,
-            },
+            metadata=submission_payload_for_paper(submission_data),
         )
     )
 
