@@ -16,6 +16,17 @@ def test_generate_papers_assigns_expected_decisions() -> None:
     assert [p["_benchmark_expected_decision"] for p in papers] == ["accept", "accept", "revise", "revise"]
 
 
+def test_generate_papers_separates_high_and_low_manuscripts() -> None:
+    papers = generate_papers(8)
+    high = papers[0]["sections"]
+    low = papers[6]["sections"]
+
+    assert "publication-ready bounded conclusion" in high["Conclusion"]
+    assert "scope reset" in low["Conclusion"]
+    assert "directly supported" in high["Limitations"]
+    assert "indirect, heterogeneous, and too weakly matched" in low["Limitations"]
+
+
 def test_expected_decision_defaults_from_quality() -> None:
     assert expected_decision_for_paper({"_benchmark_quality": "high"}) == EXPECTED_BY_QUALITY["high"]
     assert expected_decision_for_paper({"_benchmark_quality": "medium"}) == EXPECTED_BY_QUALITY["medium"]

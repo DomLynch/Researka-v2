@@ -134,43 +134,82 @@ def _make_sections(domain: str, quality: str, paper_id: int) -> dict:
     search = (
         f"The search prioritized 2024-2026 peer-reviewed studies on {topic}. "
         f"Evidence was included when it directly addressed {topic} efficacy, safety, "
-        f"or implementation. {quality == 'high' and 'Comprehensive database coverage ensured thorough capture.' or ''}"
+        f"or implementation."
     )
-
     landscape = (
         f"The bundle contains 12 sources spanning reviews and primary studies. "
         f"Reviews synthesize the field's translational logic and known bottlenecks. "
         f"Primary studies concentrate on mechanistic refinement and efficacy. "
     )
-    if quality == "high":
-        landscape += "Strong convergence across independent research groups strengthens confidence."
-    elif quality == "low":
-        landscape += "Evidence is heterogeneous and methodologically inconsistent."
-
     findings = (
         f"First, {topic} remains a credible intervention target with consistent signals "
         f"across studies. Second, the center of gravity has shifted toward precision approaches. "
         f"Third, new evidence cuts both ways with both supportive and cautionary findings. "
         f"Fourth, population-level proof remains limited in the current evidence window."
     )
-
     gaps = (
         f"No generalized human randomized evidence yet shows broad benefit from {topic}, "
         f"and the field still lacks stable biomarkers and safety-calibrated trials."
     )
-
     limitations = (
         f"The evidence base is heterogeneous. Functional outcomes differ by context, "
         f"which limits clean aggregation. Human data directly testing generalized benefit "
         f"are still sparse."
     )
-
     conclusion = (
         f"The evidence supports a calibrated position: {topic} remains credible "
         f"mechanistically, but falls short of proving broad population-level benefit. "
         f"The most defensible position is that targeted strategies may become useful "
         f"for specific indications, provided safety and efficacy gaps are addressed."
     )
+
+    if quality == "high":
+        search += (
+            " The search explicitly documented database coverage, inclusion criteria, and direct-outcome filters, "
+            "so the retained bundle is tightly aligned to the stated question rather than adjacent mechanistic literature."
+        )
+        landscape += (
+            " Multiple recent reviews and directly relevant primary studies converge on the same bounded answer, "
+            "with replication across settings and no major contradiction on the core claim."
+        )
+        findings = (
+            f"Directly cited reviews and primary studies support a narrow answer: targeted {topic} strategies show "
+            f"repeatable benefits in the populations actually studied, the positive effects are not driven by a single outlier source, "
+            f"and the manuscript does not rely on mechanistic speculation to claim impact beyond the retained evidence bundle."
+        )
+        gaps = (
+            f"Remaining gaps are mostly about optimization, longer follow-up, and transferability across adjacent settings, "
+            f"not about whether the core bounded claim is supported by the cited bundle."
+        )
+        limitations = (
+            f"The limitations section is honest that follow-up is finite and external validity is bounded, "
+            f"but those limits constrain magnitude and transferability rather than overturning the directly supported core conclusion."
+        )
+        conclusion = (
+            f"The evidence supports a publication-ready bounded conclusion: {topic} strategies are justified for the specific contexts represented in the bundle, "
+            f"the claims remain proportional to the cited evidence, and no scope reset is needed beyond minor polish."
+        )
+    elif quality == "low":
+        search += (
+            " The search is broad but noisy, mixing adjacent mechanistic papers, indirect proxy outcomes, and context-mismatched sources "
+            "that only weakly speak to the stated question."
+        )
+        landscape += (
+            " Much of the bundle is indirect, uses surrogate endpoints, or studies adjacent populations, so the manuscript keeps leaning on thin support for its practical claims."
+        )
+        findings = (
+            f"The manuscript repeatedly stretches from mechanistic or context-mismatched evidence to practical claims about {topic}, "
+            f"treats indirect signal as if it were direct outcome evidence, and never establishes that the cited bundle actually supports the headline conclusion."
+        )
+        gaps = (
+            f"The critical gaps are foundational: direct outcome evidence is thin, external validity is unresolved, and the bundle does not justify policy, deployment, or broad causal language."
+        )
+        limitations = (
+            f"The limitations are severe enough to change the decision, because the evidence is indirect, heterogeneous, and too weakly matched to the question to support the manuscript's current framing."
+        )
+        conclusion = (
+            f"The current manuscript should not be treated as publication-ready or merely polishable: the evidence for {topic} is too indirect for the claims being made, and the paper needs a scope reset rather than bounded revision."
+        )
 
     sections = {
         "Research Question": rq,
