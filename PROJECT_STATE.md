@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: the revised synthetic corpus plus `reviewer-v6-triage-anchors` now clears the repaired broad 200-paper benchmark at `187/200 = 93.5%` (`high=97.8% accept`, `medium=86.4% revise`, `low=100% reject`, `broken=100% reject`). The micro-set remains `20/20` (`100%`). The important remaining caveat is style robustness: the terser elite v3 cross-check still failed hard (`0/40`, all `reject`), so the current win is strong on the revised benchmark corpus but not yet style-invariant.
-Next: decide whether invited pilot will use the controlled Researka drafter style only. If yes, invited pilot can open behind that fence. If no, align the external/terser drafter style with the accepted house style, rerun the v3 cross-check, and only then widen intake.
+Latest: `codex/house-medium-fix` is now the winning consolidation line. It fixes the house-style medium over-accept bug, preserves the repaired broad baseline (`187/200 = 93.5%` on `artifacts/benchmark_baseline.json`), and adds v3 genre-routing support. The house-only benchmark proof is strong on controlled Researka style (`artifacts/benchmark_house_v10_live.json`: `high=100% accept`, `medium=100% revise`, `low=100% reject`, `broken=100% reject`). The open-style empirical problem is still unresolved (`artifacts/benchmark_v3_accept_smoke6.json`: `0/6` correct, `4 revise`, `2 reject`).
+Next: stop synthetic calibration for this week. Open only a controlled invited pilot behind the house-style drafter fence, collect real third-party submissions, and defer any more empirical/open-style tuning until real pilot data exists.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -36,9 +36,10 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Karpathy-loop prep: intervention log written (`docs/reviewer_prompt_interventions.md`, 5 interventions documented, 20/20 micro-set = triage+anchors on revised corpus)
 - [x] Rerun the full 200-paper benchmark with the revised corpus and triage/anchor reviewer prompt (`artifacts/benchmark_baseline.json` = repaired broad baseline at `93.5%`)
 - [x] Cross-check style robustness on the terser elite v3 corpus (`artifacts/benchmark_v3_vs_v6_prompt.json` = `0/40`, all reject; style sensitivity still open)
+- [x] Merge the clean `codex/house-medium-fix` line forward: house fix, v3 article-type routing, empirical benchmark scaffolding, frozen v3 smoke artifact
 - [ ] Expand `gold_set_v1` from seed corpus to a true human/domain-labeled gold set
-- [ ] Open invited pilot (ops task)
-- [ ] Align external/terser drafter style with the accepted house style and rerun the v3 cross-check
+- [ ] Open invited pilot fenced to the controlled Researka drafter style
+- [ ] Collect real third-party submission data before resuming open-style empirical tuning
 
 ## Non-Goals
 - Frontend rebuild
@@ -52,13 +53,14 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Rebuild drift if v2 absorbs writer-side concerns after the gatekeeper pivot
 - Over-abstracting before one clean end-to-end slice exists
 - Under-testing publish blockers
-- Cross-style calibration drift: the current reviewer/corpus combo is strong on the revised synthetic benchmark but still rejects the terser elite v3 style wholesale
+- Open-style empirical calibration remains weak: routed v3 empirical smoke is still `0/6` correct even after metadata and prompt fixes
+- Parallel local work still exists on `mimo/style-alignment`; treat that tree as exploratory until explicitly merged
 
 ## Key Architecture
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 102 passing, 1 skipped (Postgres concurrency)
+- Tests: 109 passing, 1 skipped (Postgres concurrency)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)
