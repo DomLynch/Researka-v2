@@ -58,14 +58,27 @@ def infer_v3_article_type(paper: dict) -> str:
     return ArticleType.EMPIRICAL_STUDY.value
 
 
+def routed_sections(paper: dict, article_type: str) -> dict[str, str]:
+    sections = {str(name): str(text) for name, text in dict(paper.get("sections", {})).items()}
+    if article_type != ArticleType.EMPIRICAL_STUDY.value:
+        return sections
+    if "Methods" not in sections and "Search Summary" in sections:
+        sections["Methods"] = sections["Search Summary"]
+    if "Results" not in sections and "Key Findings" in sections:
+        sections["Results"] = sections["Key Findings"]
+    return sections
+
+
 def backfill_v3_entries(papers: list[dict]) -> list[dict]:
     routed: list[dict] = []
     for paper in papers:
         verdict = str(paper.get("_benchmark_editorial_verdict", Decision.REVISE.value))
+        article_type = infer_v3_article_type(paper)
         routed.append(
             {
                 **paper,
-                "article_type": infer_v3_article_type(paper),
+                "article_type": article_type,
+                "sections": routed_sections(paper, article_type),
                 "_style_tag": "terser_v3",
                 "_benchmark_quality": "high" if verdict == Decision.ACCEPT.value else "medium",
                 "_benchmark_expected_decision": verdict,

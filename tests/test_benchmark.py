@@ -12,6 +12,7 @@ from scripts.backfill_v3_article_type import (
     build_micro_test,
     backfill_v3_entries,
     infer_v3_article_type,
+    routed_sections,
 )
 from scripts.build_style_diverse_set_v1 import STYLE_ORDER, build_style_diverse_set
 from scripts.calibrate_reviewer import build_micro_papers, compare_aggregates, load_micro_set, ordered_micro_ids
@@ -79,13 +80,13 @@ def test_backfill_v3_entries_adds_article_type_and_micro_metadata() -> None:
         {
             "title": "Liberal versus Restrictive Transfusion Thresholds in High-Cardiac-Risk Patients Undergoing Non-Cardiac Surgery: The TOP Trial",
             "_benchmark_editorial_verdict": "accept",
-            "sections": {},
+            "sections": {"Search Summary": "Methods text", "Key Findings": "Results text"},
             "source_bundle": [],
         },
         {
             "title": "Discordance Between Creatinine- and Cystatin C-Based eGFR: Clinical Implications and Prognostic Significance - A Critical Meta-Analysis",
             "_benchmark_editorial_verdict": "revise",
-            "sections": {},
+            "sections": {"Search Summary": "Methods text", "Key Findings": "Results text"},
             "source_bundle": [],
         },
     ]
@@ -93,6 +94,8 @@ def test_backfill_v3_entries_adds_article_type_and_micro_metadata() -> None:
     assert routed[0]["article_type"] == "empirical_study"
     assert routed[0]["_style_tag"] == "terser_v3"
     assert routed[0]["_benchmark_quality"] == "high"
+    assert routed[0]["sections"]["Methods"] == "Methods text"
+    assert routed[0]["sections"]["Results"] == "Results text"
     assert routed[1]["article_type"] == "rapid_evidence_synthesis"
     assert routed[1]["_benchmark_quality"] == "medium"
 
@@ -117,6 +120,24 @@ def test_build_v3_micro_test_selects_expected_titles() -> None:
     ]
     micro = build_micro_test([{"title": title} for title in titles])
     assert len(micro) == 15
+
+
+def test_routed_sections_add_methods_and_results_for_empirical_entries() -> None:
+    sections = routed_sections(
+        {
+            "sections": {
+                "Research Question": "Q",
+                "Search Summary": "M",
+                "Key Findings": "R",
+                "Conclusion": "C",
+            }
+        },
+        "empirical_study",
+    )
+    assert sections["Methods"] == "M"
+    assert sections["Results"] == "R"
+    synthesis_sections = routed_sections({"sections": {"Search Summary": "M"}}, "rapid_evidence_synthesis")
+    assert "Methods" not in synthesis_sections
 
 
 def test_aggregate_emits_real_accuracy_and_confusion_matrix() -> None:
