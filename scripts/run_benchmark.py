@@ -306,6 +306,7 @@ def run_paper(submission_data: dict, engine: WorkflowEngine, repo: InMemoryRunti
         "title": title,
         "domain": submission_data.get("domain_slug", "general"),
         "quality": submission_data.get("_benchmark_quality", "medium"),
+        "style": submission_data.get("_style_tag", "house"),
         "bundle_size": submission_data.get("_benchmark_bundle_size", 12),
         "expected_decision": expected_decision_for_paper(submission_data),
         "stage_reached": None,
@@ -511,6 +512,31 @@ def aggregate(records: list[dict]) -> dict:
         if r["outcome"] == "intake_rejected":
             by_domain[d]["intake_rejected"] += 1
 
+    by_style = {}
+    for r in records:
+        style = r.get("style", "house")
+        if style not in by_style:
+            by_style[style] = {"count": 0, "correct": 0, "accept": 0, "revise": 0, "reject": 0, "intake_rejected": 0}
+        by_style[style]["count"] += 1
+        if actual_label_for_record(r) == r.get("expected_decision"):
+            by_style[style]["correct"] += 1
+        if r["decision"] == Decision.ACCEPT.value:
+            by_style[style]["accept"] += 1
+        elif r["decision"] == Decision.REVISE.value:
+            by_style[style]["revise"] += 1
+        elif r["decision"] == Decision.REJECT.value:
+            by_style[style]["reject"] += 1
+        if r["outcome"] == "intake_rejected":
+            by_style[style]["intake_rejected"] += 1
+
+    for style, stats in by_style.items():
+        count = stats["count"]
+        stats["accuracy"] = round(stats["correct"] / count, 3) if count else 0
+        stats["accept_rate"] = round(stats["accept"] / count, 3) if count else 0
+        stats["revise_rate"] = round(stats["revise"] / count, 3) if count else 0
+        stats["reject_rate"] = round(stats["reject"] / count, 3) if count else 0
+        stats["intake_reject_rate"] = round(stats["intake_rejected"] / count, 3) if count else 0
+
     return {
         "total": total,
         "completed": len(completed),
@@ -536,6 +562,7 @@ def aggregate(records: list[dict]) -> dict:
         "mismatches": mismatches,
         "by_quality": by_quality,
         "by_domain": by_domain,
+        "by_style": by_style,
     }
 
 

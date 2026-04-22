@@ -7,6 +7,7 @@ from scripts.run_benchmark import (
     expected_decision_for_paper,
     generate_papers,
 )
+from scripts.build_style_diverse_set_v1 import STYLE_ORDER, build_style_diverse_set
 from scripts.calibrate_reviewer import build_micro_papers, compare_aggregates, load_micro_set, ordered_micro_ids
 
 
@@ -42,6 +43,7 @@ def test_aggregate_emits_real_accuracy_and_confusion_matrix() -> None:
             "paper_id": 1,
             "title": "High paper",
             "quality": "high",
+            "style": "house",
             "domain": "longevity",
             "expected_decision": "accept",
             "decision": "accept",
@@ -56,6 +58,7 @@ def test_aggregate_emits_real_accuracy_and_confusion_matrix() -> None:
             "paper_id": 2,
             "title": "Medium paper",
             "quality": "medium",
+            "style": "terser",
             "domain": "ai-ethics",
             "expected_decision": "revise",
             "decision": "revise",
@@ -70,6 +73,7 @@ def test_aggregate_emits_real_accuracy_and_confusion_matrix() -> None:
             "paper_id": 3,
             "title": "Low paper",
             "quality": "low",
+            "style": "verbose",
             "domain": "genomics",
             "expected_decision": "reject",
             "decision": "revise",
@@ -84,6 +88,7 @@ def test_aggregate_emits_real_accuracy_and_confusion_matrix() -> None:
             "paper_id": 4,
             "title": "Broken paper",
             "quality": "broken",
+            "style": "external",
             "domain": "neuroscience",
             "expected_decision": "reject",
             "decision": "reject",
@@ -109,6 +114,10 @@ def test_aggregate_emits_real_accuracy_and_confusion_matrix() -> None:
     assert agg["by_quality"]["medium"]["accuracy"] == 1.0
     assert agg["by_quality"]["low"]["accuracy"] == 0.0
     assert agg["by_quality"]["broken"]["accuracy"] == 1.0
+    assert agg["by_style"]["house"]["accuracy"] == 1.0
+    assert agg["by_style"]["terser"]["revise_rate"] == 1.0
+    assert agg["by_style"]["verbose"]["accuracy"] == 0.0
+    assert agg["by_style"]["external"]["reject_rate"] == 1.0
 
 
 def test_actual_label_for_record_uses_reject_for_intake_rejection() -> None:
@@ -160,3 +169,49 @@ def test_compare_aggregates_emits_quality_deltas() -> None:
     assert delta["reject_delta"] == 4
     assert delta["by_quality"]["high"]["accept_rate_delta"] == 0.4
     assert delta["by_quality"]["low"]["reject_rate_delta"] == 0.6
+
+
+def test_build_style_diverse_set_has_expected_shape() -> None:
+    papers = build_style_diverse_set()
+
+    assert len(papers) == 200
+    assert set(paper["_style_tag"] for paper in papers) == set(STYLE_ORDER)
+
+    for style in STYLE_ORDER:
+        group = [paper for paper in papers if paper["_style_tag"] == style]
+        assert len(group) == 50
+        counts = {}
+        for paper in group:
+            counts[paper["_benchmark_quality"]] = counts.get(paper["_benchmark_quality"], 0) + 1
+        assert counts == {"high": 15, "medium": 15, "low": 15, "broken": 5}
+
+
+def test_style_diverse_set_preserves_quality_but_changes_style() -> None:
+    papers = build_style_diverse_set()
+    house = next(p for p in papers if p["_style_tag"] == "house" and p["_benchmark_quality"] == "high")
+    terser = next(
+        p
+        for p in papers
+        if p["_style_tag"] == "terser"
+        and p["_benchmark_quality"] == house["_benchmark_quality"]
+        and p["domain_slug"] == house["domain_slug"]
+    )
+    verbose = next(
+        p
+        for p in papers
+        if p["_style_tag"] == "verbose"
+        and p["_benchmark_quality"] == house["_benchmark_quality"]
+        and p["domain_slug"] == house["domain_slug"]
+    )
+    external = next(
+        p
+        for p in papers
+        if p["_style_tag"] == "external"
+        and p["_benchmark_quality"] == house["_benchmark_quality"]
+        and p["domain_slug"] == house["domain_slug"]
+    )
+
+    assert terser["_benchmark_expected_decision"] == house["_benchmark_expected_decision"] == "accept"
+    assert len(terser["sections"]["Conclusion"]) < len(house["sections"]["Conclusion"])
+    assert len(verbose["sections"]["Conclusion"]) > len(house["sections"]["Conclusion"])
+    assert external["sections"]["Conclusion"] != house["sections"]["Conclusion"]

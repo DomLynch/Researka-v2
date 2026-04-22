@@ -44,6 +44,7 @@ def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float 
         "title": paper["title"],
         "domain": paper.get("domain_slug", "general"),
         "quality": quality,
+        "style": paper.get("_style_tag", "house"),
         "bundle_size": paper.get("_benchmark_bundle_size", 12),
         "expected_decision": expected_decision_for_paper(paper),
         "stage_reached": None,

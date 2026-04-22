@@ -273,6 +273,9 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
     assert "rapid evidence synthesis reviewer" in prompt.lower()
     assert "forced triage call" in prompt
     assert "Do not use revise as a safe default" in prompt
+    assert "Judge substance, not house style" in prompt
+    assert "Terser-style accept" in prompt
+    assert "External-style accept" in prompt
     assert "accept = all scores >= 4" in prompt
     assert "reject = empty sections" in prompt
 
