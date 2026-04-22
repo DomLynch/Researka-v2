@@ -50,6 +50,10 @@ class WorkflowEngine:
             )
         return (
             f"{article_specific}"
+            "Calibration triage:\n"
+            "- First make a forced triage call: elite-tier accept, competent-but-fixable revise, or fundamentally flawed reject.\n"
+            "- Do not use revise as a safe default for unclear cases. Decide whether the paper is closer to accept or closer to reject.\n"
+            "- Reserve revise for papers that are mostly correct and fixable with bounded edits. If the paper needs a scope reset or its claims are materially unsupported, reject instead.\n\n"
             "Output JSON ONLY. No reasoning. No analysis. No preambles. No markdown fences. No prose. "
             "Output one JSON object, nothing else.\n\n"
             "Rubric (score each 1-5):\n"

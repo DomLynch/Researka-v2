@@ -268,6 +268,13 @@ def test_workflow_uses_provider_contract_for_trace_metadata() -> None:
     assert review.metadata["cost_usd"] == 0.42
 
 
+def test_reviewer_prompt_uses_forced_triage_language() -> None:
+    prompt = WorkflowEngine()._review_system_prompt(ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)
+    assert "forced triage call" in prompt
+    assert "Do not use revise as a safe default" in prompt
+    assert "Reserve revise for papers that are mostly correct" in prompt
+
+
 def test_workflow_marks_empirical_study_in_review_metadata() -> None:
     class EmpiricalProvider:
         def complete(self, request: ProviderRequest) -> ProviderResult:

@@ -1,0 +1,10 @@
+{
+  "version": "micro-set-v1",
+  "source_artifact": "artifacts/benchmark_vps_200_stage1.json",
+  "paper_ids": {
+    "high": [1, 2, 10, 11, 19],
+    "medium": [3, 4, 5, 6, 12],
+    "low": [7, 8, 16, 17, 25],
+    "broken": [9, 18, 27, 36, 45]
+  }
+}

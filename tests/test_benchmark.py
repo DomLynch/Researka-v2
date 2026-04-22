@@ -7,6 +7,7 @@ from scripts.run_benchmark import (
     expected_decision_for_paper,
     generate_papers,
 )
+from scripts.calibrate_reviewer import build_micro_papers, compare_aggregates, load_micro_set, ordered_micro_ids
 
 
 def test_generate_papers_assigns_expected_decisions() -> None:
@@ -101,3 +102,49 @@ def test_aggregate_emits_real_accuracy_and_confusion_matrix() -> None:
 def test_actual_label_for_record_uses_reject_for_intake_rejection() -> None:
     assert actual_label_for_record({"decision": None, "outcome": "intake_rejected"}) == "reject"
     assert actual_label_for_record({"decision": "revise", "outcome": "review"}) == "revise"
+
+
+def test_micro_set_selects_balanced_fixture() -> None:
+    spec = load_micro_set("calibration/calibration_micro_set.json")
+    assert ordered_micro_ids(spec) == [1, 2, 10, 11, 19, 3, 4, 5, 6, 12, 7, 8, 16, 17, 25, 9, 18, 27, 36, 45]
+    papers = build_micro_papers(spec)
+    assert len(papers) == 20
+    assert [paper["_benchmark_quality"] for paper in papers[:5]] == ["high"] * 5
+    assert [paper["_benchmark_quality"] for paper in papers[5:10]] == ["medium"] * 5
+    assert [paper["_benchmark_quality"] for paper in papers[10:15]] == ["low"] * 5
+    assert [paper["_benchmark_quality"] for paper in papers[15:20]] == ["broken"] * 5
+
+
+def test_compare_aggregates_emits_quality_deltas() -> None:
+    previous = {
+        "accuracy": 0.55,
+        "accepts": 0,
+        "revises": 18,
+        "rejects": 2,
+        "by_quality": {
+            "high": {"accuracy": 0.0, "accept_rate": 0.0, "revise_rate": 1.0, "reject_rate": 0.0},
+            "medium": {"accuracy": 1.0, "accept_rate": 0.0, "revise_rate": 1.0, "reject_rate": 0.0},
+            "low": {"accuracy": 0.0, "accept_rate": 0.0, "revise_rate": 1.0, "reject_rate": 0.0},
+            "broken": {"accuracy": 1.0, "accept_rate": 0.0, "revise_rate": 0.0, "reject_rate": 1.0},
+        },
+    }
+    current = {
+        "accuracy": 0.75,
+        "accepts": 4,
+        "revises": 10,
+        "rejects": 6,
+        "by_quality": {
+            "high": {"accuracy": 0.4, "accept_rate": 0.4, "revise_rate": 0.6, "reject_rate": 0.0},
+            "medium": {"accuracy": 1.0, "accept_rate": 0.0, "revise_rate": 1.0, "reject_rate": 0.0},
+            "low": {"accuracy": 0.6, "accept_rate": 0.0, "revise_rate": 0.4, "reject_rate": 0.6},
+            "broken": {"accuracy": 1.0, "accept_rate": 0.0, "revise_rate": 0.0, "reject_rate": 1.0},
+        },
+    }
+
+    delta = compare_aggregates(current, previous)
+
+    assert delta["accuracy_delta"] == 0.2
+    assert delta["accept_delta"] == 4
+    assert delta["reject_delta"] == 4
+    assert delta["by_quality"]["high"]["accept_rate_delta"] == 0.4
+    assert delta["by_quality"]["low"]["reject_rate_delta"] == 0.6
