@@ -3,7 +3,7 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: prompt-only tuning was a dead end on the old under-separated micro-set (`50%` before and after), but the winning combination on the revised corpus is now clear: keep the tighter synthetic fixtures plus the reviewer triage/anchor prompt. The live artifact (`artifacts/calibration_micro_fixture_v2.json`) scores `19/20` (`95%`): `high=100% accept`, `medium=80% revise`, `low=100% reject`, `broken=100% reject`.
+Latest: prompt-only tuning was a dead end on the old under-separated micro-set (`50%` before and after), but the winning combination on the revised corpus is now clear: keep the tighter synthetic fixtures plus the reviewer triage/anchor prompt. The live artifact (`artifacts/calibration_micro_fixture_v2_final.json`) scores `20/20` (`100%`): `high=100% accept`, `medium=100% revise`, `low=100% reject`, `broken=100% reject`. (The earlier `_v2.json` scored 19/20; `_final.json` with the triage/anchor prompt fixed the last mismatch.)
 Next: rerun the full 200-paper benchmark with the revised synthetic corpus and the triage/anchor prompt, then decide whether any additional reviewer/editorial seam tuning is still necessary.
 
 ## Goal
@@ -54,7 +54,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 98 passing, 1 skipped (Postgres concurrency)
+- Tests: 102 passing, 1 skipped (Postgres concurrency)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)
