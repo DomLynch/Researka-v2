@@ -268,9 +268,11 @@ def test_workflow_uses_provider_contract_for_trace_metadata() -> None:
     assert review.metadata["cost_usd"] == 0.42
 
 
-def test_reviewer_prompt_keeps_decision_contract_visible() -> None:
+def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
     prompt = WorkflowEngine()._review_system_prompt(ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)
     assert "rapid evidence synthesis reviewer" in prompt.lower()
+    assert "forced triage call" in prompt
+    assert "Do not use revise as a safe default" in prompt
     assert "accept = all scores >= 4" in prompt
     assert "reject = empty sections" in prompt
 

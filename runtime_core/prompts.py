@@ -1,4 +1,4 @@
-REVIEWER_PROMPT_VERSION = "reviewer-v4-article-type"
+REVIEWER_PROMPT_VERSION = "reviewer-v6-triage-anchors"
 EDITOR_PROMPT_VERSION = "editor-v1-clean-runtime"
 
 
