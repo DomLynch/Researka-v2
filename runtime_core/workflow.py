@@ -53,6 +53,7 @@ class WorkflowEngine:
             "Calibration triage:\n"
             "- First make a forced triage call: elite-tier accept, competent-but-fixable revise, or fundamentally flawed reject.\n"
             "- Do not use revise as a safe default for unclear cases. Decide whether the paper is closer to accept or closer to reject.\n"
+            "- But when the manuscript is credible yet explicitly incomplete — mixed findings, sparse human data, heterogeneous evidence, or no broad population-level proof — revise is the correct answer, not accept.\n"
             "- Reserve revise for papers that are mostly correct and fixable with bounded edits. If the paper needs a scope reset or its claims are materially unsupported, reject instead.\n\n"
             "Style invariance rules:\n"
             "- Judge substance, not house style. Terseness, verbosity, passive voice, or different academic cadence are not defects by themselves.\n"
@@ -64,6 +65,7 @@ class WorkflowEngine:
             "- Anchor C (reject): manuscript is structurally broken, needs a scope reset, or makes materially unsupported claims that require more than bounded edits, recommendation=reject.\n\n"
             "Style exemplars:\n"
             "- House-style accept: seven clean sections, direct sentences, explicit search scope, bounded conclusion, recommendation=accept.\n"
+            "- House-style revise: seven clean sections and confident direct prose are still revise when the manuscript itself says findings are mixed, human data are sparse, heterogeneity limits aggregation, or broad population benefit remains unproven.\n"
             "- Terser-style accept: shorter sections and clipped sentences are acceptable when the cited bundle directly supports the bounded claim, recommendation=accept.\n"
             "- Verbose-style accept: longer narrative prose is acceptable when every paragraph still maps back to the evidence bundle and does not overclaim, recommendation=accept.\n"
             "- External-style accept: academic phrasing, passive voice, or different sentence rhythm are acceptable when the manuscript still answers the question directly and stays within the evidence, recommendation=accept.\n\n"
@@ -76,9 +78,11 @@ class WorkflowEngine:
             "- limitations_quality: do limitations materially constrain the conclusion?\n"
             "- gaps_quality: are next-step gaps or unresolved uncertainties real and relevant?\n"
             "- source_grounding: do citations or reported results actually support the thesis?\n\n"
-            "accept = all scores >= 4, zero major_issues, claim_support=supported, overclaim=none. Rare.\n"
-            "revise = default for valid but weak.\n"
-            "reject = empty sections, claims outrun bundle, speculative extrapolation, or structurally broken manuscripts.\n\n"
+            "accept = all scores >= 4, zero major_issues, claim_support=supported, overclaim=none. Rare. "
+            "Accept is invalid when the manuscript explicitly says evidence is mixed, human data are sparse, broad benefit remains unproven, or the conclusion is only mechanistically credible.\n"
+            "If any score is below 4 or major_issues is non-empty, recommendation must be revise or reject, never accept.\n"
+            "revise = at least one score < 4 or non-empty major_issues, but the manuscript is still salvageable with bounded edits.\n"
+            "reject = structurally broken, needs scope reset, or claims materially unsupported beyond bounded edits.\n\n"
             '{"recommendation":"accept|revise|reject","rubric_scores":{'
             '"research_question_quality":1-5,"synthesis_quality":1-5,'
             '"claim_evidence_alignment":1-5,"limitations_quality":1-5,'
