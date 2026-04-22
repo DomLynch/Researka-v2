@@ -212,6 +212,7 @@ def test_style_diverse_set_preserves_quality_but_changes_style() -> None:
     )
 
     assert terser["_benchmark_expected_decision"] == house["_benchmark_expected_decision"] == "accept"
+    assert len(terser["sections"]["Research Question"].split()) >= 50
     assert len(terser["sections"]["Conclusion"]) < len(house["sections"]["Conclusion"])
     assert len(verbose["sections"]["Conclusion"]) > len(house["sections"]["Conclusion"])
     assert external["sections"]["Conclusion"] != house["sections"]["Conclusion"]

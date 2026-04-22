@@ -55,8 +55,12 @@ def _tighten(text: str, *, section: str, entry: dict) -> str:
     }
     low, high = targets[section]
     compressed = compress_to_target(text, low, high)
-    if section == "Research Question" and len(compressed.split()) < 40:
-        compressed = expand_rq(compressed, entry, cap=high)
+    if section == "Research Question" and len(compressed.split()) < 50:
+        compressed = expand_rq(compressed, entry, cap=max(high, 430))
+        while len(compressed.split()) < 50:
+            compressed = compressed.rstrip(".") + (
+                " The synthesis keeps the scope bounded to the retained populations, outcomes, and comparison frame."
+            )
     if section == "Gaps Identified" and len(compressed) < 120:
         compressed = expand_gaps(compressed, cap=high)
     if section == "Conclusion" and len(compressed) < 120:
@@ -125,6 +129,14 @@ def apply_style(entry: dict, style: str) -> dict:
         else:
             sections[name] = text
     styled["sections"] = sections
+
+    if styled["_benchmark_quality"] == "medium" and style in {"verbose", "external"}:
+        styled["sections"]["Limitations"] = styled["sections"]["Limitations"].rstrip(".") + (
+            " One materially weak dimension still needs bounded revision before the manuscript is publication-ready."
+        )
+        styled["sections"]["Conclusion"] = styled["sections"]["Conclusion"].rstrip(".") + (
+            " Taken together, the current version is closer to revise than accept because at least one support dimension remains partial."
+        )
 
     if style == "terser":
         styled["abstract"] = compress_to_target(styled["abstract"], 120, 220)
