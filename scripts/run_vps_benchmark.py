@@ -16,12 +16,20 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 
 import requests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts.run_benchmark import generate_papers, aggregate, expected_decision_for_paper
+
+
+def load_benchmark_papers(path: str) -> list[dict]:
+    raw = json.loads(Path(path).read_text())
+    if not isinstance(raw, list):
+        raise ValueError("benchmark_input_must_be_list")
+    return raw
 
 
 def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float = 600.0) -> dict:
@@ -247,13 +255,13 @@ def main() -> None:
     parser.add_argument("--base-url", default="http://49.12.7.18:8000", help="VPS API base URL")
     parser.add_argument("--output", default=None, help="Output artifact path (defaults to artifacts/benchmark_baseline.json)")
     parser.add_argument("--resume-from", type=int, default=0, help="Skip first N papers (resume run)")
+    parser.add_argument("--input-json", default=None, help="Optional benchmark corpus JSON path")
     args = parser.parse_args()
 
     api_key = os.environ.get("RESEARKA_V2_API_KEY")
     if not api_key:
         print("RESEARKA_V2_API_KEY must be set for VPS benchmark runs.")
         sys.exit(1)
-    count = args.count
     base_url = args.base_url.rstrip("/")
     output = args.output or "artifacts/benchmark_baseline.json"
 
@@ -267,12 +275,17 @@ def main() -> None:
         sys.exit(1)
 
     print(f"Provider: judge_panel (VPS)")
+    if args.input_json:
+        papers = load_benchmark_papers(args.input_json)
+        count = len(papers)
+        print(f"Input corpus: {args.input_json}")
+    else:
+        count = args.count
+        papers = generate_papers(count)
     print(f"Papers: {count}")
     print(f"Base URL: {base_url}")
     print(f"Resume from: {args.resume_from}")
     print()
-
-    papers = generate_papers(count)
     records = []
     t_start = time.time()
 

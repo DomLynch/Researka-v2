@@ -33,6 +33,7 @@ def test_expected_decision_defaults_from_quality() -> None:
     assert expected_decision_for_paper({"_benchmark_quality": "low"}) == EXPECTED_BY_QUALITY["low"]
     assert expected_decision_for_paper({"_benchmark_quality": "broken"}) == EXPECTED_BY_QUALITY["broken"]
     assert expected_decision_for_paper({"_benchmark_expected_decision": "accept", "_benchmark_quality": "low"}) == "accept"
+    assert expected_decision_for_paper({"_benchmark_editorial_verdict": "reject", "_benchmark_quality": "high"}) == "reject"
 
 
 def test_aggregate_emits_real_accuracy_and_confusion_matrix() -> None:
