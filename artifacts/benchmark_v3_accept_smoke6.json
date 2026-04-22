@@ -1,0 +1,347 @@
+{
+  "run_meta": {
+    "provider": "judge_panel",
+    "target": "http://49.12.7.18:8000",
+    "paper_count": 6,
+    "elapsed_s": 593.5,
+    "timestamp": "2026-04-22T18:38:29Z"
+  },
+  "aggregates": {
+    "total": 6,
+    "completed": 6,
+    "intake_rejected": 0,
+    "errors": 0,
+    "correct": 0,
+    "accuracy": 0.0,
+    "accepts": 0,
+    "revises": 4,
+    "rejects": 2,
+    "accept_rate": 0.0,
+    "revise_rate": 0.667,
+    "reject_rate": 0.333,
+    "disagreement_rate": 0.0,
+    "consensus_count": 0,
+    "tiebreak_count": 0,
+    "total_cost_usd": 0.0166,
+    "median_cost_usd": 0.0041,
+    "mean_duration_s": 93.915,
+    "median_duration_s": 133.89,
+    "error_rate": 0.0,
+    "confusion_matrix": {
+      "accept": {
+        "accept": 0,
+        "revise": 4,
+        "reject": 2
+      },
+      "revise": {
+        "accept": 0,
+        "revise": 0,
+        "reject": 0
+      },
+      "reject": {
+        "accept": 0,
+        "revise": 0,
+        "reject": 0
+      }
+    },
+    "mismatches": [
+      {
+        "paper_id": "?",
+        "title": "Ginkgolide B Extends Healthspan and Lifespan Through Neuronal NAD+ Restoration and Mitochondrial Proteostasis",
+        "quality": "high",
+        "domain": "biomedical",
+        "expected": "accept",
+        "actual": "revise",
+        "stage_reached": "done",
+        "route": null,
+        "error": null
+      },
+      {
+        "paper_id": "?",
+        "title": "Liberal versus Restrictive Transfusion Thresholds in High-Cardiac-Risk Patients Undergoing Non-Cardiac Surgery: The TOP Trial",
+        "quality": "high",
+        "domain": "clinical",
+        "expected": "accept",
+        "actual": "revise",
+        "stage_reached": "done",
+        "route": null,
+        "error": null
+      },
+      {
+        "paper_id": "?",
+        "title": "Targeted Capillary Refill Time-Guided Resuscitation versus Usual Care in Early Septic Shock: The ANDROMEDA-SHOCK-2 Trial",
+        "quality": "high",
+        "domain": "clinical",
+        "expected": "accept",
+        "actual": "revise",
+        "stage_reached": "done",
+        "route": null,
+        "error": null
+      },
+      {
+        "paper_id": "?",
+        "title": "Sodium Bicarbonate Therapy for Severe Metabolic Acidemia Complicating Acute Kidney Injury: The BICARICU-2 Randomized Trial",
+        "quality": "high",
+        "domain": "clinical",
+        "expected": "accept",
+        "actual": "revise",
+        "stage_reached": "done",
+        "route": null,
+        "error": null
+      },
+      {
+        "paper_id": "?",
+        "title": "Rituximab versus Tacrolimus for Maintenance Immunosuppression in Adult Relapsing Nephrotic Syndrome: A Randomized Controlled Trial",
+        "quality": "high",
+        "domain": "clinical",
+        "expected": "accept",
+        "actual": "reject",
+        "stage_reached": "done",
+        "route": null,
+        "error": null
+      },
+      {
+        "paper_id": "?",
+        "title": "Dual Antiplatelet Therapy after Percutaneous Coronary Intervention According to Bleeding Risk: The HOST-BR Randomized Clinical Trial",
+        "quality": "high",
+        "domain": "clinical",
+        "expected": "accept",
+        "actual": "reject",
+        "stage_reached": "done",
+        "route": null,
+        "error": null
+      }
+    ],
+    "by_quality": {
+      "high": {
+        "count": 6,
+        "expected_decision": "accept",
+        "correct": 0,
+        "accuracy": 0.0,
+        "accept_rate": 0.0,
+        "revise_rate": 0.667,
+        "reject_rate": 0.333,
+        "intake_reject_rate": 0.0
+      }
+    },
+    "by_domain": {
+      "biomedical": {
+        "count": 1,
+        "accept": 0,
+        "revise": 1,
+        "reject": 0,
+        "intake_rejected": 0
+      },
+      "clinical": {
+        "count": 5,
+        "accept": 0,
+        "revise": 3,
+        "reject": 2,
+        "intake_rejected": 0
+      }
+    },
+    "by_style": {
+      "terser_v3": {
+        "count": 6,
+        "correct": 0,
+        "accept": 0,
+        "revise": 4,
+        "reject": 2,
+        "intake_rejected": 0,
+        "accuracy": 0.0,
+        "accept_rate": 0.0,
+        "revise_rate": 0.667,
+        "reject_rate": 0.333,
+        "intake_reject_rate": 0.0
+      }
+    }
+  },
+  "papers": [
+    {
+      "paper_id": "?",
+      "title": "Ginkgolide B Extends Healthspan and Lifespan Through Neuronal NAD+ Restoration and Mitochondrial Proteostasis",
+      "domain": "biomedical",
+      "quality": "high",
+      "style": "terser_v3",
+      "bundle_size": 12,
+      "expected_decision": "accept",
+      "stage_reached": "done",
+      "outcome": "revise",
+      "recommendation": null,
+      "decision": "revise",
+      "route": null,
+      "rubric_scores": {
+        "research_question_quality": 3,
+        "synthesis_quality": 2,
+        "claim_evidence_alignment": 4,
+        "limitations_quality": 3,
+        "gaps_quality": 3,
+        "source_grounding": 3
+      },
+      "major_issues_count": 1,
+      "overclaim": "mild",
+      "claim_support": "partially_supported",
+      "synthesis_quality": "weak",
+      "cost_usd": 0.00412,
+      "tokens_in": 7194,
+      "tokens_out": 3179,
+      "error": null,
+      "duration_s": 137.27
+    },
+    {
+      "paper_id": "?",
+      "title": "Liberal versus Restrictive Transfusion Thresholds in High-Cardiac-Risk Patients Undergoing Non-Cardiac Surgery: The TOP Trial",
+      "domain": "clinical",
+      "quality": "high",
+      "style": "terser_v3",
+      "bundle_size": 12,
+      "expected_decision": "accept",
+      "stage_reached": "done",
+      "outcome": "revise",
+      "recommendation": null,
+      "decision": "revise",
+      "route": null,
+      "rubric_scores": {
+        "research_question_quality": 5,
+        "synthesis_quality": 2,
+        "claim_evidence_alignment": 3,
+        "limitations_quality": 3,
+        "gaps_quality": 2,
+        "source_grounding": 2
+      },
+      "major_issues_count": 3,
+      "overclaim": "mild",
+      "claim_support": "partially_supported",
+      "synthesis_quality": "weak",
+      "cost_usd": 0.001238,
+      "tokens_in": 4958,
+      "tokens_out": 1136,
+      "error": null,
+      "duration_s": 48.087
+    },
+    {
+      "paper_id": "?",
+      "title": "Targeted Capillary Refill Time-Guided Resuscitation versus Usual Care in Early Septic Shock: The ANDROMEDA-SHOCK-2 Trial",
+      "domain": "clinical",
+      "quality": "high",
+      "style": "terser_v3",
+      "bundle_size": 12,
+      "expected_decision": "accept",
+      "stage_reached": "done",
+      "outcome": "revise",
+      "recommendation": null,
+      "decision": "revise",
+      "route": null,
+      "rubric_scores": {
+        "research_question_quality": 5,
+        "synthesis_quality": 2,
+        "claim_evidence_alignment": 4,
+        "limitations_quality": 4,
+        "gaps_quality": 3,
+        "source_grounding": 2
+      },
+      "major_issues_count": 1,
+      "overclaim": "mild",
+      "claim_support": "partially_supported",
+      "synthesis_quality": "weak",
+      "cost_usd": 0.004188,
+      "tokens_in": 7288,
+      "tokens_out": 3273,
+      "error": null,
+      "duration_s": 133.89
+    },
+    {
+      "paper_id": "?",
+      "title": "Sodium Bicarbonate Therapy for Severe Metabolic Acidemia Complicating Acute Kidney Injury: The BICARICU-2 Randomized Trial",
+      "domain": "clinical",
+      "quality": "high",
+      "style": "terser_v3",
+      "bundle_size": 12,
+      "expected_decision": "accept",
+      "stage_reached": "done",
+      "outcome": "revise",
+      "recommendation": null,
+      "decision": "revise",
+      "route": null,
+      "rubric_scores": {
+        "research_question_quality": 4,
+        "synthesis_quality": 3,
+        "claim_evidence_alignment": 4,
+        "limitations_quality": 4,
+        "gaps_quality": 3,
+        "source_grounding": 2
+      },
+      "major_issues_count": 2,
+      "overclaim": "mild",
+      "claim_support": "partially_supported",
+      "synthesis_quality": "weak",
+      "cost_usd": 0.001307,
+      "tokens_in": 2468,
+      "tokens_out": 582,
+      "error": null,
+      "duration_s": 50.005
+    },
+    {
+      "paper_id": "?",
+      "title": "Rituximab versus Tacrolimus for Maintenance Immunosuppression in Adult Relapsing Nephrotic Syndrome: A Randomized Controlled Trial",
+      "domain": "clinical",
+      "quality": "high",
+      "style": "terser_v3",
+      "bundle_size": 12,
+      "expected_decision": "accept",
+      "stage_reached": "done",
+      "outcome": "reject",
+      "recommendation": null,
+      "decision": "reject",
+      "route": null,
+      "rubric_scores": {
+        "research_question_quality": 5,
+        "synthesis_quality": 2,
+        "claim_evidence_alignment": 3,
+        "limitations_quality": 4,
+        "gaps_quality": 3,
+        "source_grounding": 2
+      },
+      "major_issues_count": 2,
+      "overclaim": "mild",
+      "claim_support": "partially_supported",
+      "synthesis_quality": "weak",
+      "cost_usd": 0.004494,
+      "tokens_in": 7466,
+      "tokens_out": 3502,
+      "error": null,
+      "duration_s": 146.499
+    },
+    {
+      "paper_id": "?",
+      "title": "Dual Antiplatelet Therapy after Percutaneous Coronary Intervention According to Bleeding Risk: The HOST-BR Randomized Clinical Trial",
+      "domain": "clinical",
+      "quality": "high",
+      "style": "terser_v3",
+      "bundle_size": 12,
+      "expected_decision": "accept",
+      "stage_reached": "done",
+      "outcome": "reject",
+      "recommendation": null,
+      "decision": "reject",
+      "route": null,
+      "rubric_scores": {
+        "research_question_quality": 2,
+        "synthesis_quality": 1,
+        "claim_evidence_alignment": 1,
+        "limitations_quality": 3,
+        "gaps_quality": 2,
+        "source_grounding": 1
+      },
+      "major_issues_count": 4,
+      "overclaim": "significant",
+      "claim_support": "unsupported",
+      "synthesis_quality": "weak",
+      "cost_usd": 0.001273,
+      "tokens_in": 2465,
+      "tokens_out": 552,
+      "error": null,
+      "duration_s": 47.741
+    }
+  ]
+}
