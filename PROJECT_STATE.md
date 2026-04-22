@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: prompt-only tuning was a dead end on the old under-separated micro-set (`50%` before and after), but the winning combination on the revised corpus is now clear: keep the tighter synthetic fixtures plus the reviewer triage/anchor prompt. The live artifact (`artifacts/calibration_micro_fixture_v2_final.json`) scores `20/20` (`100%`): `high=100% accept`, `medium=100% revise`, `low=100% reject`, `broken=100% reject`. (The earlier `_v2.json` scored 19/20; `_final.json` with the triage/anchor prompt fixed the last mismatch.)
-Next: rerun the full 200-paper benchmark with the revised synthetic corpus and the triage/anchor prompt, then decide whether any additional reviewer/editorial seam tuning is still necessary.
+Latest: the revised synthetic corpus plus `reviewer-v6-triage-anchors` now clears the repaired broad 200-paper benchmark at `187/200 = 93.5%` (`high=97.8% accept`, `medium=86.4% revise`, `low=100% reject`, `broken=100% reject`). The micro-set remains `20/20` (`100%`). The important remaining caveat is style robustness: the terser elite v3 cross-check still failed hard (`0/40`, all `reject`), so the current win is strong on the revised benchmark corpus but not yet style-invariant.
+Next: decide whether invited pilot will use the controlled Researka drafter style only. If yes, invited pilot can open behind that fence. If no, align the external/terser drafter style with the accepted house style, rerun the v3 cross-check, and only then widen intake.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -34,9 +34,11 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Build focused micro-set + live calibrator (`calibration/calibration_micro_set.json`, `scripts/calibrate_reviewer.py`)
 - [x] Tighten synthetic benchmark corpus so `high` and `low` fixtures are genuinely separable (`artifacts/calibration_micro_fixture_v2.json` = `19/20`)
 - [x] Karpathy-loop prep: intervention log written (`docs/reviewer_prompt_interventions.md`, 5 interventions documented, 20/20 micro-set = triage+anchors on revised corpus)
+- [x] Rerun the full 200-paper benchmark with the revised corpus and triage/anchor reviewer prompt (`artifacts/benchmark_baseline.json` = repaired broad baseline at `93.5%`)
+- [x] Cross-check style robustness on the terser elite v3 corpus (`artifacts/benchmark_v3_vs_v6_prompt.json` = `0/40`, all reject; style sensitivity still open)
 - [ ] Expand `gold_set_v1` from seed corpus to a true human/domain-labeled gold set
 - [ ] Open invited pilot (ops task)
-- [ ] Rerun the full 200-paper benchmark with the revised corpus and triage/anchor reviewer prompt
+- [ ] Align external/terser drafter style with the accepted house style and rerun the v3 cross-check
 
 ## Non-Goals
 - Frontend rebuild
@@ -50,6 +52,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Rebuild drift if v2 absorbs writer-side concerns after the gatekeeper pivot
 - Over-abstracting before one clean end-to-end slice exists
 - Under-testing publish blockers
+- Cross-style calibration drift: the current reviewer/corpus combo is strong on the revised synthetic benchmark but still rejects the terser elite v3 style wholesale
 
 ## Key Architecture
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
