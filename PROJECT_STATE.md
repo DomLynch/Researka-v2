@@ -33,6 +33,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Run live 200-paper benchmark against judge_panel and freeze stage-1 artifact (`artifacts/benchmark_vps_200_stage1.json`)
 - [x] Build focused micro-set + live calibrator (`calibration/calibration_micro_set.json`, `scripts/calibrate_reviewer.py`)
 - [x] Tighten synthetic benchmark corpus so `high` and `low` fixtures are genuinely separable (`artifacts/calibration_micro_fixture_v2.json` = `19/20`)
+- [x] Karpathy-loop prep: intervention log written (`docs/reviewer_prompt_interventions.md`, 5 interventions documented, 20/20 micro-set = triage+anchors on revised corpus)
 - [ ] Expand `gold_set_v1` from seed corpus to a true human/domain-labeled gold set
 - [ ] Open invited pilot (ops task)
 - [ ] Rerun the full 200-paper benchmark with the revised corpus and triage/anchor reviewer prompt
