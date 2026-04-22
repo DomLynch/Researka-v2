@@ -62,11 +62,17 @@ def routed_sections(paper: dict, article_type: str) -> dict[str, str]:
     sections = {str(name): str(text) for name, text in dict(paper.get("sections", {})).items()}
     if article_type != ArticleType.EMPIRICAL_STUDY.value:
         return sections
-    if "Methods" not in sections and "Search Summary" in sections:
-        sections["Methods"] = sections["Search Summary"]
-    if "Results" not in sections and "Key Findings" in sections:
-        sections["Results"] = sections["Key Findings"]
-    return sections
+    methods_parts = [sections.get("Search Summary", "").strip()]
+    if sections.get("Evidence Landscape", "").strip():
+        methods_parts.append(sections["Evidence Landscape"].strip())
+    methods = "\n\n".join(part for part in methods_parts if part)
+    return {
+        "Research Question": sections.get("Research Question", "").strip(),
+        "Methods": methods,
+        "Results": sections.get("Key Findings", "").strip(),
+        "Limitations": sections.get("Limitations", "").strip(),
+        "Conclusion": sections.get("Conclusion", "").strip(),
+    }
 
 
 def backfill_v3_entries(papers: list[dict]) -> list[dict]:

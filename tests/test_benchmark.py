@@ -128,14 +128,17 @@ def test_routed_sections_add_methods_and_results_for_empirical_entries() -> None
             "sections": {
                 "Research Question": "Q",
                 "Search Summary": "M",
+                "Evidence Landscape": "Context",
                 "Key Findings": "R",
                 "Conclusion": "C",
+                "Limitations": "L",
             }
         },
         "empirical_study",
     )
-    assert sections["Methods"] == "M"
+    assert sections["Methods"] == "M\n\nContext"
     assert sections["Results"] == "R"
+    assert list(sections.keys()) == ["Research Question", "Methods", "Results", "Limitations", "Conclusion"]
     synthesis_sections = routed_sections({"sections": {"Search Summary": "M"}}, "rapid_evidence_synthesis")
     assert "Methods" not in synthesis_sections
 
