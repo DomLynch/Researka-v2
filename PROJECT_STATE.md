@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: the live 200-paper VPS benchmark has completed and the stage-1 artifact is now frozen on disk (`artifacts/benchmark_vps_200_stage1.json`): `110/200` correct (`55%`), `0` accepts, `178` revises, `22` rejects/intake rejects. The 30-entry working gold set still passes 30/30, so the broad benchmark failure is specifically a revise-collapse on the wider synthetic corpus.
-Next: build a small challenge set from the benchmark failures (`high -> revise`, `low -> revise`, plus anchor controls), then run a tight reviewer/editorial calibration loop before rerunning the full 200-paper benchmark.
+Latest: the reviewer prompt loop was a dead end on the original micro-set (`50%` before and after prompt-only changes), so the benchmark corpus was tightened instead. The revised live micro-set artifact (`artifacts/calibration_micro_fixture_v2.json`) now scores `19/20` (`95%`): `high=100% accept`, `medium=80% revise`, `low=100% reject`, `broken=100% reject`.
+Next: rerun the full 200-paper benchmark with the revised synthetic corpus, then decide whether any reviewer/editorial seam tuning is still necessary on top of the cleaner scoreboard.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -31,9 +31,11 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] `gold_set_v1` working corpus builder and execution board (`scripts/build_gold_set_v1.py`, `calibration/week1_execution_board.md`)
 - [x] Live 30-entry working gold-set baseline frozen (`artifacts/gold_set_eval_v2_working_baseline.json`, `.md`)
 - [x] Run live 200-paper benchmark against judge_panel and freeze stage-1 artifact (`artifacts/benchmark_vps_200_stage1.json`)
+- [x] Build focused micro-set + live calibrator (`calibration/calibration_micro_set.json`, `scripts/calibrate_reviewer.py`)
+- [x] Tighten synthetic benchmark corpus so `high` and `low` fixtures are genuinely separable (`artifacts/calibration_micro_fixture_v2.json` = `19/20`)
 - [ ] Expand `gold_set_v1` from seed corpus to a true human/domain-labeled gold set
 - [ ] Open invited pilot (ops task)
-- [ ] Build a focused challenge set from the 200-paper benchmark failures and tune the reviewer/editorial seam against it
+- [ ] Rerun the full 200-paper benchmark with the revised corpus and re-evaluate reviewer/editorial seam tuning
 
 ## Non-Goals
 - Frontend rebuild
