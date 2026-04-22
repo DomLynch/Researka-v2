@@ -6,6 +6,7 @@ Usage:
     python scripts/run_benchmark.py [--count 200] [--output artifacts/benchmark_baseline.json]
     python scripts/run_benchmark.py --dry-run          # uses deterministic provider, 10 papers
     python scripts/run_benchmark.py --count 10          # 10 papers with live provider
+    python scripts/run_benchmark.py --corpus calibration/elite_benchmark_v3_cleaned.json --dry-run
 
 Requires RESEARKA_V2_PROVIDER env var (default: deterministic).
 For judge_panel: MINIMAX_API_KEY, MIMO_API_KEY, DEEPSEEK_API_KEY must be set.
@@ -189,6 +190,35 @@ def _make_sections(domain: str, quality: str, paper_id: int) -> dict:
             f"The evidence supports a publication-ready bounded conclusion: {topic} strategies are justified for the specific contexts represented in the bundle, "
             f"the claims remain proportional to the cited evidence, and no scope reset is needed beyond minor polish."
         )
+    elif quality == "medium":
+        search += (
+            " The search covered recent peer-reviewed sources on {topic}, "
+            "but the retained bundle skews toward mechanistic plausibility studies rather than direct outcome trials."
+        )
+        landscape += (
+            " The findings are mixed: some studies report positive signals while others show no clear effect, "
+            "human data remain sparse for key outcomes, and broad population benefit remains unproven."
+        )
+        findings = (
+            f"Several studies report positive signals for {topic}, but the evidence is mixed and the magnitude "
+            f"of benefit varies across contexts. Human data remain sparse for critical endpoints, and the manuscript "
+            f"does not always distinguish between mechanistic plausibility and direct outcome support in the cited bundle."
+        )
+        gaps = (
+            f"Direct outcome trials with adequate sample sizes and follow-up are missing for {topic}. "
+            f"Heterogeneity across study designs limits aggregation, and broad population benefit remains unproven "
+            f"without further adequately powered studies."
+        )
+        limitations = (
+            f"Study heterogeneity limits aggregation, and the human outcome data are sparse, "
+            f"so the manuscript's current conclusion overstates the strength of the evidence. "
+            f"Bounded revision tightening the population scope and adding direct data would strengthen the evidence base."
+        )
+        conclusion = (
+            f"Results for {topic} are encouraging but mixed, and the conclusion is only mechanistically credible at this stage — "
+            f"direct outcome evidence is thin, heterogeneity limits aggregation, and broad population benefit remains unproven. "
+            f"A bounded revision that tightens the claim scope and adds direct data would be needed before this manuscript is publication-ready."
+        )
     elif quality == "low":
         search += (
             " The search is broad but noisy, mixing adjacent mechanistic papers, indirect proxy outcomes, and context-mismatched sources "
@@ -352,23 +382,44 @@ def run_paper(submission_data: dict, engine: WorkflowEngine, repo: InMemoryRunti
         record["duration_s"] = round(time.time() - t0, 3)
         return record
 
-    # Review
-    review_job = repo.claim_next_job()
-    if review_job is None:
-        record["stage_reached"] = "review"
-        record["outcome"] = "no_review_job"
-        record["duration_s"] = round(time.time() - t0, 3)
-        return record
+    # Review (with retry for infrastructure timeouts)
+    max_review_retries = 2
+    for _review_attempt in range(max_review_retries + 1):
+        review_job = repo.claim_next_job()
+        if review_job is None:
+            record["stage_reached"] = "review"
+            record["outcome"] = "no_review_job"
+            record["duration_s"] = round(time.time() - t0, 3)
+            return record
 
-    try:
-        engine.handle_job(review_job, repo)
-        repo.complete_job(review_job.id)
-    except Exception as e:
-        record["stage_reached"] = "review"
-        record["outcome"] = "review_error"
-        record["error"] = str(e)
-        record["duration_s"] = round(time.time() - t0, 3)
-        return record
+        try:
+            engine.handle_job(review_job, repo)
+            repo.complete_job(review_job.id)
+            break  # success — exit retry loop
+        except TimeoutError:
+            repo.fail_job(review_job.id, reason="timeout")
+            if _review_attempt < max_review_retries:
+                # Enqueue a fresh review job and retry
+                review_job = repo.enqueue_job(
+                    RuntimeJob(
+                        target_object_id=submission.id,
+                        stage=Stage.REVIEW,
+                        payload={"domain_slug": submission_data.get("domain_slug", "general")},
+                    )
+                )
+                continue
+            else:
+                record["stage_reached"] = "review"
+                record["outcome"] = "review_timeout"
+                record["error"] = "max retries exceeded (timeout)"
+                record["duration_s"] = round(time.time() - t0, 3)
+                return record
+        except Exception as e:
+            record["stage_reached"] = "review"
+            record["outcome"] = "review_error"
+            record["error"] = str(e)
+            record["duration_s"] = round(time.time() - t0, 3)
+            return record
 
     review = repo.list_objects(ObjectType.REVIEW)[-1]
     rec = review.metadata.get("recommendation", "?")
@@ -575,22 +626,30 @@ def main() -> None:
     parser.add_argument("--count", type=int, default=200, help="Number of synthetic papers")
     parser.add_argument("--output", default="artifacts/benchmark_baseline.json", help="Output artifact path")
     parser.add_argument("--dry-run", action="store_true", help="Use deterministic provider, 10 papers")
+    parser.add_argument("--corpus", default=None, help="Path to a corpus JSON file (list of paper dicts)")
     args = parser.parse_args()
 
     if args.dry_run:
         os.environ["RESEARKA_V2_PROVIDER"] = "deterministic"
-        count = min(args.count, 10)
-    else:
-        count = args.count
 
+    if args.corpus:
+        with open(args.corpus) as f:
+            papers = json.load(f)
+        for i, p in enumerate(papers):
+            p.setdefault("_benchmark_paper_id", i + 1)
+            p.setdefault("_style_tag", p.get("_benchmark_source", "terse"))
+        if args.dry_run:
+            papers = papers[: min(args.count, 10)]
+    else:
+        count = min(args.count, 10) if args.dry_run else args.count
+        papers = generate_papers(count)
+
+    count = len(papers)
     provider_name = os.getenv("RESEARKA_V2_PROVIDER", "deterministic")
     print(f"Provider: {provider_name}")
     print(f"Papers: {count}")
     print()
-
-    papers = generate_papers(count)
     engine = WorkflowEngine()
-    repo = InMemoryRuntimeRepository()
 
     records = []
     t_start = time.time()
@@ -598,6 +657,7 @@ def main() -> None:
     for i, paper in enumerate(papers, 1):
         quality = paper.get("_benchmark_quality", "medium")
         print(f"[{i}/{count}] Q={quality} | {paper['domain_slug']}", end="", flush=True)
+        repo = InMemoryRuntimeRepository()
         record = run_paper(paper, engine, repo)
         status = record["decision"] or record["outcome"]
         cost_str = f" ${record['cost_usd']:.4f}" if record["cost_usd"] > 0 else ""

@@ -273,11 +273,14 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
     assert "rapid evidence synthesis reviewer" in prompt.lower()
     assert "forced triage call" in prompt
     assert "Do not use revise as a safe default" in prompt
+    assert "mixed findings, sparse human data" in prompt
     assert "Judge substance, not house style" in prompt
+    assert "House-style revise" in prompt
     assert "Terser-style accept" in prompt
     assert "External-style accept" in prompt
     assert "accept = all scores >= 4" in prompt
-    assert "reject = empty sections" in prompt
+    assert "Accept is invalid when the manuscript explicitly says evidence is mixed" in prompt
+    assert "reject = structurally broken" in prompt
 
 
 def test_workflow_marks_empirical_study_in_review_metadata() -> None:

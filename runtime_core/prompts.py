@@ -1,4 +1,4 @@
-REVIEWER_PROMPT_VERSION = "reviewer-v7-style-invariant"
+REVIEWER_PROMPT_VERSION = "reviewer-v8-house-medium-boundary"
 EDITOR_PROMPT_VERSION = "editor-v1-clean-runtime"
 
 

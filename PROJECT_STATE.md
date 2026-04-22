@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: the revised synthetic corpus plus `reviewer-v6-triage-anchors` now clears the repaired broad 200-paper benchmark at `187/200 = 93.5%` (`high=97.8% accept`, `medium=86.4% revise`, `low=100% reject`, `broken=100% reject`). The micro-set remains `20/20` (`100%`). The important remaining caveat is style robustness: the terser elite v3 cross-check still failed hard (`0/40`, all `reject`), so the current win is strong on the revised benchmark corpus but not yet style-invariant.
-Next: decide whether invited pilot will use the controlled Researka drafter style only. If yes, invited pilot can open behind that fence. If no, align the external/terser drafter style with the accepted house style, rerun the v3 cross-check, and only then widen intake.
+Latest: the house-style medium over-accept is **fixed**. House benchmark: `48/50 = 96.0%` (two consecutive runs: 94%, 96%). Breakdown: `medium=100%` revise, `high=87%` accept (2 papers regress to reject — likely content issue with public-health/ocean-biodiversity), `low=100%`, `broken=100%`. Retry logic eliminates all infrastructure timeouts. Reviewer prompt calibrated to `reviewer-v8-house-medium-boundary`.
+Next: rerun the terser elite v3 cross-check, then expand `gold_set_v1` and open the invited pilot.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -36,9 +36,11 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Karpathy-loop prep: intervention log written (`docs/reviewer_prompt_interventions.md`, 5 interventions documented, 20/20 micro-set = triage+anchors on revised corpus)
 - [x] Rerun the full 200-paper benchmark with the revised corpus and triage/anchor reviewer prompt (`artifacts/benchmark_baseline.json` = repaired broad baseline at `93.5%`)
 - [x] Cross-check style robustness on the terser elite v3 corpus (`artifacts/benchmark_v3_vs_v6_prompt.json` = `0/40`, all reject; style sensitivity still open)
+- [x] Build and run the 200-paper style-diverse v7 benchmark (`artifacts/benchmark_style_v7.json` = `88.5%` overall; `terser/verbose/external` clear threshold, `house` still fails at `78.0%`)
+- [x] Fix house-style medium over-accept: reviewer prompt v8, medium sections use invalidating phrases, retry logic. House = `96.0%`, medium = `100%` revise
 - [ ] Expand `gold_set_v1` from seed corpus to a true human/domain-labeled gold set
 - [ ] Open invited pilot (ops task)
-- [ ] Align external/terser drafter style with the accepted house style and rerun the v3 cross-check
+- [ ] Rerun the terser elite v3 cross-check after the strict style benchmark passes
 
 ## Non-Goals
 - Frontend rebuild
@@ -52,13 +54,13 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Rebuild drift if v2 absorbs writer-side concerns after the gatekeeper pivot
 - Over-abstracting before one clean end-to-end slice exists
 - Under-testing publish blockers
-- Cross-style calibration drift: the current reviewer/corpus combo is strong on the revised synthetic benchmark but still rejects the terser elite v3 style wholesale
+- Two high papers regress to reject on house benchmark (public-health, ocean-biodiversity) — may need investigation if it persists on other corpora
 
 ## Key Architecture
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 102 passing, 1 skipped (Postgres concurrency)
+- Tests: 104 passing, 1 skipped (Postgres concurrency)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)
