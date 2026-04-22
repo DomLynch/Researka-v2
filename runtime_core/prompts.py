@@ -1,4 +1,4 @@
-REVIEWER_PROMPT_VERSION = "reviewer-v8-house-medium-boundary"
+REVIEWER_PROMPT_VERSION = "reviewer-v9-empirical-routing"
 EDITOR_PROMPT_VERSION = "editor-v1-clean-runtime"
 
 

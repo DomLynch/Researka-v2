@@ -282,6 +282,12 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
     assert "Accept is invalid when the manuscript explicitly says evidence is mixed" in prompt
     assert "reject = structurally broken" in prompt
 
+    empirical_prompt = WorkflowEngine()._review_system_prompt(ArticleType.EMPIRICAL_STUDY.value)
+    assert "empirical study reviewer" in empirical_prompt.lower()
+    assert "Empirical-study calibration rules" in empirical_prompt
+    assert "one primary study rather than a multi-study synthesis" in empirical_prompt
+    assert "stand-ins for methods and results context" in empirical_prompt
+
 
 def test_workflow_marks_empirical_study_in_review_metadata() -> None:
     class EmpiricalProvider:

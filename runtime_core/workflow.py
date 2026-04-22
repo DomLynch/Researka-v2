@@ -38,6 +38,10 @@ class WorkflowEngine:
                 "- Check whether methods, measurements, and inclusion logic are explicit enough to audit the study design.\n"
                 "- Score whether results and conclusions stay proportionate to the data actually reported in the manuscript.\n"
                 "- Flag unsupported leaps from one dataset, cohort, or model system to broad policy, deployment, or causal claims.\n\n"
+                "Empirical-study calibration rules:\n"
+                "- A terser trial, dataset, or experimental manuscript can still be accept when it reports concrete outcomes, effect sizes or test statistics, honest limits, and a bounded conclusion.\n"
+                "- Do not mark claim_support unsupported just because the manuscript reports one primary study rather than a multi-study synthesis. Unsupported means the conclusion outruns the reported results.\n"
+                "- When routed benchmark manuscripts use Search Summary and Key Findings headings, treat them as stand-ins for methods and results context rather than as missing empirical structure.\n\n"
             )
         else:
             article_specific = (
