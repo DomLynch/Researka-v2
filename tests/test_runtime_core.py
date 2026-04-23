@@ -281,7 +281,6 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
     assert "accept = all scores >= 4" in prompt
     assert "Accept is invalid when the manuscript explicitly says evidence is mixed" in prompt
     assert "reject = structurally broken" in prompt
-
     empirical_prompt = WorkflowEngine()._review_system_prompt(ArticleType.EMPIRICAL_STUDY.value)
     assert "empirical study reviewer" in empirical_prompt.lower()
     assert "Empirical-study calibration rules" in empirical_prompt

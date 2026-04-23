@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: `codex/house-medium-fix` is now the winning consolidation line. It fixes the house-style medium over-accept bug, preserves the repaired broad baseline (`187/200 = 93.5%` on `artifacts/benchmark_baseline.json`), and adds v3 genre-routing support. The house-only benchmark proof is strong on controlled Researka style (`artifacts/benchmark_house_v10_live.json`: `high=100% accept`, `medium=100% revise`, `low=100% reject`, `broken=100% reject`). The open-style empirical problem is still unresolved (`artifacts/benchmark_v3_accept_smoke6.json`: `0/6` correct, `4 revise`, `2 reject`).
-Next: stop synthetic calibration for this week. Open only a controlled invited pilot behind the house-style drafter fence, collect real third-party submissions, and defer any more empirical/open-style tuning until real pilot data exists.
+Latest: `main` now absorbs both `codex/house-medium-fix` and `mimo/style-alignment` into one clean base. It keeps the repaired broad baseline (`artifacts/benchmark_baseline.json` = `187/200 = 93.5%`), the style-diverse v7 benchmark (`artifacts/benchmark_style_v7.json` = `177/200 = 88.5%`), the house-style medium fix (`artifacts/benchmark_house_v10_live.json` / `artifacts/benchmark_house_v10.json`), and Mimo's v4 abstract-enrichment diagnostic corpora and cache.
+Next: use this merged `main` as the only base for the next dev. Pilot can proceed only on the controlled house-style path; open-style empirical intake still needs real-user evidence or later follow-up work.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -37,6 +37,9 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Rerun the full 200-paper benchmark with the revised corpus and triage/anchor reviewer prompt (`artifacts/benchmark_baseline.json` = repaired broad baseline at `93.5%`)
 - [x] Cross-check style robustness on the terser elite v3 corpus (`artifacts/benchmark_v3_vs_v6_prompt.json` = `0/40`, all reject; style sensitivity still open)
 - [x] Merge the clean `codex/house-medium-fix` line forward: house fix, v3 article-type routing, empirical benchmark scaffolding, frozen v3 smoke artifact
+- [x] Build and run the 200-paper style-diverse v7 benchmark (`artifacts/benchmark_style_v7.json` = `88.5%` overall; `terser/verbose/external` clear threshold, `house` still fails at `78.0%`)
+- [x] Fix house-style medium over-accept: reviewer prompt v8, medium sections use invalidating phrases, retry logic. House = `96.0%`, medium = `100%` revise
+- [x] Merge `mimo/style-alignment` into `main` as the clean base for future work
 - [ ] Expand `gold_set_v1` from seed corpus to a true human/domain-labeled gold set
 - [ ] Open invited pilot fenced to the controlled Researka drafter style
 - [ ] Collect real third-party submission data before resuming open-style empirical tuning
@@ -54,7 +57,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Over-abstracting before one clean end-to-end slice exists
 - Under-testing publish blockers
 - Open-style empirical calibration remains weak: routed v3 empirical smoke is still `0/6` correct even after metadata and prompt fixes
-- Parallel local work still exists on `mimo/style-alignment`; treat that tree as exploratory until explicitly merged
+- Two high papers regress to reject on house benchmark (public-health, ocean-biodiversity) — may need investigation if it persists on other corpora
 
 ## Key Architecture
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts

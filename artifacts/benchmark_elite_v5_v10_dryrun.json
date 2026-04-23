@@ -3,7 +3,7 @@
     "provider": "deterministic",
     "paper_count": 10,
     "elapsed_s": 0.02,
-    "timestamp": "2026-04-22T11:00:27Z"
+    "timestamp": "2026-04-22T19:38:46Z"
   },
   "aggregates": {
     "total": 10,
@@ -297,7 +297,7 @@
       "tokens_in": 0,
       "tokens_out": 0,
       "error": null,
-      "duration_s": 0.001
+      "duration_s": 0.002
     },
     {
       "paper_id": 5,
@@ -421,7 +421,7 @@
       "tokens_in": 0,
       "tokens_out": 0,
       "error": null,
-      "duration_s": 0.002
+      "duration_s": 0.001
     },
     {
       "paper_id": 9,

@@ -1,4 +1,4 @@
-REVIEWER_PROMPT_VERSION = "reviewer-v9-empirical-routing"
+REVIEWER_PROMPT_VERSION = "reviewer-v10-stats-claim-calibration"
 EDITOR_PROMPT_VERSION = "editor-v1-clean-runtime"
 
 
