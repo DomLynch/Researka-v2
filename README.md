@@ -54,8 +54,8 @@ RESEARKA_V2_PROVIDER=judge_panel
 ```
 
 Default live judge stack:
-- primary: `mimo-v2-pro`
-- sparring: `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter
-- fallback / tiebreak: `google/gemma-4-31b-it:free` via OpenRouter
+- primary: `mimo-v2.5-pro`
+- sparring: `nvidia/nemotron-3-super-120b-a12b` via OpenRouter
+- fallback / tiebreak: `deepseek/deepseek-v4-flash` via OpenRouter
 
 The default remains deterministic for local tests and offline development.

@@ -397,7 +397,7 @@ def test_openrouter_provider_retries_transient_errors(monkeypatch: pytest.Monkey
             return False
 
         def read(self) -> bytes:
-            return b'{"choices":[{"message":{"content":"{\\"recommendation\\":\\"accept\\",\\"review_markdown\\":\\"ok\\"}"}}],"usage":{"prompt_tokens":12,"completion_tokens":8},"model":"nvidia/nemotron-3-super-120b-a12b:free"}'
+            return b'{"choices":[{"message":{"content":"{\\"recommendation\\":\\"accept\\",\\"review_markdown\\":\\"ok\\"}"}}],"usage":{"prompt_tokens":12,"completion_tokens":8},"model":"nvidia/nemotron-3-super-120b-a12b"}'
 
     def fake_urlopen(*args, **kwargs):
         attempts["count"] += 1
@@ -421,7 +421,7 @@ def test_openrouter_provider_retries_transient_errors(monkeypatch: pytest.Monkey
     assert sleeps == [0.25, 0.5]
 
 
-def test_reviewer_panel_from_env_uses_mimo_nemotron_gemma(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reviewer_panel_from_env_uses_mimo_nemotron_deepseek(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
     monkeypatch.delenv("RESEARKA_V2_REVIEWER_MODEL", raising=False)
     monkeypatch.delenv("RESEARKA_V2_JUDGE_MODEL", raising=False)
@@ -432,9 +432,9 @@ def test_reviewer_panel_from_env_uses_mimo_nemotron_gemma(monkeypatch: pytest.Mo
     assert isinstance(provider.primary, MimoProvider)
     assert isinstance(provider.sparring, OpenRouterProvider)
     assert isinstance(provider.fallback, OpenRouterProvider)
-    assert provider.primary.model == "mimo-v2-pro"
-    assert provider.sparring.model == "nvidia/nemotron-3-super-120b-a12b:free"
-    assert provider.fallback.model == "google/gemma-4-31b-it:free"
+    assert provider.primary.model == "mimo-v2.5-pro"
+    assert provider.sparring.model == "nvidia/nemotron-3-super-120b-a12b"
+    assert provider.fallback.model == "deepseek/deepseek-v4-flash"
 
 
 def test_editorial_requires_recommendation_metadata() -> None:
@@ -492,9 +492,9 @@ def test_reviewer_panel_escalates_on_disagreement() -> None:
             )
 
     panel = ReviewerPanel(
-        primary=FakeProvider("mimo", "mimo-v2-pro", "accept"),
-        sparring=FakeProvider("openrouter", "nvidia/nemotron-3-super-120b-a12b:free", "reject"),
-        fallback=FakeProvider("openrouter", "google/gemma-4-31b-it:free", "revise"),
+        primary=FakeProvider("mimo", "mimo-v2.5-pro", "accept"),
+        sparring=FakeProvider("openrouter", "nvidia/nemotron-3-super-120b-a12b", "reject"),
+        fallback=FakeProvider("openrouter", "deepseek/deepseek-v4-flash", "revise"),
     )
     result = panel.complete(
         ProviderRequest(
@@ -534,15 +534,15 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
             )
 
     panel = ReviewerPanel(
-        primary=BrokenProvider("mimo", "mimo-v2-pro", "<think>not json Think"),
+        primary=BrokenProvider("mimo", "mimo-v2.5-pro", "<think>not json Think"),
         sparring=BrokenProvider(
             "mimo",
-            "mimo-v2-pro",
+            "mimo-v2.5-pro",
             json.dumps(_review_payload("accept", review_markdown="Mimo accepts.")),
         ),
         fallback=BrokenProvider(
             "openrouter",
-            "google/gemma-4-31b-it:free",
+            "deepseek/deepseek-v4-flash",
             json.dumps(_review_payload("revise", review_markdown="Fallback revises.")),
         ),
     )
@@ -583,17 +583,17 @@ def test_reviewer_panel_treats_missing_review_markdown_as_failure() -> None:
     panel = ReviewerPanel(
         primary=BrokenProvider(
             "mimo",
-            "mimo-v2-pro",
+            "mimo-v2.5-pro",
             _review_payload("accept", review_markdown=""),
         ),
         sparring=BrokenProvider(
             "mimo",
-            "mimo-v2-pro",
+            "mimo-v2.5-pro",
             _review_payload("accept", review_markdown="Mimo accepts."),
         ),
         fallback=BrokenProvider(
             "openrouter",
-            "google/gemma-4-31b-it:free",
+            "deepseek/deepseek-v4-flash",
             _review_payload("revise", review_markdown="Fallback revises."),
         ),
     )
@@ -633,7 +633,7 @@ def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
     panel = ReviewerPanel(
         primary=BrokenProvider(
             "mimo",
-            "mimo-v2-pro",
+            "mimo-v2.5-pro",
             _review_payload(
                 "accept",
                 rubric_scores={
@@ -653,12 +653,12 @@ def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
         ),
         sparring=BrokenProvider(
             "mimo",
-            "mimo-v2-pro",
+            "mimo-v2.5-pro",
             _review_payload("revise", review_markdown="Mimo requests revision."),
         ),
         fallback=BrokenProvider(
             "openrouter",
-            "google/gemma-4-31b-it:free",
+            "deepseek/deepseek-v4-flash",
             _review_payload("reject", review_markdown="Fallback rejects."),
         ),
     )
@@ -680,7 +680,7 @@ def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
 def test_workflow_stores_panel_route_metadata() -> None:
     class PanelProvider:
         provider = "reviewer-panel"
-        model = "mimo-v2-pro|nvidia/nemotron-3-super-120b-a12b:free|google/gemma-4-31b-it:free"
+        model = "mimo-v2.5-pro|nvidia/nemotron-3-super-120b-a12b|deepseek/deepseek-v4-flash"
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
             return ProviderResult(
@@ -712,7 +712,7 @@ def test_workflow_stores_panel_route_metadata() -> None:
                     metadata={
                         "route": "consensus",
                         "winner_provider": "mimo",
-                        "winner_model": "mimo-v2-pro",
+                        "winner_model": "mimo-v2.5-pro",
                         "primary_recommendation": "accept",
                         "sparring_recommendation": "accept",
                     },
@@ -1301,7 +1301,7 @@ def test_calibration_reject_rubric_fields_stored() -> None:
 def test_panel_stores_rubric_metadata_in_review() -> None:
     class PanelProviderWithRubric:
         provider = "reviewer-panel"
-        model = "mimo-v2-pro|nvidia/nemotron-3-super-120b-a12b:free|google/gemma-4-31b-it:free"
+        model = "mimo-v2.5-pro|nvidia/nemotron-3-super-120b-a12b|deepseek/deepseek-v4-flash"
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
             return ProviderResult(
@@ -1333,7 +1333,7 @@ def test_panel_stores_rubric_metadata_in_review() -> None:
                     metadata={
                         "route": "consensus",
                         "winner_provider": "mimo",
-                        "winner_model": "mimo-v2-pro",
+                        "winner_model": "mimo-v2.5-pro",
                         "primary_recommendation": "revise",
                         "sparring_recommendation": "revise",
                     },
