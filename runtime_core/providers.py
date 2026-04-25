@@ -206,6 +206,7 @@ class OpenAICompatibleProvider:
         return attempt < self.max_attempts - 1 and error_class in {
             ProviderErrorClass.TIMEOUT,
             ProviderErrorClass.PROVIDER_UNAVAILABLE,
+            ProviderErrorClass.RATE_LIMIT,
         }
 
 

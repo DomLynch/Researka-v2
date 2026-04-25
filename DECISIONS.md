@@ -1,7 +1,7 @@
 # DECISION JOURNAL
 
 ## 2026-04-25 — Replace paid DeepSeek/MiniMax live panel slots with OpenRouter paid models
-**Decision:** Keep MiMo V2.5 Pro as the primary live reviewer, move the sparring reviewer to OpenRouter `nvidia/nemotron-3-super-120b-a12b`, and move fallback/tiebreak to OpenRouter `deepseek/deepseek-v4-flash`.
+**Decision:** Keep MiMo V2.5 Pro as the primary live reviewer, move the sparring reviewer to OpenRouter `nvidia/nemotron-3-super-120b-a12b`, and move fallback/tiebreak to OpenRouter `google/gemma-4-31b-it`.
 **Why:** DeepSeek pricing is now an operational risk, MiniMax subscription is being retired, and the panel still needs non-Xiaomi adjudication diversity. OpenRouter currently lists both target models as paid OpenRouter models and OpenAI-compatible JSON mode.
 **Alternatives rejected:**
 - Keep DeepSeek as tiebreak — rejected because it can burn cost unexpectedly.

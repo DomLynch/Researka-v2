@@ -1,4 +1,5 @@
 import json
+import urllib.error
 
 import pytest
 
@@ -421,7 +422,43 @@ def test_openrouter_provider_retries_transient_errors(monkeypatch: pytest.Monkey
     assert sleeps == [0.25, 0.5]
 
 
-def test_reviewer_panel_from_env_uses_mimo_nemotron_deepseek(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_openrouter_provider_retries_rate_limits(monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts = {"count": 0}
+    sleeps: list[float] = []
+
+    class StubResponse:
+        def __enter__(self) -> "StubResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def read(self) -> bytes:
+            return b'{"choices":[{"message":{"content":"{\\"recommendation\\":\\"accept\\",\\"review_markdown\\":\\"ok\\"}"}}],"usage":{"prompt_tokens":12,"completion_tokens":8},"model":"google/gemma-4-31b-it"}'
+
+    def fake_urlopen(*args, **kwargs):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise urllib.error.HTTPError("url", 429, "rate limit", {}, None)
+        return StubResponse()
+
+    monkeypatch.setattr("runtime_core.providers.time.sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr("runtime_core.providers.urllib.request.urlopen", fake_urlopen)
+    provider = OpenRouterProvider(api_key="test-key", model="google/gemma-4-31b-it")
+    result = provider.complete(
+        ProviderRequest(
+            system_prompt="system",
+            user_prompt="user",
+            prompt_version="reviewer-v1",
+            response_format="json_object",
+        )
+    )
+    assert result.ok is True
+    assert attempts["count"] == 2
+    assert sleeps == [0.25]
+
+
+def test_reviewer_panel_from_env_uses_mimo_nemotron_gemma(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
     monkeypatch.delenv("RESEARKA_V2_REVIEWER_MODEL", raising=False)
     monkeypatch.delenv("RESEARKA_V2_JUDGE_MODEL", raising=False)
@@ -434,7 +471,7 @@ def test_reviewer_panel_from_env_uses_mimo_nemotron_deepseek(monkeypatch: pytest
     assert isinstance(provider.fallback, OpenRouterProvider)
     assert provider.primary.model == "mimo-v2.5-pro"
     assert provider.sparring.model == "nvidia/nemotron-3-super-120b-a12b"
-    assert provider.fallback.model == "deepseek/deepseek-v4-flash"
+    assert provider.fallback.model == "google/gemma-4-31b-it"
 
 
 def test_editorial_requires_recommendation_metadata() -> None:
@@ -494,7 +531,7 @@ def test_reviewer_panel_escalates_on_disagreement() -> None:
     panel = ReviewerPanel(
         primary=FakeProvider("mimo", "mimo-v2.5-pro", "accept"),
         sparring=FakeProvider("openrouter", "nvidia/nemotron-3-super-120b-a12b", "reject"),
-        fallback=FakeProvider("openrouter", "deepseek/deepseek-v4-flash", "revise"),
+        fallback=FakeProvider("openrouter", "google/gemma-4-31b-it", "revise"),
     )
     result = panel.complete(
         ProviderRequest(
@@ -542,7 +579,7 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
         ),
         fallback=BrokenProvider(
             "openrouter",
-            "deepseek/deepseek-v4-flash",
+            "google/gemma-4-31b-it",
             json.dumps(_review_payload("revise", review_markdown="Fallback revises.")),
         ),
     )
@@ -593,7 +630,7 @@ def test_reviewer_panel_treats_missing_review_markdown_as_failure() -> None:
         ),
         fallback=BrokenProvider(
             "openrouter",
-            "deepseek/deepseek-v4-flash",
+            "google/gemma-4-31b-it",
             _review_payload("revise", review_markdown="Fallback revises."),
         ),
     )
@@ -658,7 +695,7 @@ def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
         ),
         fallback=BrokenProvider(
             "openrouter",
-            "deepseek/deepseek-v4-flash",
+            "google/gemma-4-31b-it",
             _review_payload("reject", review_markdown="Fallback rejects."),
         ),
     )
@@ -680,7 +717,7 @@ def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
 def test_workflow_stores_panel_route_metadata() -> None:
     class PanelProvider:
         provider = "reviewer-panel"
-        model = "mimo-v2.5-pro|nvidia/nemotron-3-super-120b-a12b|deepseek/deepseek-v4-flash"
+        model = "mimo-v2.5-pro|nvidia/nemotron-3-super-120b-a12b|google/gemma-4-31b-it"
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
             return ProviderResult(
@@ -1301,7 +1338,7 @@ def test_calibration_reject_rubric_fields_stored() -> None:
 def test_panel_stores_rubric_metadata_in_review() -> None:
     class PanelProviderWithRubric:
         provider = "reviewer-panel"
-        model = "mimo-v2.5-pro|nvidia/nemotron-3-super-120b-a12b|deepseek/deepseek-v4-flash"
+        model = "mimo-v2.5-pro|nvidia/nemotron-3-super-120b-a12b|google/gemma-4-31b-it"
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
             return ProviderResult(
