@@ -227,21 +227,19 @@ class MimoProvider(OpenAICompatibleProvider):
         )
 
 
-class DeepSeekProvider(OpenAICompatibleProvider):
+class OpenRouterProvider(OpenAICompatibleProvider):
     def __init__(
         self,
         *,
         api_key: str | None = None,
-        model: str = "deepseek-reasoner",
-        base_url: str = "https://api.deepseek.com/v1",
+        model: str = "nvidia/nemotron-3-super-120b-a12b:free",
+        base_url: str = "https://openrouter.ai/api/v1",
     ) -> None:
         super().__init__(
-            provider="deepseek",
+            provider="openrouter",
             model=model,
-            api_key=api_key or os.getenv("DEEPSEEK_API_KEY", ""),
+            api_key=api_key or os.getenv("OPENROUTER_API_KEY", ""),
             base_url=base_url,
-            input_cost_per_million=0.27,
-            output_cost_per_million=1.10,
         )
 
 
@@ -252,9 +250,9 @@ def provider_from_env() -> LanguageModelProvider:
             model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2-pro"),
             base_url=os.getenv("RESEARKA_V2_MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
         )
-    if selected == "deepseek":
-        return DeepSeekProvider(
-            model=os.getenv("RESEARKA_V2_DEEPSEEK_MODEL", "deepseek-reasoner"),
-            base_url=os.getenv("RESEARKA_V2_DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+    if selected == "openrouter":
+        return OpenRouterProvider(
+            model=os.getenv("RESEARKA_V2_OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"),
+            base_url=os.getenv("RESEARKA_V2_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         )
     return DeterministicProvider()

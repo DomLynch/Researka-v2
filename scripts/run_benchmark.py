@@ -9,7 +9,7 @@ Usage:
     python scripts/run_benchmark.py --corpus calibration/elite_benchmark_v3_cleaned.json --dry-run
 
 Requires RESEARKA_V2_PROVIDER env var (default: deterministic).
-For judge_panel: MINIMAX_API_KEY, MIMO_API_KEY, DEEPSEEK_API_KEY must be set.
+For judge_panel: MIMO_API_KEY and OPENROUTER_API_KEY must be set.
 """
 from __future__ import annotations
 

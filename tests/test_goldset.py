@@ -237,7 +237,7 @@ def test_render_gold_set_report_contains_core_sections() -> None:
             "timestamp": "2026-04-21T00:00:00Z",
             "corpus_version": "gold-set-v1-working",
             "provider": "reviewer-panel",
-            "model": "mimo|deepseek",
+            "model": "mimo|openrouter",
         },
         "summary": {
             "total": 2,

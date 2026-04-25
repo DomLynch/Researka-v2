@@ -6,10 +6,10 @@ import os
 from contracts import ProviderErrorClass, ProviderUsage
 
 from .providers import (
-    DeepSeekProvider,
     DeterministicProvider,
     LanguageModelProvider,
     MimoProvider,
+    OpenRouterProvider,
     ProviderError,
     ProviderRequest,
     ProviderResponse,
@@ -295,13 +295,13 @@ def reviewer_from_env() -> LanguageModelProvider:
                 model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2-pro"),
                 base_url=os.getenv("RESEARKA_V2_MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
             ),
-            sparring=DeepSeekProvider(
-                model=os.getenv("RESEARKA_V2_DEEPSEEK_SPARRING_MODEL", "deepseek-chat"),
-                base_url=os.getenv("RESEARKA_V2_DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+            sparring=OpenRouterProvider(
+                model=os.getenv("RESEARKA_V2_REVIEWER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"),
+                base_url=os.getenv("RESEARKA_V2_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
             ),
-            fallback=DeepSeekProvider(
-                model=os.getenv("RESEARKA_V2_DEEPSEEK_MODEL", "deepseek-reasoner"),
-                base_url=os.getenv("RESEARKA_V2_DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+            fallback=OpenRouterProvider(
+                model=os.getenv("RESEARKA_V2_JUDGE_MODEL", "google/gemma-4-31b-it:free"),
+                base_url=os.getenv("RESEARKA_V2_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
             ),
         )
     if selected == "deterministic":

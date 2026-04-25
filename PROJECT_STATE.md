@@ -71,6 +71,6 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Database: Postgres `researka_v2` (user `researka_v2`)
 - Health: http://49.12.7.18:8000/health
 - **Shared with elite-trader benchmark** — other dev running 64-paper test against same LLM providers
-- LLM providers: MiniMax (primary), MIMO (sparring, ~15s baseline), DeepSeek (fallback)
+- LLM providers: MiMo v2 Pro (primary), OpenRouter Nemotron 3 Super free (sparring), OpenRouter Gemma 4 31B free (fallback)
 - Timeout: 60s per provider call (was 30s, MIMO needs headroom under shared load)
 - Calibration artifact path: `artifacts/benchmark_baseline.json` (shared by benchmark runners and `/calibration`)

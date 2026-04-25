@@ -1,5 +1,14 @@
 # DECISION JOURNAL
 
+## 2026-04-25 — Replace paid DeepSeek/MiniMax live panel slots with OpenRouter free models
+**Decision:** Keep MiMo v2 Pro as the primary live reviewer, move the sparring reviewer to OpenRouter `nvidia/nemotron-3-super-120b-a12b:free`, and move fallback/tiebreak to OpenRouter `google/gemma-4-31b-it:free`.
+**Why:** DeepSeek pricing is now an operational risk, MiniMax subscription is being retired, and the panel still needs non-Xiaomi adjudication diversity. OpenRouter currently lists both target models as free with 262K context and OpenAI-compatible JSON mode.
+**Alternatives rejected:**
+- Keep DeepSeek as tiebreak — rejected because it can burn cost unexpectedly.
+- Keep MiniMax as reviewer — rejected because it forces a second migration when the subscription expires.
+- Use MiMo Flash as reviewer or judge — rejected because same-family review weakens disagreement signal.
+**Revisit if:** OpenRouter free endpoints disappear, JSON mode fails in live probes, or benchmark/gold-set quality regresses by more than 10%.
+
 ## 2026-04-19 — Start v2 as backend-only
 **Decision:** Rebuild Researka v2 as a backend-only Python runtime, separate from the frontend.
 **Why:** The current pain is runtime architecture, not the website. Separating frontend removes drag and keeps the rebuild small.
