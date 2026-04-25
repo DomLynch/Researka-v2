@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
-from contracts import ApiKeyCreateResponse, ApiKeyInfo, AuditReview, AuditVerdict, FailureClass, EventType, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob
+from contracts import ApiKeyCreateResponse, ApiKeyInfo, AuditReview, AuditVerdict, FailureClass, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob
 
 
 class RuntimeRepository(Protocol):

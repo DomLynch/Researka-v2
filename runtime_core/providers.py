@@ -233,7 +233,7 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         self,
         *,
         api_key: str | None = None,
-        model: str = "nvidia/nemotron-3-super-120b-a12b",
+        model: str = "google/gemma-4-31b-it",
         base_url: str = "https://openrouter.ai/api/v1",
     ) -> None:
         super().__init__(
@@ -253,7 +253,7 @@ def provider_from_env() -> LanguageModelProvider:
         )
     if selected == "openrouter":
         return OpenRouterProvider(
-            model=os.getenv("RESEARKA_V2_OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b"),
+            model=os.getenv("RESEARKA_V2_OPENROUTER_MODEL", "google/gemma-4-31b-it"),
             base_url=os.getenv("RESEARKA_V2_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         )
     return DeterministicProvider()

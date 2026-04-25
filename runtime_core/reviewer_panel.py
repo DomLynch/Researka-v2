@@ -296,11 +296,11 @@ def reviewer_from_env() -> LanguageModelProvider:
                 base_url=os.getenv("RESEARKA_V2_MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
             ),
             sparring=OpenRouterProvider(
-                model=os.getenv("RESEARKA_V2_REVIEWER_MODEL", "nvidia/nemotron-3-super-120b-a12b"),
+                model=os.getenv("RESEARKA_V2_REVIEWER_MODEL", "google/gemma-4-31b-it"),
                 base_url=os.getenv("RESEARKA_V2_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
             ),
             fallback=OpenRouterProvider(
-                model=os.getenv("RESEARKA_V2_JUDGE_MODEL", "google/gemma-4-31b-it"),
+                model=os.getenv("RESEARKA_V2_JUDGE_MODEL", "mistralai/mistral-small-2603"),
                 base_url=os.getenv("RESEARKA_V2_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
             ),
         )

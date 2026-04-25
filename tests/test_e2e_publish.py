@@ -105,7 +105,6 @@ def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
         ),
     )
     assert seed2.status_code == 200
-    submission2_id = seed2.json()["submission"]["id"]
 
     for _ in range(12):
         queue = client.get("/jobs/queue").json()["queued"]

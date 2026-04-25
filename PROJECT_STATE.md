@@ -3,7 +3,7 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: provider panel now uses MiMo V2.5 Pro + OpenRouter Nemotron 3 Super + OpenRouter Gemma 4 31B, and editorial decisions mirror to Derivation Web when `/etc/derivation-web/researka.key` is present. The DW mirror is non-blocking: Researka still completes decisions if DW is unavailable.
+Latest: provider panel now uses MiMo V2.5 Pro + OpenRouter Gemma 4 31B + OpenRouter Mistral Small 2603, and editorial decisions mirror to Derivation Web when `/etc/derivation-web/researka.key` is present. The DW mirror is non-blocking: Researka still completes decisions if DW is unavailable.
 Next: pilot can proceed only on the controlled house-style path; open-style empirical intake still needs real-user evidence or later follow-up work. Re-baseline before making broad calibration claims after the model swap.
 
 ## Goal
@@ -71,6 +71,6 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Database: Postgres `researka_v2` (user `researka_v2`)
 - Health: http://49.12.7.18:8000/health
 - **Shared with elite-trader benchmark** — other dev running 64-paper test against same LLM providers
-- LLM providers: MiMo V2.5 Pro (primary), OpenRouter Nemotron 3 Super (sparring), OpenRouter Gemma 4 31B (fallback)
+- LLM providers: MiMo V2.5 Pro (primary), OpenRouter Gemma 4 31B (sparring), OpenRouter Mistral Small 2603 (fallback)
 - Timeout: 60s per provider call (was 30s, MIMO needs headroom under shared load)
 - Calibration artifact path: `artifacts/benchmark_baseline.json` (shared by benchmark runners and `/calibration`)
