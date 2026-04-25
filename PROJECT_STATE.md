@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-04-21
 Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: `main` now absorbs both `codex/house-medium-fix` and `mimo/style-alignment` into one clean base. It keeps the repaired broad baseline (`artifacts/benchmark_baseline.json` = `187/200 = 93.5%`), the style-diverse v7 benchmark (`artifacts/benchmark_style_v7.json` = `177/200 = 88.5%`), the house-style medium fix (`artifacts/benchmark_house_v10_live.json` / `artifacts/benchmark_house_v10.json`), and Mimo's v4 abstract-enrichment diagnostic corpora and cache.
-Next: use this merged `main` as the only base for the next dev. Pilot can proceed only on the controlled house-style path; open-style empirical intake still needs real-user evidence or later follow-up work.
+Latest: provider panel now uses MiMo V2.5 Pro + OpenRouter Nemotron 3 Super + OpenRouter Gemma 4 31B, and editorial decisions mirror to Derivation Web when `/etc/derivation-web/researka.key` is present. The DW mirror is non-blocking: Researka still completes decisions if DW is unavailable.
+Next: pilot can proceed only on the controlled house-style path; open-style empirical intake still needs real-user evidence or later follow-up work. Re-baseline before making broad calibration claims after the model swap.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.

@@ -59,3 +59,6 @@ Default live judge stack:
 - fallback / tiebreak: `google/gemma-4-31b-it` via OpenRouter
 
 The default remains deterministic for local tests and offline development.
+
+## Derivation Web
+When `/etc/derivation-web/researka.key` exists, decisions are mirrored to `https://dw.domlynch.com` as non-blocking provenance artifacts. DW failures do not block Researka decisions.

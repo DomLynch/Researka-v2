@@ -5,6 +5,7 @@ import json
 from contracts import ArticleType, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, WorkflowContext, WorkflowOutcome, publication_template_for, run_submission_template_checks
 
 from .compiler import compile_publication
+from .derivation_web import emit_decision_to_derivation_web
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
 from .reviewer_panel import reviewer_from_env
@@ -29,7 +30,6 @@ class WorkflowEngine:
         self.provider = provider or reviewer_from_env()
 
     def _review_system_prompt(self, article_type: str) -> str:
-        template = publication_template_for(article_type)
         if article_type == ArticleType.EMPIRICAL_STUDY.value:
             article_specific = (
                 "You are the Researka empirical study reviewer. Judge this as a manuscript that reports one study or dataset, "
@@ -362,7 +362,8 @@ class WorkflowEngine:
                     },
                 )
             )
-            return {"created_object_id": decision.id, "terminal_decision": Decision.REJECT.value, "next_jobs": 0}
+            derivation = emit_decision_to_derivation_web(submission=submission, decision=decision)
+            return {"created_object_id": decision.id, "terminal_decision": Decision.REJECT.value, "next_jobs": 0, "derivation_web": derivation}
         repository.enqueue_job(
             RuntimeJob(
                 target_object_id=submission.id,
@@ -441,10 +442,12 @@ class WorkflowEngine:
         )
         for next_job in outcome.next_jobs:
             repository.enqueue_job(next_job)
+        derivation = emit_decision_to_derivation_web(submission=submission, review=review, decision=decision_object)
         return {
             "created_object_id": decision_object.id,
             "terminal_decision": decision.value if outcome.terminal_decision else None,
             "next_jobs": len(outcome.next_jobs),
+            "derivation_web": derivation,
         }
 
     def _run_publish(self, job: RuntimeJob, repository: RuntimeRepository) -> dict:
