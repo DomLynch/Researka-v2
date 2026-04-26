@@ -7,6 +7,7 @@ from contracts import ProviderErrorClass, ProviderUsage
 
 from .providers import (
     DeterministicProvider,
+    FallbackProvider,
     LanguageModelProvider,
     MimoProvider,
     OpenRouterProvider,
@@ -290,18 +291,39 @@ class ReviewerPanel:
 def reviewer_from_env() -> LanguageModelProvider:
     selected = os.getenv("RESEARKA_V2_PROVIDER", "deterministic").strip().lower()
     if selected in {"judge_panel", "panel", "reviewer_panel"}:
+        or_base_url = os.getenv("RESEARKA_V2_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        # Backup model — Mistral by default. Used three ways:
+        #   (1) wraps MiMo so a transient MiMo failure still yields a primary review,
+        #   (2) wraps Gemma so a transient Gemma failure still yields a sparring review,
+        #   (3) is the panel-level tiebreaker on disagreement / both-failed.
+        # Toggle off via RESEARKA_V2_REVIEWER_FALLBACK_ENABLED=0 if you want to study
+        # raw MiMo/Gemma failure rates without the safety net.
+        fallback_model = os.getenv("RESEARKA_V2_FALLBACK_MODEL", "mistralai/mistral-small-2603")
+        fallback_enabled = os.getenv("RESEARKA_V2_REVIEWER_FALLBACK_ENABLED", "1").strip().lower() not in {"0", "false", "no"}
+
+        def _make_fallback() -> OpenRouterProvider:
+            return OpenRouterProvider(model=fallback_model, base_url=or_base_url)
+
+        primary_inner = MimoProvider(
+            model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2.5-pro"),
+            base_url=os.getenv("RESEARKA_V2_MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
+        )
+        sparring_inner = OpenRouterProvider(
+            model=os.getenv("RESEARKA_V2_REVIEWER_MODEL", "google/gemma-4-31b-it"),
+            base_url=or_base_url,
+        )
+        primary: LanguageModelProvider = (
+            FallbackProvider(primary=primary_inner, fallback=_make_fallback()) if fallback_enabled else primary_inner
+        )
+        sparring: LanguageModelProvider = (
+            FallbackProvider(primary=sparring_inner, fallback=_make_fallback()) if fallback_enabled else sparring_inner
+        )
         return ReviewerPanel(
-            primary=MimoProvider(
-                model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2.5-pro"),
-                base_url=os.getenv("RESEARKA_V2_MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
-            ),
-            sparring=OpenRouterProvider(
-                model=os.getenv("RESEARKA_V2_REVIEWER_MODEL", "google/gemma-4-31b-it"),
-                base_url=os.getenv("RESEARKA_V2_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-            ),
+            primary=primary,
+            sparring=sparring,
             fallback=OpenRouterProvider(
                 model=os.getenv("RESEARKA_V2_JUDGE_MODEL", "mistralai/mistral-small-2603"),
-                base_url=os.getenv("RESEARKA_V2_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+                base_url=or_base_url,
             ),
         )
     if selected == "deterministic":

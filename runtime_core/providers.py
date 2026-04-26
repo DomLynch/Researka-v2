@@ -284,6 +284,45 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         )
 
 
+class FallbackProvider:
+    """Wraps a primary provider with a fallback that runs only on transient failure.
+
+    Use this in the reviewer panel to add resilience to individual reviewer slots:
+    if MiMo or Gemma times out / is rate-limited / returns 5xx, the wrapped fallback
+    (typically Mistral) takes over so the panel doesn't lose that slot entirely.
+
+    A 4xx (BAD_REQUEST — including missing API key) is NOT considered transient and
+    short-circuits without trying the fallback. A response that's structurally bad
+    after parsing (caught by the panel's _validated_result, not us) is also not
+    treated as transient — the fallback is for network/availability issues, not for
+    "the model said something weird".
+    """
+
+    def __init__(self, *, primary: LanguageModelProvider, fallback: LanguageModelProvider) -> None:
+        self.primary = primary
+        self.fallback = fallback
+        self.provider = f"{getattr(primary, 'provider', 'primary')}+fallback"
+        self.model = getattr(primary, "model", "primary")
+
+    def complete(self, request: ProviderRequest) -> ProviderResult:
+        result = self.primary.complete(request)
+        if result.ok:
+            return result
+        if not self._is_transient(result):
+            return result
+        return self.fallback.complete(request)
+
+    @staticmethod
+    def _is_transient(result: ProviderResult) -> bool:
+        if result.error is None:
+            return False
+        return result.error.error_class in {
+            ProviderErrorClass.TIMEOUT,
+            ProviderErrorClass.PROVIDER_UNAVAILABLE,
+            ProviderErrorClass.RATE_LIMIT,
+        }
+
+
 def provider_from_env() -> LanguageModelProvider:
     selected = os.getenv("RESEARKA_V2_PROVIDER", "deterministic").strip().lower()
     if selected == "mimo":

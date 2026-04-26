@@ -7,7 +7,7 @@ from runtime_core.compiler import canonical_bundle_facts, compile_publication
 from runtime_core.gates import run_publish_gates
 from runtime_core.failure_classifier import classify_failure_reason
 from runtime_core.prompts import REVIEWER_PROMPT_VERSION
-from runtime_core.providers import MimoProvider, OpenRouterProvider, ProviderRequest, ProviderResponse, ProviderResult
+from runtime_core.providers import FallbackProvider, MimoProvider, OpenRouterProvider, ProviderRequest, ProviderResponse, ProviderResult
 from runtime_core.reviewer_panel import ReviewerPanel, reviewer_from_env
 from runtime_core.repos import InMemoryRuntimeRepository
 from runtime_core.sanitizer import sanitize_source_ledger
@@ -470,16 +470,40 @@ def test_reviewer_panel_from_env_uses_mimo_gemma_mistral(monkeypatch: pytest.Mon
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
     monkeypatch.delenv("RESEARKA_V2_REVIEWER_MODEL", raising=False)
     monkeypatch.delenv("RESEARKA_V2_JUDGE_MODEL", raising=False)
+    # Default behaviour: per-slot Mistral fallback is enabled, so primary and
+    # sparring are wrapped in FallbackProvider.
+    monkeypatch.delenv("RESEARKA_V2_REVIEWER_FALLBACK_ENABLED", raising=False)
+
+    provider = reviewer_from_env()
+
+    assert isinstance(provider, ReviewerPanel)
+    assert isinstance(provider.primary, FallbackProvider)
+    assert isinstance(provider.sparring, FallbackProvider)
+    assert isinstance(provider.fallback, OpenRouterProvider)
+    # The wrapper exposes the primary inner model in its .model attribute.
+    assert provider.primary.model == "mimo-v2.5-pro"
+    assert provider.sparring.model == "google/gemma-4-31b-it"
+    assert provider.fallback.model == "mistralai/mistral-small-2603"
+    # Inner primaries must be the right concrete provider type.
+    assert isinstance(provider.primary.primary, MimoProvider)
+    assert isinstance(provider.sparring.primary, OpenRouterProvider)
+    # The fallback inside each wrapper is Mistral via OpenRouter.
+    assert provider.primary.fallback.model == "mistralai/mistral-small-2603"
+    assert provider.sparring.fallback.model == "mistralai/mistral-small-2603"
+
+
+def test_reviewer_panel_from_env_can_disable_per_slot_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Setting RESEARKA_V2_REVIEWER_FALLBACK_ENABLED=0 returns to the previous
+    behaviour: bare MiMo and Gemma in the primary/sparring slots, no wrapping.
+    Useful for measuring raw provider failure rates without the safety net."""
+    monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
+    monkeypatch.setenv("RESEARKA_V2_REVIEWER_FALLBACK_ENABLED", "0")
 
     provider = reviewer_from_env()
 
     assert isinstance(provider, ReviewerPanel)
     assert isinstance(provider.primary, MimoProvider)
     assert isinstance(provider.sparring, OpenRouterProvider)
-    assert isinstance(provider.fallback, OpenRouterProvider)
-    assert provider.primary.model == "mimo-v2.5-pro"
-    assert provider.sparring.model == "google/gemma-4-31b-it"
-    assert provider.fallback.model == "mistralai/mistral-small-2603"
 
 
 def test_editorial_requires_recommendation_metadata() -> None:
