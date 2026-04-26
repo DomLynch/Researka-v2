@@ -138,9 +138,9 @@ def _make_sections(domain: str, quality: str, paper_id: int) -> dict:
         f"or implementation."
     )
     landscape = (
-        f"The bundle contains 12 sources spanning reviews and primary studies. "
-        f"Reviews synthesize the field's translational logic and known bottlenecks. "
-        f"Primary studies concentrate on mechanistic refinement and efficacy. "
+        "The bundle contains 12 sources spanning reviews and primary studies. "
+        "Reviews synthesize the field's translational logic and known bottlenecks. "
+        "Primary studies concentrate on mechanistic refinement and efficacy. "
     )
     findings = (
         f"First, {topic} remains a credible intervention target with consistent signals "
@@ -153,9 +153,9 @@ def _make_sections(domain: str, quality: str, paper_id: int) -> dict:
         f"and the field still lacks stable biomarkers and safety-calibrated trials."
     )
     limitations = (
-        f"The evidence base is heterogeneous. Functional outcomes differ by context, "
-        f"which limits clean aggregation. Human data directly testing generalized benefit "
-        f"are still sparse."
+        "The evidence base is heterogeneous. Functional outcomes differ by context, "
+        "which limits clean aggregation. Human data directly testing generalized benefit "
+        "are still sparse."
     )
     conclusion = (
         f"The evidence supports a calibrated position: {topic} remains credible "
@@ -179,12 +179,12 @@ def _make_sections(domain: str, quality: str, paper_id: int) -> dict:
             f"and the manuscript does not rely on mechanistic speculation to claim impact beyond the retained evidence bundle."
         )
         gaps = (
-            f"Remaining gaps are mostly about optimization, longer follow-up, and transferability across adjacent settings, "
-            f"not about whether the core bounded claim is supported by the cited bundle."
+            "Remaining gaps are mostly about optimization, longer follow-up, and transferability across adjacent settings, "
+            "not about whether the core bounded claim is supported by the cited bundle."
         )
         limitations = (
-            f"The limitations section is honest that follow-up is finite and external validity is bounded, "
-            f"but those limits constrain magnitude and transferability rather than overturning the directly supported core conclusion."
+            "The limitations section is honest that follow-up is finite and external validity is bounded, "
+            "but those limits constrain magnitude and transferability rather than overturning the directly supported core conclusion."
         )
         conclusion = (
             f"The evidence supports a publication-ready bounded conclusion: {topic} strategies are justified for the specific contexts represented in the bundle, "
@@ -210,9 +210,9 @@ def _make_sections(domain: str, quality: str, paper_id: int) -> dict:
             f"without further adequately powered studies."
         )
         limitations = (
-            f"Study heterogeneity limits aggregation, and the human outcome data are sparse, "
-            f"so the manuscript's current conclusion overstates the strength of the evidence. "
-            f"Bounded revision tightening the population scope and adding direct data would strengthen the evidence base."
+            "Study heterogeneity limits aggregation, and the human outcome data are sparse, "
+            "so the manuscript's current conclusion overstates the strength of the evidence. "
+            "Bounded revision tightening the population scope and adding direct data would strengthen the evidence base."
         )
         conclusion = (
             f"Results for {topic} are encouraging but mixed, and the conclusion is only mechanistically credible at this stage — "
@@ -232,10 +232,10 @@ def _make_sections(domain: str, quality: str, paper_id: int) -> dict:
             f"treats indirect signal as if it were direct outcome evidence, and never establishes that the cited bundle actually supports the headline conclusion."
         )
         gaps = (
-            f"The critical gaps are foundational: direct outcome evidence is thin, external validity is unresolved, and the bundle does not justify policy, deployment, or broad causal language."
+            "The critical gaps are foundational: direct outcome evidence is thin, external validity is unresolved, and the bundle does not justify policy, deployment, or broad causal language."
         )
         limitations = (
-            f"The limitations are severe enough to change the decision, because the evidence is indirect, heterogeneous, and too weakly matched to the question to support the manuscript's current framing."
+            "The limitations are severe enough to change the decision, because the evidence is indirect, heterogeneous, and too weakly matched to the question to support the manuscript's current framing."
         )
         conclusion = (
             f"The current manuscript should not be treated as publication-ready or merely polishable: the evidence for {topic} is too indirect for the claims being made, and the paper needs a scope reset rather than bounded revision."

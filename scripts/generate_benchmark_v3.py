@@ -325,8 +325,8 @@ def main():
         low, high = TARGETS[section_name]
         tol_low = int(low * (1 - TOLERANCE))
         tol_high = int(high * (1 + TOLERANCE))
-        in_range = sum(1 for l in lengths if tol_low <= l <= tol_high)
-        below_floor = sum(1 for l in lengths if l < MIN_CHARS)
+        in_range = sum(1 for length in lengths if tol_low <= length <= tol_high)
+        below_floor = sum(1 for length in lengths if length < MIN_CHARS)
         print(f"  {section_name:20s}: avg={avg:5.0f} min={min(lengths):4d} max={max(lengths):4d} "
               f"range={tol_low}-{tol_high} in={in_range:2d}/64 floor_fail={below_floor}")
 

@@ -267,7 +267,7 @@ def main() -> None:
         print(f"VPS health check failed: {e}")
         sys.exit(1)
 
-    print(f"Provider: judge_panel (VPS)")
+    print("Provider: judge_panel (VPS)")
     if args.input_json:
         papers = load_benchmark_papers(args.input_json)
         count = len(papers)

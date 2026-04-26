@@ -2,7 +2,6 @@
 """Submit a paper to Researka v2 and run the full pipeline."""
 import json
 import httpx
-import time
 
 BASE = "http://49.12.7.18:8000"
 
