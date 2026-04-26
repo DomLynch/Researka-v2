@@ -58,6 +58,86 @@ def test_emit_decision_to_derivation_web_skips_without_key(monkeypatch):
     assert result == {"ok": False, "skipped": "missing_key"}
 
 
+def test_emit_decision_to_derivation_web_includes_fallback_flags(monkeypatch):
+    """The DW claim artifact metadata should carry the per-slot fallback flags
+    (sourced from the review object) so external auditors can reconstruct
+    safety-net usage without database access."""
+    captured: list[dict] = []
+
+    def fake_post(path, payload, *, api_key):  # noqa: ARG001
+        if path == "/api/artifacts" and payload["kind"] == "claim":
+            captured.append(payload["metadata"])
+            return 201, {"id": "art_decision"}
+        if path == "/api/artifacts" and payload["kind"] == "source":
+            return 201, {"id": "art_submission"}
+        return 201, {"id": "ok"}
+
+    monkeypatch.setenv("RESEARKA_DW_API_KEY", "dwk_test")
+    monkeypatch.setattr("runtime_core.derivation_web._post", fake_post)
+    submission = ResearchObject(object_type=ObjectType.SUBMISSION, title="Submission", body_markdown="body")
+    review = ResearchObject(
+        object_type=ObjectType.REVIEW,
+        parent_object_id=submission.id,
+        title="Review",
+        metadata={
+            "recommendation": "revise",
+            "primary_fallback_used": True,
+            "primary_fallback_reason": "timeout",
+            "sparring_fallback_used": False,
+            "route": "consensus",
+        },
+    )
+    decision = ResearchObject(
+        object_type=ObjectType.DECISION,
+        parent_object_id=submission.id,
+        title="Decision",
+        metadata={"decision": "revise", "notes": ["revise"], "model": "panel"},
+    )
+
+    emit_decision_to_derivation_web(submission=submission, review=review, decision=decision)
+
+    assert len(captured) == 1
+    metadata = captured[0]
+    assert metadata["primary_fallback_used"] is True
+    assert metadata["primary_fallback_reason"] == "timeout"
+    assert metadata["sparring_fallback_used"] is False
+    assert metadata["sparring_fallback_reason"] is None
+    assert metadata["panel_route"] == "consensus"
+
+
+def test_emit_decision_to_derivation_web_defaults_fallback_flags_when_review_missing(monkeypatch):
+    """When a review object isn't passed (e.g. early reject path), the flags
+    must default to False/None — not blow up."""
+    captured: list[dict] = []
+
+    def fake_post(path, payload, *, api_key):  # noqa: ARG001
+        if path == "/api/artifacts" and payload["kind"] == "claim":
+            captured.append(payload["metadata"])
+        if path == "/api/artifacts":
+            return 201, {"id": "art_x"}
+        return 201, {"id": "ok"}
+
+    monkeypatch.setenv("RESEARKA_DW_API_KEY", "dwk_test")
+    monkeypatch.setattr("runtime_core.derivation_web._post", fake_post)
+    submission = ResearchObject(object_type=ObjectType.SUBMISSION, title="S", body_markdown="b")
+    decision = ResearchObject(
+        object_type=ObjectType.DECISION,
+        parent_object_id=submission.id,
+        title="D",
+        metadata={"decision": "reject"},
+    )
+
+    emit_decision_to_derivation_web(submission=submission, decision=decision)  # no review arg
+
+    assert len(captured) == 1
+    metadata = captured[0]
+    assert metadata["primary_fallback_used"] is False
+    assert metadata["sparring_fallback_used"] is False
+    assert metadata["primary_fallback_reason"] is None
+    assert metadata["sparring_fallback_reason"] is None
+    assert metadata["panel_route"] is None
+
+
 def test_emit_decision_to_derivation_web_non_blocking_when_dw_down(monkeypatch):
     """If DW is unreachable, the emit should swallow the error and return ok=False
     with an error message — never raise. Researka's review path must not block on DW."""

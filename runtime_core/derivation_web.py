@@ -55,6 +55,23 @@ def _artifact_body(obj: ResearchObject) -> str:
     return str(body).strip() or obj.title
 
 
+def _bool_meta(obj: ResearchObject | None, key: str) -> bool:
+    """Read a boolean from the review metadata, defaulting to False."""
+    if obj is None:
+        return False
+    return bool(obj.metadata.get(key, False))
+
+
+def _str_meta(obj: ResearchObject | None, key: str) -> str | None:
+    """Read a non-empty string from the review metadata, returning None if absent."""
+    if obj is None:
+        return None
+    value = obj.metadata.get(key)
+    if value in (None, ""):
+        return None
+    return str(value)
+
+
 def emit_decision_to_derivation_web(
     *,
     submission: ResearchObject,
@@ -109,6 +126,15 @@ def emit_decision_to_derivation_web(
                     "provider": decision.metadata.get("provider"),
                     "model": decision.metadata.get("model"),
                     "prompt_version": decision.metadata.get("prompt_version"),
+                    # Per-slot fallback observability (added 2026-04-26 — surfaces
+                    # whether MiMo or Gemma was actually replaced by Mistral on this
+                    # call, so external auditors can reconstruct safety-net usage
+                    # from the DW chain alone without poking the runtime DB).
+                    "primary_fallback_used": _bool_meta(review, "primary_fallback_used"),
+                    "sparring_fallback_used": _bool_meta(review, "sparring_fallback_used"),
+                    "primary_fallback_reason": _str_meta(review, "primary_fallback_reason"),
+                    "sparring_fallback_reason": _str_meta(review, "sparring_fallback_reason"),
+                    "panel_route": _str_meta(review, "route"),
                 },
                 "actor_id": ACTOR_ID,
             },
