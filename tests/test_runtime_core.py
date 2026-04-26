@@ -419,7 +419,11 @@ def test_openrouter_provider_retries_transient_errors(monkeypatch: pytest.Monkey
     )
     assert result.ok is True
     assert attempts["count"] == 3
-    assert sleeps == [0.25, 0.5]
+    # Two retries with exponential base 0.25s and 0.5s, ±25% jitter to avoid
+    # thundering-herd retries when many jobs hit a transient outage at once.
+    assert len(sleeps) == 2
+    assert sleeps[0] == pytest.approx(0.25, abs=0.0625)
+    assert sleeps[1] == pytest.approx(0.5, abs=0.125)
 
 
 def test_openrouter_provider_retries_rate_limits(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -455,7 +459,11 @@ def test_openrouter_provider_retries_rate_limits(monkeypatch: pytest.MonkeyPatch
     )
     assert result.ok is True
     assert attempts["count"] == 2
-    assert sleeps == [0.25]
+    # Rate-limit backoff now uses a separate, larger base (default 2.0s) so a
+    # 429 burst doesn't burn the same tiny budget as a transient timeout.
+    # ±25% jitter applied.
+    assert len(sleeps) == 1
+    assert sleeps[0] == pytest.approx(2.0, abs=0.5)
 
 
 def test_reviewer_panel_from_env_uses_mimo_gemma_mistral(monkeypatch: pytest.MonkeyPatch) -> None:

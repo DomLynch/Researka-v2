@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import time
 import urllib.error
 import urllib.request
@@ -95,7 +96,10 @@ class OpenAICompatibleProvider:
         input_cost_per_million: float = 0.0,
         output_cost_per_million: float = 0.0,
         max_attempts: int = 3,
+        max_attempts_on_rate_limit: int = 6,
         retry_backoff_seconds: float = 0.25,
+        rate_limit_backoff_seconds: float = 2.0,
+        rate_limit_backoff_cap_seconds: float = 30.0,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -104,7 +108,10 @@ class OpenAICompatibleProvider:
         self.input_cost_per_million = input_cost_per_million
         self.output_cost_per_million = output_cost_per_million
         self.max_attempts = max_attempts
+        self.max_attempts_on_rate_limit = max_attempts_on_rate_limit
         self.retry_backoff_seconds = retry_backoff_seconds
+        self.rate_limit_backoff_seconds = rate_limit_backoff_seconds
+        self.rate_limit_backoff_cap_seconds = rate_limit_backoff_cap_seconds
 
     def complete(self, request: ProviderRequest) -> ProviderResult:
         if not self.api_key:
@@ -125,7 +132,12 @@ class OpenAICompatibleProvider:
             },
             method="POST",
         )
-        for attempt in range(self.max_attempts):
+        # Rate-limit retries get their own (larger) attempt budget so a single
+        # 429 burst doesn't spend all retries before the rate-limit window opens.
+        attempt = 0
+        rate_limit_attempt = 0
+        last_error: ProviderError | None = None
+        while True:
             try:
                 with urllib.request.urlopen(req, timeout=request.timeout_sec) as response:
                     raw = json.loads(response.read().decode("utf-8"))
@@ -133,25 +145,30 @@ class OpenAICompatibleProvider:
             except urllib.error.HTTPError as exc:
                 error_class = self._classify_status(int(getattr(exc, "code", 0) or 0))
                 body = exc.read().decode("utf-8", errors="ignore")
-                if self._should_retry(error_class, attempt):
-                    time.sleep(self.retry_backoff_seconds * (2**attempt))
-                    continue
-                return ProviderResult(ok=False, error=ProviderError(error_class=error_class, message=body or str(exc)))
+                last_error = ProviderError(error_class=error_class, message=body or str(exc))
+                if error_class is ProviderErrorClass.RATE_LIMIT:
+                    if rate_limit_attempt >= self.max_attempts_on_rate_limit - 1:
+                        return ProviderResult(ok=False, error=last_error)
+                    sleep_for = self._rate_limit_sleep(exc, rate_limit_attempt)
+                    rate_limit_attempt += 1
+                elif self._is_transient(error_class):
+                    if attempt >= self.max_attempts - 1:
+                        return ProviderResult(ok=False, error=last_error)
+                    sleep_for = self._jittered_backoff(self.retry_backoff_seconds, attempt)
+                    attempt += 1
+                else:
+                    return ProviderResult(ok=False, error=last_error)
+                time.sleep(sleep_for)
+                continue
             except Exception as exc:
                 message = str(exc).lower()
                 error_class = ProviderErrorClass.TIMEOUT if "timed out" in message else ProviderErrorClass.PROVIDER_UNAVAILABLE
-                if self._should_retry(error_class, attempt):
-                    time.sleep(self.retry_backoff_seconds * (2**attempt))
-                    continue
-                return ProviderResult(ok=False, error=ProviderError(error_class=error_class, message=str(exc)))
-        else:
-            return ProviderResult(
-                ok=False,
-                error=ProviderError(
-                    error_class=ProviderErrorClass.PROVIDER_UNAVAILABLE,
-                    message=f"{self.provider}_retry_exhausted",
-                ),
-            )
+                last_error = ProviderError(error_class=error_class, message=str(exc))
+                if not self._is_transient(error_class) or attempt >= self.max_attempts - 1:
+                    return ProviderResult(ok=False, error=last_error)
+                time.sleep(self._jittered_backoff(self.retry_backoff_seconds, attempt))
+                attempt += 1
+                continue
 
         message = (((raw.get("choices") or [{}])[0]).get("message") or {})
         text = str(message.get("content") or message.get("reasoning_content") or "").strip()
@@ -202,12 +219,35 @@ class OpenAICompatibleProvider:
             return ProviderErrorClass.PROVIDER_UNAVAILABLE
         return ProviderErrorClass.OTHER
 
-    def _should_retry(self, error_class: ProviderErrorClass, attempt: int) -> bool:
-        return attempt < self.max_attempts - 1 and error_class in {
-            ProviderErrorClass.TIMEOUT,
-            ProviderErrorClass.PROVIDER_UNAVAILABLE,
-            ProviderErrorClass.RATE_LIMIT,
-        }
+    def _is_transient(self, error_class: ProviderErrorClass) -> bool:
+        return error_class in {ProviderErrorClass.TIMEOUT, ProviderErrorClass.PROVIDER_UNAVAILABLE}
+
+    def _jittered_backoff(self, base_seconds: float, attempt: int) -> float:
+        """Exponential backoff with ±25% jitter to avoid thundering-herd retries."""
+        raw = base_seconds * (2**attempt)
+        jitter = raw * 0.25 * (2 * random.random() - 1)
+        return max(0.0, raw + jitter)
+
+    def _rate_limit_sleep(self, exc: urllib.error.HTTPError, attempt: int) -> float:
+        """Sleep duration for a 429.
+
+        Order:
+        1. `Retry-After` header (seconds or HTTP-date) if present and parseable
+        2. Exponential backoff with jitter, capped at rate_limit_backoff_cap_seconds
+
+        Capped to keep single requests from blocking the worker indefinitely.
+        """
+        retry_after = getattr(exc, "headers", None)
+        if retry_after is not None:
+            value = retry_after.get("Retry-After", "").strip()
+            if value:
+                try:
+                    seconds = float(value)
+                    return min(max(seconds, 0.0), self.rate_limit_backoff_cap_seconds)
+                except ValueError:
+                    pass
+        backoff = self._jittered_backoff(self.rate_limit_backoff_seconds, attempt)
+        return min(backoff, self.rate_limit_backoff_cap_seconds)
 
 
 class MimoProvider(OpenAICompatibleProvider):

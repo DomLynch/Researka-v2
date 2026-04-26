@@ -103,13 +103,17 @@ def parse_md(path: Path) -> dict:
         src_year = int(title_match.group(2))
         # Detect directness + tier from the labels
         directness = "direct" if " direct " in meta_part or "| direct |" in meta_part else "indirect"
-        # Extract DOI from URL if present
-        doi = ""
-        doi_match = re.search(r"doi\.org/(.+)$", url)
+        # Extract DOI ONLY from doi.org URLs and only if it matches Researka's
+        # `10.XXXX/suffix` shape. PubMed (`pubmed.ncbi.nlm.nih.gov/<pmid>`),
+        # EuropePMC (`/MED/<pmid>`), and ClinicalTrials.gov URLs carry PMIDs
+        # or NCT IDs, not DOIs — sending those as `doi=...` trips the
+        # doi_sanity gate. Better to send `doi: None` (the contract allows it).
+        doi: str | None = None
+        doi_match = re.search(r"doi\.org/(.+?)/?$", url)
         if doi_match:
-            doi = doi_match.group(1)
-        elif "/MED/" in url:
-            doi = url.split("/MED/")[-1]
+            candidate = doi_match.group(1).strip()
+            if re.match(r"^10\.\d{4,}/\S+$", candidate):
+                doi = candidate
         # Researka's contract: evidence_type is Literal["primary", "review"]
         # Map: systematic-review/meta-analysis/narrative review -> "review"
         # Everything else (rct, primary, cohort, observational, protocol) -> "primary"
