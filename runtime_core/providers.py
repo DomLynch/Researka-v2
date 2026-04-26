@@ -307,10 +307,27 @@ class FallbackProvider:
     def complete(self, request: ProviderRequest) -> ProviderResult:
         result = self.primary.complete(request)
         if result.ok:
-            return result
+            return self._tag(result, fallback_used=False)
         if not self._is_transient(result):
             return result
-        return self.fallback.complete(request)
+        fallback_result = self.fallback.complete(request)
+        return self._tag(fallback_result, fallback_used=True, primary_error=result.error)
+
+    @staticmethod
+    def _tag(result: ProviderResult, *, fallback_used: bool, primary_error: ProviderError | None = None) -> ProviderResult:
+        """Stamp the response metadata so the panel can surface fallback usage in DW.
+
+        We tag the actual ProviderResponse rather than wrapping the result so the
+        existing ResponseValidator / panel logic doesn't need to change shape.
+        """
+        if not result.ok or result.response is None:
+            return result
+        new_metadata = {**result.response.metadata, "fallback_used": fallback_used}
+        if fallback_used and primary_error is not None:
+            new_metadata["fallback_reason"] = primary_error.error_class.value
+        # ProviderResponse is a frozen-ish pydantic model; rebuild it.
+        result.response.metadata = new_metadata
+        return result
 
     @staticmethod
     def _is_transient(result: ProviderResult) -> bool:

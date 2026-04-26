@@ -48,6 +48,7 @@ class ReviewerPanel:
     def complete(self, request: ProviderRequest) -> ProviderResult:
         primary = self._validated_result(self.primary.complete(request))
         sparring = self._validated_result(self.sparring.complete(request))
+        slot_flags = self._slot_fallback_flags(primary, sparring)
 
         if primary.ok and sparring.ok:
             primary_rec = self._recommendation_from(primary)
@@ -61,6 +62,7 @@ class ReviewerPanel:
                         "primary_recommendation": primary_rec,
                         "sparring_recommendation": sparring_rec,
                         "consensus": True,
+                        **slot_flags,
                     },
                 )
             fallback = self._validated_result(self.fallback.complete(request))
@@ -75,6 +77,7 @@ class ReviewerPanel:
                     "sparring_recommendation": sparring_rec,
                     "consensus": False,
                     "escalated_to_fallback": True,
+                    **slot_flags,
                 },
             )
 
@@ -86,6 +89,7 @@ class ReviewerPanel:
                 metadata={
                     "ops_flag": "sparring_failed",
                     "sparring_error": self._error_text(sparring),
+                    **slot_flags,
                 },
             )
 
@@ -97,6 +101,7 @@ class ReviewerPanel:
                 metadata={
                     "ops_flag": "primary_failed",
                     "primary_error": self._error_text(primary),
+                    **slot_flags,
                 },
             )
 
@@ -112,8 +117,28 @@ class ReviewerPanel:
                 "primary_error": self._error_text(primary),
                 "sparring_error": self._error_text(sparring),
                 "escalated_to_fallback": True,
+                **slot_flags,
             },
         )
+
+    def _slot_fallback_flags(self, primary: ProviderResult, sparring: ProviderResult) -> dict[str, object]:
+        """Read the FallbackProvider observability tags off each slot's response.
+
+        FallbackProvider stamps `fallback_used` (and `fallback_reason` when true)
+        into ProviderResponse.metadata. Surface those at the panel level as
+        primary_fallback_used / sparring_fallback_used so the DW chain shows
+        when MiMo or Gemma was actually replaced by Mistral. Bare (un-wrapped)
+        slots and failed slots default to False — the flag is only true when we
+        have positive evidence the safety net fired.
+        """
+        flags: dict[str, object] = {}
+        for slot_label, result in (("primary", primary), ("sparring", sparring)):
+            metadata = result.response.metadata if (result.ok and result.response is not None) else {}
+            flags[f"{slot_label}_fallback_used"] = bool(metadata.get("fallback_used", False))
+            reason = metadata.get("fallback_reason")
+            if reason:
+                flags[f"{slot_label}_fallback_reason"] = reason
+        return flags
 
     def _panel_response(
         self,
