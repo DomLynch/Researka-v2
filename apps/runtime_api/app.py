@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException, Request
@@ -13,6 +15,48 @@ from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 
 _calibration_cache: dict | None = None
 _calibration_path: str | None = None
+
+# Captured at module import for the /version endpoint.
+_SERVICE_STARTED_AT = datetime.now(timezone.utc).isoformat()
+
+
+def _resolve_git_sha() -> str:
+    """Best-effort SHA resolution for the /version endpoint.
+
+    Order:
+    1. RESEARKA_GIT_SHA env var (set by deploy script — most reliable)
+    2. /etc/researka/git_sha file (alternative deploy hook)
+    3. Subprocess `git rev-parse HEAD` from package root (dev mode)
+    4. "unknown"
+    """
+    env_sha = os.environ.get("RESEARKA_GIT_SHA", "").strip()
+    if env_sha:
+        return env_sha
+    sha_file = Path("/etc/researka/git_sha")
+    if sha_file.exists():
+        try:
+            return sha_file.read_text().strip() or "unknown"
+        except OSError:
+            pass
+    try:
+        # Anchor on the package directory so the lookup works regardless of cwd.
+        repo_root = Path(__file__).resolve().parents[2]
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return "unknown"
+
+
+_SERVICE_GIT_SHA = _resolve_git_sha()
 
 
 def reset_calibration_cache() -> None:
@@ -143,6 +187,15 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok", "service": "researka-v2-runtime-api"}
+
+    @app.get("/version")
+    def version() -> dict[str, str]:
+        """Public version probe. Lets remote auditors verify deployed SHA without SSH."""
+        return {
+            "service": "researka-v2-runtime-api",
+            "git_sha": _SERVICE_GIT_SHA,
+            "started_at": _SERVICE_STARTED_AT,
+        }
 
     @app.get("/architecture")
     def architecture() -> dict[str, list[str]]:

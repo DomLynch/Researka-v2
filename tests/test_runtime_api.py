@@ -28,6 +28,21 @@ def test_health(client: TestClient) -> None:
     assert response.json()["status"] == "ok"
 
 
+def test_version_returns_sha_and_start_time(client: TestClient) -> None:
+    """The /version endpoint lets remote auditors verify the deployed SHA without SSH."""
+    response = client.get("/version")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["service"] == "researka-v2-runtime-api"
+    assert "git_sha" in data
+    assert "started_at" in data
+    # SHA is either a 40-char hex (real git output) or "unknown" (no git available).
+    sha = data["git_sha"]
+    assert sha == "unknown" or (len(sha) == 40 and all(c in "0123456789abcdef" for c in sha))
+    # started_at is an ISO-8601 UTC timestamp.
+    assert "T" in data["started_at"] and data["started_at"].endswith("+00:00")
+
+
 def test_architecture(client: TestClient) -> None:
     response = client.get("/architecture")
     assert response.status_code == 200
