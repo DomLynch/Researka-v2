@@ -52,10 +52,12 @@ _TYPE_THRESHOLDS: dict[str, dict[str, object]] = {
     ArticleType.RESEARCH_SYNTHESIS.value: {
         # Synthesis papers cite an order of magnitude more sources than RES.
         "minimum_citations": 25,
-        # Synthesis papers may legitimately cite older foundational mechanism
-        # work, so the recency bar is the same as RES — half should be recent
-        # but the older half is allowed.
-        "minimum_recency_ratio": 0.5,
+        # Synthesis papers must engage with foundational mechanism work
+        # (often pre-2020 for established pathways like mTOR / autophagy),
+        # so the recency floor is lower than RES. 40% means at least 10 of
+        # 25 citations must be recent — current evidence is still required,
+        # but the corpus is allowed to be majority-foundational.
+        "minimum_recency_ratio": 0.4,
         # Abstract for a synthesis paper must convey the question, scope, and
         # headline findings — needs more words than a one-line research
         # question prompt.
