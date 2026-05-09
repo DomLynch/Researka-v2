@@ -1,4 +1,4 @@
-REVIEWER_PROMPT_VERSION = "reviewer-v10-stats-claim-calibration"
+REVIEWER_PROMPT_VERSION = "reviewer-v11-research-synthesis"
 EDITOR_PROMPT_VERSION = "editor-v1-clean-runtime"
 
 

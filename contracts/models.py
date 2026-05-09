@@ -34,6 +34,12 @@ class Decision(StrEnum):
 class ArticleType(StrEnum):
     RAPID_EVIDENCE_SYNTHESIS = "rapid_evidence_synthesis"
     EMPIRICAL_STUDY = "empirical_study"
+    # RESEARCH_SYNTHESIS is the v2 long-form path: full multi-section research
+    # synthesis paper (~10-30k words) with cross-domain integration, numeric
+    # traceability, and explicit mechanistic-vs-clinical separation. Designed
+    # to accept the kind of paper the Research Agent Bot produces in its
+    # full-synthesis pipeline, where RES would force destructive compression.
+    RESEARCH_SYNTHESIS = "research_synthesis"
 
 
 class ObjectType(StrEnum):

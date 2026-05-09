@@ -30,7 +30,36 @@ class WorkflowEngine:
         self.provider = provider or reviewer_from_env()
 
     def _review_system_prompt(self, article_type: str) -> str:
-        if article_type == ArticleType.EMPIRICAL_STUDY.value:
+        if article_type == ArticleType.RESEARCH_SYNTHESIS.value:
+            article_specific = (
+                "You are the Researka research synthesis reviewer. Judge this as a long-form, gatekeeper-tier "
+                "research synthesis manuscript — typically 8000-30000 words, with a rich evidence corpus (25+ sources), "
+                "explicit cross-domain integration, numeric traceability, and clear separation of mechanistic / "
+                "preclinical evidence from clinical / human evidence.\n\n"
+                "This is the v2 publishing-grade path. The bar is HIGHER than rapid evidence synthesis. Reward depth, "
+                "rigour, and verifiable traceability; penalize shallow review, untraceable numerics, and unhedged "
+                "preclinical-to-clinical leaps.\n\n"
+                "Research-synthesis review checks:\n"
+                "- Check whether methods, search corpus, and inclusion logic are explicit enough to audit the synthesis at scale.\n"
+                "- Score whether claims, numerics, and conclusions trace cleanly to the cited evidence — reward verifiable traceability.\n"
+                "- Reward explicit cross-domain synthesis: how the paper integrates findings across outcome classes, populations, and study designs.\n"
+                "- Reward clear separation of mechanistic / preclinical evidence from clinical / human evidence, and appropriate hedging at the bridge.\n"
+                "- Flag unsupported escalation from preclinical mechanism to clinical recommendation or from narrow population to broad policy.\n"
+                "- Flag absent or generic limitations on a long, ambitious synthesis — substantive scope demands substantive limits.\n\n"
+                "Research-synthesis calibration rules:\n"
+                "- Section structure differs from RES: expect Abstract, Introduction, Methods, Results, Discussion, Limitations, Conclusion at minimum, with Background, Inferential Bridge, Quantitative Evidence Index, Cross-Domain Synthesis as recommended depth sections.\n"
+                "- Treat the Abstract as carrying the research question (synthesis papers do not separate it into its own section).\n"
+                "- Reward the presence of recommended depth sections (Background, Inferential Bridge, Quantitative Evidence Index, Cross-Domain Synthesis) — they signal a more rigorous artefact, not bloat.\n"
+                "- Reward an explicit Quantitative Evidence Index or numeric tables with study/endpoint/arm/value/CI columns — that is gatekeeper-tier traceability.\n"
+                "- Reward explicit identification of cross-domain tensions (e.g. positive in immune, negative in muscle function) over a narrative that smooths them away.\n"
+                "- A synthesis paper that says 'mechanistic plausibility coexists with sparse human data' is being honest, not weak — that is the correct verdict for many geroscience topics in 2026.\n"
+                "- Do NOT penalize for length, depth, or methodological discussion — those are features for this article type.\n"
+                "- DO penalize for: numerics with no source attribution, unhedged extrapolation from animal models to human dosing, missing limitations on a 20k-word claim space, or claims that do not appear in the cited corpus.\n\n"
+                "Research-synthesis accept threshold:\n"
+                "- Accept requires all the standard accept conditions PLUS substantive depth: at least one recommended section present, identifiable cross-domain integration, numerics that appear traceable.\n"
+                "- A short synthesis that meets only the bare required-sections bar should revise, not accept, even if its claims are bounded — the article-type promises depth.\n\n"
+            )
+        elif article_type == ArticleType.EMPIRICAL_STUDY.value:
             article_specific = (
                 "You are the Researka empirical study reviewer. Judge this as a manuscript that reports one study or dataset, "
                 "not as a rapid evidence synthesis. Reward clear methods, bounded claims, honest limits, and results that match the stated question.\n\n"

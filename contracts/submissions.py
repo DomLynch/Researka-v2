@@ -23,22 +23,58 @@ class SourceBundleEntry(BaseModel):
 class SubmissionTemplateV1(BaseModel):
     article_type: str = ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
     required_sections: tuple[str, ...] = RAPID_EVIDENCE_SYNTHESIS.required_sections
+    recommended_sections: tuple[str, ...] = ()
     review_checks: tuple[str, ...] = RAPID_EVIDENCE_SYNTHESIS.review_checks
     minimum_citations: int = 12
     minimum_recency_ratio: float = 0.5
     minimum_research_question_words: int = 50
+    research_question_section: str = "Research Question"
+    minimum_body_word_count: int = 0
 
 
 SUBMISSION_TEMPLATE_V1 = SubmissionTemplateV1()
 RECENT_PUBLICATION_YEAR_FLOOR = 2020
 
+# Per-article-type intake thresholds. The synthesis path demands more
+# evidence breadth and substance than the rapid path because the artefact
+# being published is much larger and more consequential.
+_TYPE_THRESHOLDS: dict[str, dict[str, object]] = {
+    ArticleType.RAPID_EVIDENCE_SYNTHESIS.value: {
+        "minimum_citations": 12,
+        "minimum_recency_ratio": 0.5,
+        "minimum_research_question_words": 50,
+    },
+    ArticleType.EMPIRICAL_STUDY.value: {
+        "minimum_citations": 12,
+        "minimum_recency_ratio": 0.5,
+        "minimum_research_question_words": 50,
+    },
+    ArticleType.RESEARCH_SYNTHESIS.value: {
+        # Synthesis papers cite an order of magnitude more sources than RES.
+        "minimum_citations": 25,
+        # Synthesis papers may legitimately cite older foundational mechanism
+        # work, so the recency bar is the same as RES — half should be recent
+        # but the older half is allowed.
+        "minimum_recency_ratio": 0.5,
+        # Abstract for a synthesis paper must convey the question, scope, and
+        # headline findings — needs more words than a one-line research
+        # question prompt.
+        "minimum_research_question_words": 75,
+    },
+}
+
 
 def submission_template_for(article_type: str) -> SubmissionTemplateV1:
     publication_template = publication_template_for(article_type)
+    thresholds = _TYPE_THRESHOLDS.get(publication_template.article_type, {})
     return SubmissionTemplateV1(
         article_type=publication_template.article_type,
         required_sections=publication_template.required_sections,
+        recommended_sections=publication_template.recommended_sections,
         review_checks=publication_template.review_checks,
+        research_question_section=publication_template.research_question_section,
+        minimum_body_word_count=publication_template.minimum_body_word_count,
+        **thresholds,  # type: ignore[arg-type]
     )
 
 
@@ -62,18 +98,39 @@ def run_submission_template_checks(
     active_template = template or submission_template_for(article_type)
     results: list[GateResult] = []
 
-    research_question = str(sections.get("Research Question", "")).strip()
+    # Research question gate: which section to inspect depends on article type.
+    # RES uses an explicit "Research Question" section; synthesis papers state
+    # the question in the Abstract or Introduction.
+    rq_section = active_template.research_question_section
+    research_question = str(sections.get(rq_section, "")).strip()
     question_words = len(research_question.split())
     results.append(
         GateResult(
             name="research_question_word_budget",
             passed=question_words >= active_template.minimum_research_question_words,
             reason=(
-                f"Research Question must contain at least {active_template.minimum_research_question_words} words; "
+                f"`{rq_section}` must contain at least {active_template.minimum_research_question_words} words; "
                 f"received {question_words}"
             ),
         )
     )
+
+    # Body word count gate (synthesis-tier only — minimum=0 for RES disables it).
+    if active_template.minimum_body_word_count > 0:
+        body_words = sum(
+            len(str(sections.get(name, "")).split())
+            for name in (*active_template.required_sections, *active_template.recommended_sections)
+        )
+        results.append(
+            GateResult(
+                name="minimum_body_word_count",
+                passed=body_words >= active_template.minimum_body_word_count,
+                reason=(
+                    f"synthesis-paper body (required + recommended sections) must contain at least "
+                    f"{active_template.minimum_body_word_count} words; received {body_words}"
+                ),
+            )
+        )
 
     try:
         normalized_bundle = _normalize_source_bundle(source_bundle)
