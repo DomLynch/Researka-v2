@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException, Request
 
 from apps.worker.main import WorkerApp
-from contracts import AuditReview, AuditVerdict, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
+from contracts import AuditReview, AuditVerdict, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload, normalize_orcid
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 
@@ -93,8 +94,22 @@ def _load_calibration_data() -> dict:
     return _calibration_cache
 
 
-def _check_api_key(repo: RuntimeRepository, request: Request) -> str | None:
-    """Validate API key. Returns agent_id if valid, raises 403 if not.
+def _legacy_identity() -> dict[str, str | None]:
+    try:
+        owner_orcid = normalize_orcid(os.environ.get("RESEARKA_V2_DEFAULT_ORCID"))
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=f"invalid_default_orcid:{exc}") from exc
+    owner_name = os.environ.get("RESEARKA_V2_DEFAULT_OWNER_NAME")
+    return {
+        "auth_source": "legacy_api_key",
+        "agent_id": None,
+        "owner_name": owner_name.strip() if owner_name else None,
+        "owner_orcid": owner_orcid,
+    }
+
+
+def _check_api_key(repo: RuntimeRepository, request: Request) -> dict[str, str | None]:
+    """Validate API key. Returns trusted identity metadata if valid, raises 403 if not.
 
     Check order:
     1. Legacy env-var key (RESEARKA_V2_API_KEY) — exact match
@@ -107,14 +122,19 @@ def _check_api_key(repo: RuntimeRepository, request: Request) -> str | None:
     # Legacy env-var key
     legacy_key = os.environ.get("RESEARKA_V2_API_KEY")
     if legacy_key and provided == legacy_key:
-        return None  # legacy key, no agent_id
+        return _legacy_identity()
 
     # Per-agent key
-    agent_id = repo.validate_api_key(provided)
-    if agent_id is not None:
-        key_hash = repo._hash_key(provided)
+    key_info = repo.validate_api_key_info(provided)
+    if key_info is not None:
+        key_hash = hashlib.sha256(provided.encode()).hexdigest()
         repo.record_api_key_usage(key_hash)
-        return agent_id
+        return {
+            "auth_source": "api_key",
+            "agent_id": key_info.agent_id,
+            "owner_name": key_info.owner_name,
+            "owner_orcid": key_info.owner_orcid,
+        }
 
     raise HTTPException(status_code=403, detail="invalid_api_key")
 
@@ -128,11 +148,41 @@ def _check_admin(request: Request) -> None:
     raise HTTPException(status_code=403, detail="admin_key_required")
 
 
+def _trusted_submission_metadata(payload: SubmissionPayload, identity: dict[str, str | None]) -> dict:
+    metadata = payload.model_dump(mode="json")
+    trusted_agent_id = identity.get("agent_id")
+    claimed_agent_id = metadata.get("author_agent_id")
+    if trusted_agent_id:
+        if claimed_agent_id != trusted_agent_id:
+            metadata["claimed_author_agent_id"] = claimed_agent_id
+        metadata["author_agent_id"] = trusted_agent_id
+        metadata["authenticated_agent_id"] = trusted_agent_id
+    metadata["identity_source"] = identity.get("auth_source")
+
+    try:
+        submitted_orcid = normalize_orcid(metadata.get("submitter_orcid"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid_submitter_orcid:{exc}") from exc
+    trusted_orcid = identity.get("owner_orcid")
+    if trusted_orcid and submitted_orcid and trusted_orcid != submitted_orcid:
+        raise HTTPException(status_code=403, detail="submitter_orcid_mismatch")
+    final_orcid = trusted_orcid or submitted_orcid
+    if final_orcid:
+        metadata["orcid"] = final_orcid
+        metadata["author_orcid"] = final_orcid
+        metadata["human_owner_orcid"] = final_orcid
+
+    owner_name = identity.get("owner_name") or metadata.get("submitter_name")
+    if owner_name:
+        metadata["human_owner_name"] = owner_name
+    return metadata
+
+
 def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     if repository is not None:
         repo = repository
-    elif postgres_dsn_from_env():
-        repo = PostgresRuntimeRepository(postgres_dsn_from_env())
+    elif dsn := postgres_dsn_from_env():
+        repo = PostgresRuntimeRepository(dsn)
     else:
         repo = InMemoryRuntimeRepository()
     app = FastAPI(title="Researka v2 Runtime API")
@@ -153,13 +203,14 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
 
     @app.post("/submissions")
     def submit(payload: SubmissionPayload, request: Request) -> dict:
-        _check_api_key(app.state.repository, request)
+        identity = _check_api_key(app.state.repository, request)
+        metadata = _trusted_submission_metadata(payload, identity)
         submission = app.state.repository.create_object(
             ResearchObject(
                 object_type=ObjectType.SUBMISSION,
                 title=payload.title,
                 body_markdown=payload.abstract,
-                metadata=payload.model_dump(mode="json"),
+                metadata=metadata,
             )
         )
         job = app.state.repository.enqueue_job(
@@ -350,7 +401,20 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="agent_id_required")
         label = body.get("label", "")
         daily_limit = body.get("daily_limit", 0)
-        response = app.state.repository.create_api_key(agent_id, label=label, daily_limit=daily_limit)
+        owner_name = body.get("owner_name")
+        if isinstance(owner_name, str):
+            owner_name = owner_name.strip() or None
+        try:
+            owner_orcid = normalize_orcid(body.get("owner_orcid"))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"invalid_owner_orcid:{exc}") from exc
+        response = app.state.repository.create_api_key(
+            agent_id,
+            label=label,
+            daily_limit=daily_limit,
+            owner_name=owner_name,
+            owner_orcid=owner_orcid,
+        )
         return response.model_dump(mode="json")
 
     @app.get("/ops/keys")

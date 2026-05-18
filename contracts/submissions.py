@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ValidationError
 
 from .models import ArticleType, GateResult
 from .templates import RAPID_EVIDENCE_SYNTHESIS, publication_template_for

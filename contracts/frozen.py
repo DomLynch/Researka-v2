@@ -2,14 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import GateResult
 from .templates import RAPID_EVIDENCE_SYNTHESIS
 from .submissions import (
     RECENT_PUBLICATION_YEAR_FLOOR,
     SUBMISSION_TEMPLATE_V1,
-    SourceBundleEntry,
-    SubmissionTemplateV1,
-    run_submission_template_checks,
 )
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from contracts import ArticleType, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, WorkflowContext, WorkflowOutcome, publication_template_for, run_submission_template_checks
 
@@ -24,12 +25,53 @@ OVERCLAIM_VERDICTS = {"none", "mild", "significant"}
 SYNTHESIS_QUALITY_VERDICTS = {"strong", "adequate", "weak", "empty"}
 
 
+def _publication_identity_metadata(submission_metadata: dict) -> dict:
+    keys = (
+        "identity_source",
+        "authenticated_agent_id",
+        "claimed_author_agent_id",
+        "human_owner_name",
+        "human_owner_orcid",
+        "author_orcid",
+        "orcid",
+        "submitter_name",
+        "submitter_orcid",
+    )
+    return {key: submission_metadata[key] for key in keys if submission_metadata.get(key)}
+
+
+def _osf_publication_metadata() -> dict:
+    enabled = os.environ.get("RESEARKA_V2_OSF_ENABLED", "1").strip().lower() not in {"0", "false", "no"}
+    project_id = os.environ.get("RESEARKA_V2_OSF_PROJECT_ID")
+    token_configured = bool(os.environ.get("RESEARKA_V2_OSF_TOKEN"))
+    if not enabled:
+        status = "disabled"
+    elif project_id and token_configured:
+        status = "pending_osf_export"
+    else:
+        status = "pending_osf_credentials"
+    return {
+        "doi": None,
+        "doi_status": status,
+        "osf_status": status,
+        "osf_project_id": project_id,
+        "osf_guid": None,
+        "osf_url": None,
+        "osf": {
+            "enabled": enabled,
+            "status": status,
+            "project_id": project_id,
+            "guid": None,
+            "url": None,
+        },
+    }
+
+
 class WorkflowEngine:
     def __init__(self, provider: LanguageModelProvider | None = None) -> None:
         self.provider = provider or reviewer_from_env()
 
     def _review_system_prompt(self, article_type: str) -> str:
-        template = publication_template_for(article_type)
         if article_type == ArticleType.EMPIRICAL_STUDY.value:
             article_specific = (
                 "You are the Researka empirical study reviewer. Judge this as a manuscript that reports one study or dataset, "
@@ -477,6 +519,8 @@ class WorkflowEngine:
                     "counts": artifact.counts.model_dump(mode="json"),
                     "gates": [gate.model_dump(mode="json") for gate in artifact.gates],
                     "author_agent_id": submission.metadata.get("author_agent_id"),
+                    **_publication_identity_metadata(submission.metadata),
+                    **_osf_publication_metadata(),
                     **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
                 },
             )

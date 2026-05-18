@@ -22,6 +22,7 @@ from .models import (
     Stage,
     WorkflowContext,
     WorkflowOutcome,
+    normalize_orcid,
 )
 from .templates import EMPIRICAL_STUDY, PUBLICATION_TEMPLATES, PublicationTemplate, RAPID_EVIDENCE_SYNTHESIS, publication_template_for
 from .submissions import SourceBundleEntry, SubmissionTemplateV1, run_submission_template_checks, submission_template_for
@@ -65,4 +66,5 @@ __all__ = [
     "Stage",
     "WorkflowContext",
     "WorkflowOutcome",
+    "normalize_orcid",
 ]

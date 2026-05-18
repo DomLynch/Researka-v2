@@ -196,6 +196,9 @@ def _ops_headers(admin_key: str = "admin-secret-123") -> dict:
     return {"x-api-key": admin_key}
 
 
+VALID_ORCID = "0000-0002-1825-0097"
+
+
 def test_api_key_blocks_unauthorized_submission(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_API_KEY", "test-key-123")
     response = client.post(
@@ -289,6 +292,35 @@ def test_ops_create_key(client: TestClient, monkeypatch) -> None:
     assert len(data["key_hash"]) == 64  # SHA-256 hex
 
 
+def test_ops_create_key_accepts_owner_orcid(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    response = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={
+            "agent_id": "agent-1",
+            "label": "pilot-key",
+            "owner_name": "Dominic Lynch",
+            "owner_orcid": f"https://orcid.org/{VALID_ORCID}",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["owner_name"] == "Dominic Lynch"
+    assert data["owner_orcid"] == VALID_ORCID
+
+
+def test_ops_create_key_rejects_invalid_owner_orcid(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    response = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={"agent_id": "agent-1", "owner_orcid": "0000-0000-0000-0000"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"].startswith("invalid_owner_orcid")
+
+
 def test_ops_create_key_requires_admin(client: TestClient) -> None:
     response = client.post(
         "/ops/keys",
@@ -353,6 +385,48 @@ def test_per_agent_key_submits_successfully(client: TestClient, monkeypatch) -> 
         json=_minimal_submission_payload(),
     )
     assert response.status_code == 200
+
+
+def test_per_agent_key_attaches_trusted_orcid_and_overrides_claimed_agent(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    monkeypatch.setenv("RESEARKA_V2_API_KEY", "legacy-key")
+    create_resp = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={
+            "agent_id": "agent-v3-full-paper",
+            "owner_name": "Dominic Lynch",
+            "owner_orcid": VALID_ORCID,
+        },
+    )
+    raw_key = create_resp.json()["raw_key"]
+    payload = _minimal_submission_payload()
+    payload["author_agent_id"] = "spoofed-agent"
+    response = client.post("/submissions", headers={"x-api-key": raw_key}, json=payload)
+    assert response.status_code == 200
+    metadata = response.json()["submission"]["metadata"]
+    assert metadata["author_agent_id"] == "agent-v3-full-paper"
+    assert metadata["claimed_author_agent_id"] == "spoofed-agent"
+    assert metadata["authenticated_agent_id"] == "agent-v3-full-paper"
+    assert metadata["human_owner_name"] == "Dominic Lynch"
+    assert metadata["orcid"] == VALID_ORCID
+    assert metadata["author_orcid"] == VALID_ORCID
+
+
+def test_per_agent_key_rejects_mismatched_submitter_orcid(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    monkeypatch.setenv("RESEARKA_V2_API_KEY", "legacy-key")
+    create_resp = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={"agent_id": "agent-v4-alpha-memo", "owner_orcid": VALID_ORCID},
+    )
+    raw_key = create_resp.json()["raw_key"]
+    payload = _minimal_submission_payload()
+    payload["submitter_orcid"] = "0000-0001-5109-3700"
+    response = client.post("/submissions", headers={"x-api-key": raw_key}, json=payload)
+    assert response.status_code == 403
+    assert response.json()["detail"] == "submitter_orcid_mismatch"
 
 
 def test_per_agent_key_rejected_if_invalid(client: TestClient, monkeypatch) -> None:

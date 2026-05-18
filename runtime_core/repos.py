@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
-from contracts import ApiKeyCreateResponse, ApiKeyInfo, AuditReview, AuditVerdict, FailureClass, EventType, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob
+from contracts import ApiKeyCreateResponse, ApiKeyInfo, AuditReview, AuditVerdict, FailureClass, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob, normalize_orcid
 
 
 class RuntimeRepository(Protocol):
@@ -28,7 +28,16 @@ class RuntimeRepository(Protocol):
     def list_events(self) -> list[RuntimeEvent]: ...
 
     # API key management
-    def create_api_key(self, agent_id: str, *, label: str = "", daily_limit: int = 0) -> ApiKeyCreateResponse: ...
+    def create_api_key(
+        self,
+        agent_id: str,
+        *,
+        label: str = "",
+        daily_limit: int = 0,
+        owner_name: str | None = None,
+        owner_orcid: str | None = None,
+    ) -> ApiKeyCreateResponse: ...
+    def validate_api_key_info(self, raw_key: str) -> ApiKeyInfo | None: ...
     def validate_api_key(self, raw_key: str) -> str | None: ...
     def revoke_api_key(self, key_hash: str) -> bool: ...
     def list_api_keys(self) -> list[ApiKeyInfo]: ...
@@ -166,14 +175,25 @@ class InMemoryRuntimeRepository:
     def _hash_key(self, raw_key: str) -> str:
         return hashlib.sha256(raw_key.encode()).hexdigest()
 
-    def create_api_key(self, agent_id: str, *, label: str = "", daily_limit: int = 0) -> ApiKeyCreateResponse:
+    def create_api_key(
+        self,
+        agent_id: str,
+        *,
+        label: str = "",
+        daily_limit: int = 0,
+        owner_name: str | None = None,
+        owner_orcid: str | None = None,
+    ) -> ApiKeyCreateResponse:
         raw_key = f"rk_{secrets.token_urlsafe(32)}"
         key_hash = self._hash_key(raw_key)
+        normalized_orcid = normalize_orcid(owner_orcid)
         info = ApiKeyInfo(
             key_hash=key_hash,
             agent_id=agent_id,
             label=label,
             daily_limit=daily_limit,
+            owner_name=owner_name,
+            owner_orcid=normalized_orcid,
             created_at=datetime.now(timezone.utc),
         )
         self.api_keys[key_hash] = info
@@ -182,11 +202,13 @@ class InMemoryRuntimeRepository:
             agent_id=agent_id,
             label=label,
             daily_limit=daily_limit,
+            owner_name=owner_name,
+            owner_orcid=normalized_orcid,
             raw_key=raw_key,
             created_at=info.created_at,
         )
 
-    def validate_api_key(self, raw_key: str) -> str | None:
+    def validate_api_key_info(self, raw_key: str) -> ApiKeyInfo | None:
         key_hash = self._hash_key(raw_key)
         info = self.api_keys.get(key_hash)
         if info is None or info.revoked:
@@ -196,7 +218,11 @@ class InMemoryRuntimeRepository:
             used = self.api_key_usage.get((key_hash, today), 0)
             if used >= info.daily_limit:
                 return None
-        return info.agent_id
+        return info
+
+    def validate_api_key(self, raw_key: str) -> str | None:
+        info = self.validate_api_key_info(raw_key)
+        return info.agent_id if info is not None else None
 
     def revoke_api_key(self, key_hash: str) -> bool:
         info = self.api_keys.get(key_hash)
@@ -364,11 +390,15 @@ class PostgresRuntimeRepository:
                     agent_id TEXT NOT NULL,
                     label TEXT NOT NULL DEFAULT '',
                     daily_limit INTEGER NOT NULL DEFAULT 0,
+                    owner_name TEXT NULL,
+                    owner_orcid TEXT NULL,
                     revoked BOOLEAN NOT NULL DEFAULT FALSE,
                     created_at TIMESTAMPTZ NOT NULL
                 )
                 """
             )
+            cur.execute("ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS owner_name TEXT NULL")
+            cur.execute("ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS owner_orcid TEXT NULL")
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS api_key_usage (
@@ -664,17 +694,26 @@ class PostgresRuntimeRepository:
     def _hash_key(self, raw_key: str) -> str:
         return hashlib.sha256(raw_key.encode()).hexdigest()
 
-    def create_api_key(self, agent_id: str, *, label: str = "", daily_limit: int = 0) -> ApiKeyCreateResponse:
+    def create_api_key(
+        self,
+        agent_id: str,
+        *,
+        label: str = "",
+        daily_limit: int = 0,
+        owner_name: str | None = None,
+        owner_orcid: str | None = None,
+    ) -> ApiKeyCreateResponse:
         raw_key = f"rk_{secrets.token_urlsafe(32)}"
         key_hash = self._hash_key(raw_key)
         created_at = datetime.now(timezone.utc)
+        normalized_orcid = normalize_orcid(owner_orcid)
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO api_keys (key_hash, agent_id, label, daily_limit, revoked, created_at)
-                VALUES (%s, %s, %s, %s, FALSE, %s)
+                INSERT INTO api_keys (key_hash, agent_id, label, daily_limit, owner_name, owner_orcid, revoked, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s)
                 """,
-                (key_hash, agent_id, label, daily_limit, created_at),
+                (key_hash, agent_id, label, daily_limit, owner_name, normalized_orcid, created_at),
             )
             conn.commit()
         return ApiKeyCreateResponse(
@@ -682,11 +721,13 @@ class PostgresRuntimeRepository:
             agent_id=agent_id,
             label=label,
             daily_limit=daily_limit,
+            owner_name=owner_name,
+            owner_orcid=normalized_orcid,
             raw_key=raw_key,
             created_at=created_at,
         )
 
-    def validate_api_key(self, raw_key: str) -> str | None:
+    def validate_api_key_info(self, raw_key: str) -> ApiKeyInfo | None:
         key_hash = self._hash_key(raw_key)
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         with self._connect() as conn, conn.cursor() as cur:
@@ -705,7 +746,20 @@ class PostgresRuntimeRepository:
                 used = usage_row["count"] if usage_row else 0
                 if used >= daily_limit:
                     return None
-            return agent_id
+            return ApiKeyInfo(
+                key_hash=row["key_hash"],
+                agent_id=agent_id,
+                label=row["label"],
+                daily_limit=daily_limit,
+                owner_name=row.get("owner_name"),
+                owner_orcid=row.get("owner_orcid"),
+                revoked=row["revoked"],
+                created_at=row["created_at"],
+            )
+
+    def validate_api_key(self, raw_key: str) -> str | None:
+        info = self.validate_api_key_info(raw_key)
+        return info.agent_id if info is not None else None
 
     def revoke_api_key(self, key_hash: str) -> bool:
         with self._connect() as conn, conn.cursor() as cur:
@@ -726,6 +780,8 @@ class PostgresRuntimeRepository:
                 agent_id=r["agent_id"],
                 label=r["label"],
                 daily_limit=r["daily_limit"],
+                owner_name=r.get("owner_name"),
+                owner_orcid=r.get("owner_orcid"),
                 revoked=r["revoked"],
                 created_at=r["created_at"],
             )

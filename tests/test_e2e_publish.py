@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 from contracts import RuntimeJob, Stage
 from runtime_core.prompts import EDITOR_PROMPT_VERSION
 
+VALID_ORCID = "0000-0002-1825-0097"
+
 
 def _valid_source_bundle() -> list[dict[str, object]]:
     years = (2024, 2023, 2022, 2021, 2020, 2024, 2023, 2022, 2021, 2019, 2018, 2017)
@@ -105,7 +107,6 @@ def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
         ),
     )
     assert seed2.status_code == 200
-    submission2_id = seed2.json()["submission"]["id"]
 
     for _ in range(12):
         queue = client.get("/jobs/queue").json()["queued"]
@@ -116,3 +117,35 @@ def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
     publications = client.app.state.repository.list_objects("publication")
     assert len(publications) == 1
     assert publications[0].id == first_pub_id
+
+
+def test_publication_carries_orcid_and_osf_pending_metadata(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    create_resp = client.post(
+        "/ops/keys",
+        headers={"x-api-key": "admin-secret-123"},
+        json={"agent_id": "agent-v3-full-paper", "owner_name": "Dominic Lynch", "owner_orcid": VALID_ORCID},
+    )
+    raw_key = create_resp.json()["raw_key"]
+    seed = client.post(
+        "/submissions",
+        headers={"x-api-key": raw_key},
+        json=_submission_payload(
+            "Databases searched include PubMed and review corpora, with a documented date window, explicit inclusion logic, and a stated narrowing rule that explains why these retained receipts best match the scoped research question."
+        ),
+    )
+    assert seed.status_code == 200
+
+    for _ in range(12):
+        queue = client.get("/jobs/queue").json()["queued"]
+        if not queue:
+            break
+        assert client.post("/jobs/run-once").status_code == 200
+
+    publication = client.app.state.repository.list_objects("publication")[0]
+    assert publication.metadata["author_agent_id"] == "agent-v3-full-paper"
+    assert publication.metadata["human_owner_name"] == "Dominic Lynch"
+    assert publication.metadata["orcid"] == VALID_ORCID
+    assert publication.metadata["doi"] is None
+    assert publication.metadata["doi_status"] == "pending_osf_credentials"
+    assert publication.metadata["osf"]["status"] == "pending_osf_credentials"
