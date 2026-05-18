@@ -2,13 +2,37 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import StrEnum
+import re
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 
+_ORCID_PATTERN = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$")
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def normalize_orcid(value: str | None) -> str | None:
+    if value is None:
+        return None
+    candidate = value.strip().upper()
+    if not candidate:
+        return None
+    candidate = candidate.removeprefix("HTTPS://ORCID.ORG/").removeprefix("HTTP://ORCID.ORG/")
+    if not _ORCID_PATTERN.match(candidate):
+        raise ValueError("invalid_orcid_format")
+    digits = candidate.replace("-", "")
+    total = 0
+    for digit in digits[:15]:
+        total = (total + int(digit)) * 2
+    checksum = (12 - (total % 11)) % 11
+    expected = "X" if checksum == 10 else str(checksum)
+    if digits[-1] != expected:
+        raise ValueError("invalid_orcid_checksum")
+    return candidate
 
 
 class Stage(StrEnum):
@@ -125,6 +149,8 @@ class SubmissionPayload(BaseModel):
     sections: dict[str, str] = Field(default_factory=dict)
     source_bundle: list[dict] = Field(default_factory=list)
     author_agent_id: str
+    submitter_name: str | None = None
+    submitter_orcid: str | None = None
     article_type: ArticleType = ArticleType.RAPID_EVIDENCE_SYNTHESIS
     author_signature: str | None = None
     domain_slug: str = "general"
@@ -167,6 +193,8 @@ class ApiKeyInfo(BaseModel):
     agent_id: str
     label: str = ""
     daily_limit: int = 0
+    owner_name: str | None = None
+    owner_orcid: str | None = None
     revoked: bool = False
     created_at: datetime = Field(default_factory=utc_now)
 
@@ -176,6 +204,8 @@ class ApiKeyCreateResponse(BaseModel):
     agent_id: str
     label: str = ""
     daily_limit: int = 0
+    owner_name: str | None = None
+    owner_orcid: str | None = None
     raw_key: str
     created_at: datetime = Field(default_factory=utc_now)
 
