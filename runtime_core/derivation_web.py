@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -42,20 +43,28 @@ def _base_url() -> str:
 
 
 def _post(path: str, payload: dict[str, Any], *, api_key: str) -> tuple[int, dict[str, Any]]:
-    req = urllib.request.Request(
-        _url(path),
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=float(os.getenv("RESEARKA_DW_TIMEOUT_SEC", "5"))) as response:
-            body = response.read().decode("utf-8")
-            return int(response.status), json.loads(body) if body else {}
-    except urllib.error.HTTPError as exc:
-        if exc.code == 409:
-            return exc.code, {}
-        raise
+    attempts = max(1, int(os.getenv("RESEARKA_DW_POST_ATTEMPTS", "4")))
+    for attempt in range(attempts):
+        req = urllib.request.Request(
+            _url(path),
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=float(os.getenv("RESEARKA_DW_TIMEOUT_SEC", "5"))) as response:
+                body = response.read().decode("utf-8")
+                return int(response.status), json.loads(body) if body else {}
+        except urllib.error.HTTPError as exc:
+            if exc.code == 409:
+                return exc.code, {}
+            if exc.code == 429 and attempt < attempts - 1:
+                retry_after = exc.headers.get("Retry-After")
+                delay = float(str(retry_after or os.getenv("RESEARKA_DW_RETRY_DELAY_SEC", "2")))
+                time.sleep(delay)
+                continue
+            raise
+    raise RuntimeError("dw_post_retry_exhausted")
 
 
 def _artifact_body(obj: ResearchObject) -> str:

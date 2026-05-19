@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import io
 import urllib.error
+from email.message import Message
 
 from contracts import ObjectType, ResearchObject
-from runtime_core.derivation_web import backfill_missing_publication_chains, emit_decision_to_derivation_web, emit_publication_to_derivation_web
+from runtime_core.derivation_web import _post, backfill_missing_publication_chains, emit_decision_to_derivation_web, emit_publication_to_derivation_web
 from runtime_core.repos import InMemoryRuntimeRepository
 
 
@@ -171,6 +173,39 @@ def test_emit_decision_to_derivation_web_non_blocking_when_dw_down(monkeypatch):
     assert "Connection refused" in result["error"]
     # The emit should bail on the very first POST (actors), not silently retry the rest.
     assert calls == ["/api/actors"]
+
+
+def test_dw_post_retries_rate_limits(monkeypatch) -> None:
+    calls = []
+
+    class Response:
+        status = 201
+
+        def read(self) -> bytes:
+            return b'{"id":"ok"}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    def fake_urlopen(*_: object, **__: object) -> Response:
+        calls.append(1)
+        if len(calls) == 1:
+            headers = Message()
+            headers["Retry-After"] = "0"
+            raise urllib.error.HTTPError("url", 429, "Too Many Requests", headers, io.BytesIO())
+        return Response()
+
+    monkeypatch.setattr("runtime_core.derivation_web.time.sleep", lambda _: None)
+    monkeypatch.setattr("runtime_core.derivation_web.urllib.request.urlopen", fake_urlopen)
+
+    status, body = _post("/api/actors", {"id": "a"}, api_key="dwk_test")
+
+    assert status == 201
+    assert body == {"id": "ok"}
+    assert len(calls) == 2
 
 
 def test_emit_publication_to_derivation_web_returns_metadata(monkeypatch):
