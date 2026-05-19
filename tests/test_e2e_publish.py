@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from fastapi.testclient import TestClient
 
 from contracts import RuntimeJob, Stage
@@ -115,3 +117,24 @@ def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
     publications = client.app.state.repository.list_objects("publication")
     assert len(publications) == 1
     assert publications[0].id == first_pub_id
+
+
+def test_publish_attaches_derivation_web_publication_metadata(client: TestClient, monkeypatch) -> None:
+    def fake_emit_publication_to_derivation_web(**_: object) -> dict[str, object]:
+        return {
+            "dw_artifact_id": "art_publication",
+            "dw_chain_url": "https://provenance.researka.org/artifacts/art_publication/chain",
+            "dw_api_chain_url": "https://provenance.researka.org/api/artifacts/art_publication/chain",
+            "dw_status": "registered",
+            "content_hash": "sha256:abc123",
+            "sha256": "sha256:abc123",
+        }
+
+    monkeypatch.setattr("runtime_core.workflow.emit_publication_to_derivation_web", fake_emit_publication_to_derivation_web)
+    _assert_publish_happy_path(client)
+
+    publication = cast(Any, client.app).state.repository.list_objects("publication")[0]
+    assert publication.metadata["dw_status"] == "registered"
+    assert publication.metadata["dw_artifact_id"] == "art_publication"
+    assert publication.metadata["dw_chain_url"] == "https://provenance.researka.org/artifacts/art_publication/chain"
+    assert publication.metadata["sha256"] == "sha256:abc123"

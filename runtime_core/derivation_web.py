@@ -4,11 +4,11 @@ import json
 import os
 import urllib.error
 import urllib.request
-from datetime import timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from contracts import ObjectType, ResearchObject
+from contracts import Decision, ObjectType, ResearchObject
 
 ACTOR_ID = "researka:v2"
 
@@ -28,9 +28,17 @@ def _key() -> str | None:
     return path.read_text().strip()
 
 
+def is_configured() -> bool:
+    return _enabled() and _key() is not None
+
+
 def _url(path: str) -> str:
-    base = os.getenv("RESEARKA_DW_URL", "https://dw.domlynch.com").rstrip("/")
+    base = _base_url()
     return f"{base}{path}"
+
+
+def _base_url() -> str:
+    return os.getenv("RESEARKA_DW_URL", "https://provenance.researka.org").rstrip("/")
 
 
 def _post(path: str, payload: dict[str, Any], *, api_key: str) -> tuple[int, dict[str, Any]]:
@@ -72,6 +80,85 @@ def _str_meta(obj: ResearchObject | None, key: str) -> str | None:
     return str(value)
 
 
+def _fallback_metadata(review: ResearchObject | None) -> dict[str, Any]:
+    return {
+        "primary_fallback_used": _bool_meta(review, "primary_fallback_used"),
+        "sparring_fallback_used": _bool_meta(review, "sparring_fallback_used"),
+        "primary_fallback_reason": _str_meta(review, "primary_fallback_reason"),
+        "sparring_fallback_reason": _str_meta(review, "sparring_fallback_reason"),
+        "panel_route": _str_meta(review, "route"),
+    }
+
+
+def _source_metadata(submission: ResearchObject) -> dict[str, Any]:
+    return {
+        "researka_object_type": ObjectType.SUBMISSION.value,
+        "researka_submission_id": submission.id,
+        "title": submission.title,
+        "domain_slug": submission.metadata.get("domain_slug"),
+        "article_type": submission.metadata.get("article_type"),
+    }
+
+
+def _emit_claim_chain(
+    *,
+    submission: ResearchObject,
+    claim_body: str,
+    claim_content_type: str,
+    claim_metadata: dict[str, Any],
+    stage: str,
+    decision_value: Any,
+    created_at: datetime,
+    api_key: str,
+) -> dict[str, Any]:
+    _post("/api/actors", {"id": ACTOR_ID, "kind": "agent", "name": "Researka v2"}, api_key=api_key)
+    source_status, source_artifact = _post(
+        "/api/artifacts",
+        {
+            "kind": "source",
+            "content_type": "text/markdown",
+            "body_text": _artifact_body(submission),
+            "metadata": _source_metadata(submission),
+            "actor_id": ACTOR_ID,
+        },
+        api_key=api_key,
+    )
+    claim_status, claim_artifact = _post(
+        "/api/artifacts",
+        {
+            "kind": "claim",
+            "content_type": claim_content_type,
+            "body_text": claim_body,
+            "metadata": claim_metadata,
+            "actor_id": ACTOR_ID,
+        },
+        api_key=api_key,
+    )
+    source_id = source_artifact.get("id")
+    claim_id = claim_artifact.get("id")
+    step: dict[str, Any] = {}
+    if source_id and claim_id:
+        _, step = _post(
+            "/api/steps",
+            {
+                "step_type": "classify",
+                "input_artifact_ids": [source_id],
+                "output_artifact_id": claim_id,
+                "actor_id": ACTOR_ID,
+                "method": {"system": "researka-v2", "stage": stage, "decision": decision_value},
+                "created_at": created_at.astimezone(timezone.utc).isoformat(),
+            },
+            api_key=api_key,
+        )
+    return {
+        "source_status": source_status,
+        "claim_status": claim_status,
+        "source_artifact": source_artifact,
+        "claim_artifact": claim_artifact,
+        "step": step,
+    }
+
+
 def emit_decision_to_derivation_web(
     *,
     submission: ResearchObject,
@@ -85,86 +172,211 @@ def emit_decision_to_derivation_web(
         return {"ok": False, "skipped": "missing_key"}
 
     try:
-        _post("/api/actors", {"id": ACTOR_ID, "kind": "agent", "name": "Researka v2"}, api_key=api_key)
-        submission_status, submission_artifact = _post(
-            "/api/artifacts",
-            {
-                "kind": "source",
-                "content_type": "text/markdown",
-                "body_text": _artifact_body(submission),
-                "metadata": {
-                    "researka_object_type": ObjectType.SUBMISSION.value,
-                    "researka_submission_id": submission.id,
-                    "title": submission.title,
-                    "domain_slug": submission.metadata.get("domain_slug"),
-                    "article_type": submission.metadata.get("article_type"),
-                },
-                "actor_id": ACTOR_ID,
-            },
-            api_key=api_key,
-        )
-        decision_status, decision_artifact = _post(
-            "/api/artifacts",
-            {
-                "kind": "claim",
-                "content_type": "application/json",
-                "body_text": json.dumps(
-                    {
-                        "decision": decision.metadata.get("decision"),
-                        "notes": decision.metadata.get("notes", []),
-                        "gate_failures": decision.metadata.get("gate_failures", []),
-                        "review_recommendation": (review.metadata.get("recommendation") if review else None),
-                    },
-                    ensure_ascii=False,
-                    sort_keys=True,
-                ),
-                "metadata": {
-                    "researka_object_type": ObjectType.DECISION.value,
-                    "researka_submission_id": submission.id,
-                    "researka_decision_id": decision.id,
-                    "researka_review_id": review.id if review else decision.metadata.get("review_id"),
-                    "provider": decision.metadata.get("provider"),
-                    "model": decision.metadata.get("model"),
-                    "prompt_version": decision.metadata.get("prompt_version"),
-                    # Per-slot fallback observability (added 2026-04-26 — surfaces
-                    # whether MiMo or Gemma was actually replaced by Mistral on this
-                    # call, so external auditors can reconstruct safety-net usage
-                    # from the DW chain alone without poking the runtime DB).
-                    "primary_fallback_used": _bool_meta(review, "primary_fallback_used"),
-                    "sparring_fallback_used": _bool_meta(review, "sparring_fallback_used"),
-                    "primary_fallback_reason": _str_meta(review, "primary_fallback_reason"),
-                    "sparring_fallback_reason": _str_meta(review, "sparring_fallback_reason"),
-                    "panel_route": _str_meta(review, "route"),
-                },
-                "actor_id": ACTOR_ID,
-            },
-            api_key=api_key,
-        )
-        submission_artifact_id = submission_artifact.get("id")
-        decision_artifact_id = decision_artifact.get("id")
-        if submission_artifact_id and decision_artifact_id:
-            _post(
-                "/api/steps",
+        chain = _emit_claim_chain(
+            submission=submission,
+            claim_content_type="application/json",
+            claim_body=json.dumps(
                 {
-                    "step_type": "classify",
-                    "input_artifact_ids": [submission_artifact_id],
-                    "output_artifact_id": decision_artifact_id,
-                    "actor_id": ACTOR_ID,
-                    "method": {
-                        "system": "researka-v2",
-                        "stage": "autonomous_editorial_decision",
-                        "decision": decision.metadata.get("decision"),
-                    },
-                    "created_at": decision.created_at.astimezone(timezone.utc).isoformat(),
+                    "decision": decision.metadata.get("decision"),
+                    "notes": decision.metadata.get("notes", []),
+                    "gate_failures": decision.metadata.get("gate_failures", []),
+                    "review_recommendation": (review.metadata.get("recommendation") if review else None),
                 },
-                api_key=api_key,
-            )
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+            claim_metadata={
+                "researka_object_type": ObjectType.DECISION.value,
+                "researka_submission_id": submission.id,
+                "researka_decision_id": decision.id,
+                "researka_review_id": review.id if review else decision.metadata.get("review_id"),
+                "provider": decision.metadata.get("provider"),
+                "model": decision.metadata.get("model"),
+                "prompt_version": decision.metadata.get("prompt_version"),
+                **_fallback_metadata(review),
+            },
+            stage="autonomous_editorial_decision",
+            decision_value=decision.metadata.get("decision"),
+            created_at=decision.created_at,
+            api_key=api_key,
+        )
         return {
             "ok": True,
-            "submission_artifact_id": submission_artifact_id,
-            "decision_artifact_id": decision_artifact_id,
-            "submission_status": submission_status,
-            "decision_status": decision_status,
+            "submission_artifact_id": chain["source_artifact"].get("id"),
+            "decision_artifact_id": chain["claim_artifact"].get("id"),
+            "submission_status": chain["source_status"],
+            "decision_status": chain["claim_status"],
         }
     except Exception as exc:
         return {"ok": False, "error": str(exc)[:240]}
+
+
+def emit_publication_to_derivation_web(
+    *,
+    submission: ResearchObject,
+    publication: ResearchObject,
+    review: ResearchObject | None = None,
+    decision: ResearchObject | None = None,
+) -> dict[str, Any]:
+    if not _enabled() or not (api_key := _key()):
+        return {}
+
+    try:
+        decision_value = decision.metadata.get("decision") if decision else Decision.ACCEPT.value
+        chain = _emit_claim_chain(
+            submission=submission,
+            claim_content_type="text/markdown",
+            claim_body=publication.body_markdown,
+            claim_metadata={
+                "researka_object_type": ObjectType.PUBLICATION.value,
+                "researka_publication_id": publication.id,
+                "researka_submission_id": submission.id,
+                "researka_review_id": review.id if review else None,
+                "researka_decision_id": decision.id if decision else None,
+                "title": publication.title,
+                "domain_slug": submission.metadata.get("domain_slug"),
+                "article_type": publication.metadata.get("article_type"),
+                "author_agent_id": publication.metadata.get("author_agent_id"),
+                "decision": decision_value,
+                "prompt_version": publication.metadata.get("prompt_version"),
+                **_fallback_metadata(review),
+            },
+            stage="autonomous_publish",
+            decision_value=decision_value,
+            created_at=publication.created_at,
+            api_key=api_key,
+        )
+        artifact_id = chain["claim_artifact"].get("id")
+        if not artifact_id:
+            return {"dw_status": "failed", "dw_error": "missing_publication_artifact_id"}
+        metadata = {
+            "dw_artifact_id": str(artifact_id),
+            "dw_chain_url": f"{_base_url()}/artifacts/{artifact_id}/chain",
+            "dw_api_chain_url": f"{_base_url()}/api/artifacts/{artifact_id}/chain",
+            "dw_source_artifact_id": chain["source_artifact"].get("id"),
+            "dw_step_id": chain["step"].get("id"),
+            "dw_step_hash": chain["step"].get("step_hash"),
+            "dw_status": "registered",
+        }
+        if content_hash := chain["claim_artifact"].get("content_hash"):
+            metadata["content_hash"] = f"sha256:{content_hash}"
+            metadata["sha256"] = f"sha256:{content_hash}"
+        return metadata
+    except Exception as exc:
+        return {"dw_status": "failed", "dw_error": str(exc)[:240]}
+
+
+def _latest_accept_decision(repository: Any, submission_id: str) -> ResearchObject | None:
+    decisions = [
+        obj
+        for obj in repository.children_of(submission_id, ObjectType.DECISION)
+        if obj.metadata.get("decision") == Decision.ACCEPT.value
+    ]
+    return decisions[-1] if decisions else None
+
+
+def _review_for_decision(repository: Any, decision: ResearchObject | None) -> ResearchObject | None:
+    if decision is None or not decision.metadata.get("review_id"):
+        return None
+    return repository.get_object(str(decision.metadata["review_id"]))
+
+
+def backfill_missing_publication_chains(
+    repository: Any,
+    *,
+    apply: bool = False,
+    limit: int | None = None,
+    publication_id: str | None = None,
+    emit_fn: Callable[..., dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Backfill DW metadata for existing publications.
+
+    Dry-run never calls Derivation Web. Apply reuses the same emit path as new
+    publications and persists only returned DW metadata.
+    """
+    emit = emit_fn or emit_publication_to_derivation_web
+    summary: dict[str, Any] = {
+        "mode": "apply" if apply else "dry_run",
+        "scanned": 0,
+        "eligible": 0,
+        "registered": 0,
+        "already_registered": 0,
+        "skipped": 0,
+        "failed": 0,
+        "items": [],
+    }
+
+    publications = repository.list_objects(ObjectType.PUBLICATION)
+    if publication_id is not None:
+        publications = [pub for pub in publications if pub.id == publication_id]
+
+    for publication in publications:
+        if limit is not None and summary["eligible"] >= limit:
+            break
+        summary["scanned"] += 1
+        item: dict[str, Any] = {
+            "publication_id": publication.id,
+            "title": publication.title,
+            "status": "",
+        }
+        if publication.metadata.get("dw_artifact_id"):
+            summary["already_registered"] += 1
+            item["status"] = "already_registered"
+            summary["items"].append(item)
+            continue
+
+        submission_id = publication.parent_object_id
+        if not submission_id:
+            summary["skipped"] += 1
+            item["status"] = "missing_parent_submission"
+            summary["items"].append(item)
+            continue
+        submission = repository.get_object(submission_id)
+        if submission is None:
+            summary["skipped"] += 1
+            item["status"] = "missing_parent_submission"
+            item["submission_id"] = submission_id
+            summary["items"].append(item)
+            continue
+
+        summary["eligible"] += 1
+        item["submission_id"] = submission.id
+        item["author_agent_id"] = submission.metadata.get("author_agent_id")
+        decision = _latest_accept_decision(repository, submission.id)
+        review = _review_for_decision(repository, decision)
+        if not apply:
+            item["status"] = "would_register"
+            summary["items"].append(item)
+            continue
+
+        try:
+            emitted = emit(submission=submission, publication=publication, review=review, decision=decision)
+            if not emitted:
+                summary["skipped"] += 1
+                item["status"] = "dw_not_configured"
+                summary["items"].append(item)
+                continue
+            if emitted.get("dw_status") == "failed":
+                raise RuntimeError(str(emitted.get("dw_error", ""))[:240])
+            metadata = {**publication.metadata, **emitted}
+            updated = repository.update_object_metadata(publication.id, metadata)
+            if updated is None:
+                raise RuntimeError("publication_disappeared")
+        except Exception as exc:
+            summary["failed"] += 1
+            item["status"] = "failed"
+            item["error"] = str(exc)[:240]
+            summary["items"].append(item)
+            continue
+        summary["registered"] += 1
+        item.update(
+            {
+                "status": "registered",
+                "dw_artifact_id": emitted.get("dw_artifact_id"),
+                "dw_chain_url": emitted.get("dw_chain_url"),
+                "sha256": emitted.get("sha256"),
+            }
+        )
+        summary["items"].append(item)
+
+    return summary
