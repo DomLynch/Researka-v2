@@ -1,9 +1,15 @@
+from typing import Any, cast
+
 from fastapi.testclient import TestClient
 
-from contracts import RuntimeJob, Stage
+from contracts import ResearchObject, RuntimeJob, Stage
 from runtime_core.prompts import EDITOR_PROMPT_VERSION
 
 VALID_ORCID = "0000-0002-1825-0097"
+
+
+def _repository(client: TestClient) -> Any:
+    return cast(Any, client.app).state.repository
 
 
 def _valid_source_bundle() -> list[dict[str, object]]:
@@ -39,7 +45,7 @@ def _submission_payload(search_summary: str) -> dict:
 
 
 def _assert_publish_happy_path(client: TestClient) -> None:
-    repository = client.app.state.repository
+    repository = _repository(client)
     seed = client.post(
         "/submissions",
         json=_submission_payload(
@@ -91,12 +97,12 @@ def test_leakage_submission_is_rejected_at_intake(client: TestClient) -> None:
     assert decision["status"] == "complete"
     assert decision["decision"] == "reject"
     assert decision["gate_failures"]
-    assert client.app.state.repository.list_objects("review") == []
+    assert _repository(client).list_objects("review") == []
 
 
 def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
     _assert_publish_happy_path(client)
-    publications = client.app.state.repository.list_objects("publication")
+    publications = _repository(client).list_objects("publication")
     assert len(publications) == 1
     first_pub_id = publications[0].id
 
@@ -114,7 +120,7 @@ def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
             break
         client.post("/jobs/run-once")
 
-    publications = client.app.state.repository.list_objects("publication")
+    publications = _repository(client).list_objects("publication")
     assert len(publications) == 1
     assert publications[0].id == first_pub_id
 
@@ -142,10 +148,60 @@ def test_publication_carries_orcid_and_osf_pending_metadata(client: TestClient, 
             break
         assert client.post("/jobs/run-once").status_code == 200
 
-    publication = client.app.state.repository.list_objects("publication")[0]
+    publication = _repository(client).list_objects("publication")[0]
     assert publication.metadata["author_agent_id"] == "agent-v3-full-paper"
     assert publication.metadata["human_owner_name"] == "Dominic Lynch"
     assert publication.metadata["orcid"] == VALID_ORCID
     assert publication.metadata["doi"] is None
     assert publication.metadata["doi_status"] == "pending_osf_credentials"
     assert publication.metadata["osf"]["status"] == "pending_osf_credentials"
+    assert "dw_chain_url" not in publication.metadata
+    assert "content_hash" not in publication.metadata
+
+
+def test_publish_attaches_real_derivation_web_metadata(client: TestClient, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_emit_publication_chain(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        publication = cast(ResearchObject, kwargs["publication"])
+        return {
+            "dw_artifact_id": "art_dw_publication",
+            "dw_chain_url": "https://provenance.researka.org/artifacts/art_dw_publication/chain",
+            "dw_api_chain_url": "https://provenance.researka.org/api/artifacts/art_dw_publication/chain",
+            "dw_source_artifact_id": "art_dw_submission",
+            "dw_step_id": "step_dw_accept",
+            "dw_step_hash": "abc123",
+            "dw_status": "registered",
+            "content_hash": "sha256:real-dw-hash",
+            "sha256": "sha256:real-dw-hash",
+            "publication_id_seen": publication.id,
+        }
+
+    monkeypatch.setattr("runtime_core.workflow.emit_publication_chain", fake_emit_publication_chain)
+
+    seed = client.post(
+        "/submissions",
+        json=_submission_payload(
+            "Databases searched include PubMed and review corpora, with a documented date window, explicit inclusion logic, and a stated narrowing rule that explains why these retained receipts best match the scoped research question."
+        ),
+    )
+    assert seed.status_code == 200
+
+    for _ in range(12):
+        queue = client.get("/jobs/queue").json()["queued"]
+        if not queue:
+            break
+        assert client.post("/jobs/run-once").status_code == 200
+
+    publication = _repository(client).list_objects("publication")[0]
+    assert publication.metadata["dw_status"] == "registered"
+    assert publication.metadata["dw_artifact_id"] == "art_dw_publication"
+    assert publication.metadata["dw_chain_url"] == "https://provenance.researka.org/artifacts/art_dw_publication/chain"
+    assert publication.metadata["content_hash"] == "sha256:real-dw-hash"
+    captured_submission = cast(ResearchObject, captured["submission"])
+    captured_publication = cast(ResearchObject, captured["publication"])
+    assert captured_submission.id == publication.parent_object_id
+    assert captured_publication.id == publication.id
+    assert captured["review"] is not None
+    assert captured["decision"] is not None

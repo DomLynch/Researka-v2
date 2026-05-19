@@ -6,6 +6,7 @@ import os
 from contracts import ArticleType, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, WorkflowContext, WorkflowOutcome, publication_template_for, run_submission_template_checks
 
 from .compiler import compile_publication
+from .derivation_web import emit_publication_chain
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
 from .reviewer_panel import reviewer_from_env
@@ -507,22 +508,43 @@ class WorkflowEngine:
         failed = [gate.name for gate in artifact.gates if not gate.passed]
         if failed:
             raise ValueError(f"publish_gates_failed:{','.join(failed)}")
-        publication = repository.create_object(
-            ResearchObject(
-                object_type=ObjectType.PUBLICATION,
-                parent_object_id=submission.id,
-                title=artifact.title,
-                body_markdown=artifact.body_markdown,
-                metadata={
-                    "abstract": artifact.abstract,
-                    "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
-                    "counts": artifact.counts.model_dump(mode="json"),
-                    "gates": [gate.model_dump(mode="json") for gate in artifact.gates],
-                    "author_agent_id": submission.metadata.get("author_agent_id"),
-                    **_publication_identity_metadata(submission.metadata),
-                    **_osf_publication_metadata(),
-                    **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
-                },
-            )
+        publication = ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title=artifact.title,
+            body_markdown=artifact.body_markdown,
+            metadata={
+                "abstract": artifact.abstract,
+                "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                "counts": artifact.counts.model_dump(mode="json"),
+                "gates": [gate.model_dump(mode="json") for gate in artifact.gates],
+                "author_agent_id": submission.metadata.get("author_agent_id"),
+                **_publication_identity_metadata(submission.metadata),
+                **_osf_publication_metadata(),
+                **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+            },
         )
+        decisions = [
+            obj
+            for obj in repository.children_of(submission.id, ObjectType.DECISION)
+            if obj.metadata.get("decision") == Decision.ACCEPT.value
+        ]
+        decision = decisions[-1] if decisions else None
+        review = None
+        if decision is not None and decision.metadata.get("review_id"):
+            review = repository.get_object(str(decision.metadata["review_id"]))
+        try:
+            publication.metadata.update(
+                emit_publication_chain(
+                    submission=submission,
+                    publication=publication,
+                    review=review,
+                    decision=decision,
+                )
+            )
+        except Exception as exc:
+            publication.metadata["dw_status"] = "failed"
+            publication.metadata["dw_error"] = str(exc)[:240]
+
+        publication = repository.create_object(publication)
         return {"publication_id": publication.id, "deduped": False}
