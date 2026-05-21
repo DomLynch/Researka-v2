@@ -5,10 +5,10 @@ import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib import error, request
 
-from contracts import ResearchObject
+from contracts import Decision, ObjectType, ResearchObject
 
 
 SYSTEM_ACTOR_ID = "researka:v2"
@@ -237,3 +237,122 @@ def emit_publication_chain(
         "content_hash": f"sha256:{content_hash}",
         "sha256": f"sha256:{content_hash}",
     }
+
+
+def _latest_accept_decision(repository: Any, submission_id: str) -> ResearchObject | None:
+    decisions = [
+        obj
+        for obj in repository.children_of(submission_id, ObjectType.DECISION)
+        if obj.metadata.get("decision") == Decision.ACCEPT.value
+    ]
+    return decisions[-1] if decisions else None
+
+
+def _review_for_decision(repository: Any, decision: ResearchObject | None) -> ResearchObject | None:
+    if decision is None or not decision.metadata.get("review_id"):
+        return None
+    return repository.get_object(str(decision.metadata["review_id"]))
+
+
+def backfill_missing_publication_chains(
+    repository: Any,
+    *,
+    apply: bool = False,
+    limit: int | None = None,
+    publication_id: str | None = None,
+    config: DerivationWebConfig | None = None,
+    emit_fn: Callable[..., dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Backfill DW metadata for existing publications.
+
+    Dry-run is the default and never calls Derivation Web. Apply mode reuses the
+    same emit path as new publications, then persists only returned DW metadata.
+    """
+    emit = emit_fn or emit_publication_chain
+    summary: dict[str, Any] = {
+        "mode": "apply" if apply else "dry_run",
+        "scanned": 0,
+        "eligible": 0,
+        "registered": 0,
+        "already_registered": 0,
+        "skipped": 0,
+        "failed": 0,
+        "items": [],
+    }
+
+    publications = repository.list_objects(ObjectType.PUBLICATION)
+    if publication_id is not None:
+        publications = [pub for pub in publications if pub.id == publication_id]
+
+    for publication in publications:
+        if limit is not None and summary["eligible"] >= limit:
+            break
+        summary["scanned"] += 1
+        item: dict[str, Any] = {
+            "publication_id": publication.id,
+            "title": publication.title,
+            "status": "",
+        }
+        if publication.metadata.get("dw_artifact_id"):
+            summary["already_registered"] += 1
+            item["status"] = "already_registered"
+            summary["items"].append(item)
+            continue
+
+        submission_id = publication.parent_object_id
+        if not submission_id:
+            summary["skipped"] += 1
+            item["status"] = "missing_parent_submission"
+            summary["items"].append(item)
+            continue
+        submission = repository.get_object(submission_id)
+        if submission is None:
+            summary["skipped"] += 1
+            item["status"] = "missing_parent_submission"
+            item["submission_id"] = submission_id
+            summary["items"].append(item)
+            continue
+
+        summary["eligible"] += 1
+        item["submission_id"] = submission.id
+        item["author_agent_id"] = submission.metadata.get("author_agent_id")
+        decision = _latest_accept_decision(repository, submission.id)
+        review = _review_for_decision(repository, decision)
+        if not apply:
+            item["status"] = "would_register"
+            summary["items"].append(item)
+            continue
+
+        try:
+            emitted = emit(
+                submission=submission,
+                publication=publication,
+                review=review,
+                decision=decision,
+                config=config,
+            )
+            if not emitted:
+                summary["skipped"] += 1
+                item["status"] = "dw_not_configured"
+                summary["items"].append(item)
+                continue
+            metadata = {**publication.metadata, **emitted}
+            updated = repository.update_object_metadata(publication.id, metadata)
+            if updated is None:
+                raise RuntimeError("publication_disappeared")
+            summary["registered"] += 1
+            item.update(
+                {
+                    "status": "registered",
+                    "dw_artifact_id": emitted.get("dw_artifact_id"),
+                    "dw_chain_url": emitted.get("dw_chain_url"),
+                    "sha256": emitted.get("sha256"),
+                }
+            )
+        except Exception as exc:
+            summary["failed"] += 1
+            item["status"] = "failed"
+            item["error"] = str(exc)[:240]
+        summary["items"].append(item)
+
+    return summary

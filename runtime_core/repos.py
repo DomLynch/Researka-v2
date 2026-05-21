@@ -15,6 +15,7 @@ class RuntimeRepository(Protocol):
     def reset(self) -> None: ...
     def create_object(self, obj: ResearchObject) -> ResearchObject: ...
     def get_object(self, object_id: str) -> ResearchObject | None: ...
+    def update_object_metadata(self, object_id: str, metadata: dict) -> ResearchObject | None: ...
     def list_objects(self, object_type: ObjectType | str | None = None) -> list[ResearchObject]: ...
     def children_of(self, parent_object_id: str, object_type: ObjectType | str | None = None) -> list[ResearchObject]: ...
     def publication_for_target(self, target_object_id: str) -> ResearchObject | None: ...
@@ -84,6 +85,14 @@ class InMemoryRuntimeRepository:
 
     def get_object(self, object_id: str) -> ResearchObject | None:
         return self.objects.get(object_id)
+
+    def update_object_metadata(self, object_id: str, metadata: dict) -> ResearchObject | None:
+        obj = self.objects.get(object_id)
+        if obj is None:
+            return None
+        updated = obj.model_copy(update={"metadata": dict(metadata)})
+        self.objects[object_id] = updated
+        return updated
 
     def list_objects(self, object_type: ObjectType | str | None = None) -> list[ResearchObject]:
         objects = list(self.objects.values())
@@ -491,6 +500,21 @@ class PostgresRuntimeRepository:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT * FROM research_objects WHERE id = %s", (object_id,))
             return self._object_from_row(cur.fetchone())
+
+    def update_object_metadata(self, object_id: str, metadata: dict) -> ResearchObject | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE research_objects
+                SET metadata = %s
+                WHERE id = %s
+                RETURNING *
+                """,
+                (json.dumps(metadata), object_id),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return self._object_from_row(row)
 
     def list_objects(self, object_type: ObjectType | str | None = None) -> list[ResearchObject]:
         with self._connect() as conn, conn.cursor() as cur:

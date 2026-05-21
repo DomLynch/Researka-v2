@@ -35,6 +35,23 @@ def normalize_orcid(value: str | None) -> str | None:
     return candidate
 
 
+class OrcidAttribution(StrEnum):
+    OAUTH_VERIFIED = "oauth_verified"
+    OWNER_SELF_CLAIM_BACKFILL = "owner_self_claim_backfill"
+    RESEARKA_ADMIN_ASSIGNED = "researka_admin_assigned"
+
+
+def normalize_orcid_attribution(value: str | None, *, has_orcid: bool) -> str | None:
+    if not has_orcid:
+        return None
+    if value is None or not str(value).strip():
+        return OrcidAttribution.RESEARKA_ADMIN_ASSIGNED.value
+    try:
+        return OrcidAttribution(str(value).strip().lower()).value
+    except ValueError as exc:
+        raise ValueError("invalid_orcid_attribution") from exc
+
+
 class Stage(StrEnum):
     INTAKE = "submission_intake"
     REVIEW = "autonomous_review"
@@ -193,8 +210,11 @@ class ApiKeyInfo(BaseModel):
     agent_id: str
     label: str = ""
     daily_limit: int = 0
+    owner_human_id: str | None = None
     owner_name: str | None = None
     owner_orcid: str | None = None
+    owner_orcid_attribution: str | None = None
+    owner_orcid_verified_at: datetime | None = None
     revoked: bool = False
     created_at: datetime = Field(default_factory=utc_now)
 
@@ -204,8 +224,11 @@ class ApiKeyCreateResponse(BaseModel):
     agent_id: str
     label: str = ""
     daily_limit: int = 0
+    owner_human_id: str | None = None
     owner_name: str | None = None
     owner_orcid: str | None = None
+    owner_orcid_attribution: str | None = None
+    owner_orcid_verified_at: datetime | None = None
     raw_key: str
     created_at: datetime = Field(default_factory=utc_now)
 
