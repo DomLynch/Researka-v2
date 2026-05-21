@@ -128,6 +128,7 @@ class ResearchObject(BaseModel):
 class SubmissionPayload(BaseModel):
     title: str
     abstract: str
+    body_markdown: str | None = None
     sections: dict[str, str] = Field(default_factory=dict)
     source_bundle: list[dict] = Field(default_factory=list)
     author_agent_id: str

@@ -3,7 +3,7 @@ from __future__ import annotations
 from contracts import GateResult, PublicationArtifact, PublicationCounts, publication_template_for
 
 from .gates import run_publish_gates
-from .sanitizer import sanitize_publication_body, validate_template_structure
+from .sanitizer import extract_markdown_section, sanitize_publication_body, validate_template_structure
 
 
 def _ordered_sections(sections: dict[str, str], *, required_sections: tuple[str, ...]) -> list[tuple[str, str]]:
@@ -44,26 +44,39 @@ def compile_publication(
     abstract: str,
     sections: dict[str, str],
     source_bundle: list[dict],
+    body_markdown: str | None = None,
     article_type: str = "rapid_evidence_synthesis",
     core_claims_resolved: bool = True,
 ) -> PublicationArtifact:
     template = publication_template_for(article_type)
-    ordered_sections = []
-    for name, text in _ordered_sections(sections, required_sections=template.required_sections):
-        ordered_sections.append(f"## {name}\n\n{text.strip()}".strip())
-    body_markdown = "\n\n".join(ordered_sections).strip()
-    body_markdown, _ = sanitize_publication_body(body_markdown)
-    validate_template_structure(body_markdown, template.required_sections)
+    if body_markdown and body_markdown.strip():
+        compiled_body = body_markdown.strip()
+    else:
+        ordered_sections = []
+        for name, text in _ordered_sections(sections, required_sections=template.required_sections):
+            ordered_sections.append(f"## {name}\n\n{text.strip()}".strip())
+        compiled_body = "\n\n".join(ordered_sections).strip()
+    compiled_body, _ = sanitize_publication_body(compiled_body)
+    if body_markdown and body_markdown.strip():
+        _validate_full_manuscript_body(compiled_body)
+    else:
+        validate_template_structure(compiled_body, template.required_sections)
     counts = canonical_bundle_facts(source_bundle)
     gates: list[GateResult] = run_publish_gates(
-        body_markdown=body_markdown,
+        body_markdown=compiled_body,
         counts=counts,
         core_claims_resolved=core_claims_resolved,
     )
     return PublicationArtifact(
         title=title,
         abstract=abstract.strip(),
-        body_markdown=body_markdown,
+        body_markdown=compiled_body,
         counts=counts,
         gates=gates,
     )
+
+
+def _validate_full_manuscript_body(body: str) -> None:
+    validate_template_structure(body, ("Abstract", "Methods", "Results", "Limitations", "Conclusion"))
+    if not extract_markdown_section(body, "References").strip():
+        raise ValueError("structure_gate: full manuscript references missing")

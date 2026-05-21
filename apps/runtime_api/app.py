@@ -211,7 +211,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             ResearchObject(
                 object_type=ObjectType.SUBMISSION,
                 title=payload.title,
-                body_markdown=payload.abstract,
+                body_markdown=payload.body_markdown or payload.abstract,
                 metadata=payload.model_dump(mode="json"),
             )
         )

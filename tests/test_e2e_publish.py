@@ -119,6 +119,32 @@ def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
     assert publications[0].id == first_pub_id
 
 
+def test_end_to_end_publish_uses_full_body_when_present(client: TestClient) -> None:
+    payload = _submission_payload(
+        "Databases searched include PubMed and review corpora, with a documented date window, explicit inclusion logic, and a stated narrowing rule that explains why these retained receipts best match the scoped research question."
+    )
+    payload["body_markdown"] = "\n\n".join(
+        [
+            "# Full manuscript",
+            "## Abstract\n\nThis abstract is long enough to describe the accepted evidence synthesis and its bounded interpretation for public release.",
+            "## Methods\n\nThe methods describe retrieval, screening, extraction, appraisal, synthesis, and verification in enough detail for audit by a public reader.",
+            "## Results\n\nThe results preserve the full manuscript evidence narrative instead of collapsing the paper into a shortened publication section map.",
+            "## Limitations\n\nThe limitations identify scope restrictions, missing endpoints, uncertainty, and interpretation risks that constrain public claims.",
+            "## Conclusion\n\nThe conclusion states the bounded finding and separates supported claims from unresolved evidence gaps and future research needs.",
+            "## References\n\n- Example 2024. DOI: 10.1234/example. PMID: 12345678.",
+        ]
+    )
+    seed = client.post("/submissions", json=payload)
+    assert seed.status_code == 200
+    for _ in range(12):
+        if not client.get("/jobs/queue").json()["queued"]:
+            break
+        assert client.post("/jobs/run-once").status_code == 200
+    publication = client.app.state.repository.list_objects("publication")[0]
+    assert "## References" in publication.body_markdown
+    assert "DOI: 10.1234/example" in publication.body_markdown
+
+
 def test_publish_attaches_derivation_web_publication_metadata(client: TestClient, monkeypatch) -> None:
     def fake_emit_publication_to_derivation_web(**_: object) -> dict[str, object]:
         return {

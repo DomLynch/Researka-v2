@@ -495,6 +495,7 @@ class WorkflowEngine:
             abstract=str(submission.metadata.get("abstract", "")).strip(),
             sections=dict(submission.metadata.get("sections", {})),
             source_bundle=list(submission.metadata.get("source_bundle", [])),
+            body_markdown=submission.metadata.get("body_markdown"),
             article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
             core_claims_resolved=bool(submission.metadata.get("core_claims_resolved", True)),
         )

@@ -180,6 +180,30 @@ def test_compile_publication_supports_empirical_study_sections() -> None:
     assert "## Results" in artifact.body_markdown
 
 
+def test_compile_publication_preserves_full_manuscript_references() -> None:
+    full_body = "\n\n".join(
+        [
+            "# Full manuscript",
+            "## Abstract\n\nThis abstract is long enough to satisfy the public full manuscript structure gate and summarize the accepted research artifact.",
+            "## Methods\n\nThe methods describe source retrieval, screening, extraction, appraisal, synthesis, and verification in enough detail to audit the accepted manuscript.",
+            "## Results\n\nThe results present outcome-specific evidence, directness, limitations, and traceable findings without reducing the publication to a section-map summary.",
+            "## Limitations\n\nThe limitations identify corpus boundaries, uncertainty, scope restrictions, missing endpoints, and interpretation risks that constrain public claims.",
+            "## Conclusion\n\nThe conclusion states the bounded finding and preserves the distinction between supported claims, unresolved gaps, and future research needs.",
+            "## References\n\n- Example 2024. DOI: 10.1234/example. PMID: 12345678.",
+        ]
+    )
+    artifact = compile_publication(
+        title="Full manuscript",
+        abstract="A",
+        body_markdown=full_body,
+        sections=_full_sections(),
+        source_bundle=_valid_source_bundle(),
+    )
+    assert artifact.body_markdown.strip() == full_body
+    assert "## References" in artifact.body_markdown
+    assert "DOI: 10.1234/example" in artifact.body_markdown
+
+
 def test_canonical_bundle_facts_reconcile_counts() -> None:
     counts = canonical_bundle_facts(
         [
