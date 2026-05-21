@@ -8,7 +8,20 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
-from contracts import ApiKeyCreateResponse, ApiKeyInfo, AuditReview, AuditVerdict, FailureClass, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob, normalize_orcid
+from contracts import (
+    ApiKeyCreateResponse,
+    ApiKeyInfo,
+    AuditReview,
+    AuditVerdict,
+    FailureClass,
+    JobStatus,
+    ObjectType,
+    ResearchObject,
+    RuntimeEvent,
+    RuntimeJob,
+    normalize_orcid,
+    normalize_orcid_attribution,
+)
 
 
 class RuntimeRepository(Protocol):
@@ -35,8 +48,11 @@ class RuntimeRepository(Protocol):
         *,
         label: str = "",
         daily_limit: int = 0,
+        owner_human_id: str | None = None,
         owner_name: str | None = None,
         owner_orcid: str | None = None,
+        owner_orcid_attribution: str | None = None,
+        owner_orcid_verified_at: datetime | None = None,
     ) -> ApiKeyCreateResponse: ...
     def validate_api_key_info(self, raw_key: str) -> ApiKeyInfo | None: ...
     def validate_api_key(self, raw_key: str) -> str | None: ...
@@ -190,20 +206,30 @@ class InMemoryRuntimeRepository:
         *,
         label: str = "",
         daily_limit: int = 0,
+        owner_human_id: str | None = None,
         owner_name: str | None = None,
         owner_orcid: str | None = None,
+        owner_orcid_attribution: str | None = None,
+        owner_orcid_verified_at: datetime | None = None,
     ) -> ApiKeyCreateResponse:
         raw_key = f"rk_{secrets.token_urlsafe(32)}"
         key_hash = self._hash_key(raw_key)
+        created_at = datetime.now(timezone.utc)
         normalized_orcid = normalize_orcid(owner_orcid)
+        normalized_attribution = normalize_orcid_attribution(owner_orcid_attribution, has_orcid=normalized_orcid is not None)
+        human_id = owner_human_id or (f"orcid:{normalized_orcid}" if normalized_orcid else None)
+        verified_at = owner_orcid_verified_at or (created_at if normalized_orcid else None)
         info = ApiKeyInfo(
             key_hash=key_hash,
             agent_id=agent_id,
             label=label,
             daily_limit=daily_limit,
+            owner_human_id=human_id,
             owner_name=owner_name,
             owner_orcid=normalized_orcid,
-            created_at=datetime.now(timezone.utc),
+            owner_orcid_attribution=normalized_attribution,
+            owner_orcid_verified_at=verified_at,
+            created_at=created_at,
         )
         self.api_keys[key_hash] = info
         return ApiKeyCreateResponse(
@@ -211,8 +237,11 @@ class InMemoryRuntimeRepository:
             agent_id=agent_id,
             label=label,
             daily_limit=daily_limit,
+            owner_human_id=human_id,
             owner_name=owner_name,
             owner_orcid=normalized_orcid,
+            owner_orcid_attribution=normalized_attribution,
+            owner_orcid_verified_at=verified_at,
             raw_key=raw_key,
             created_at=info.created_at,
         )
@@ -399,15 +428,21 @@ class PostgresRuntimeRepository:
                     agent_id TEXT NOT NULL,
                     label TEXT NOT NULL DEFAULT '',
                     daily_limit INTEGER NOT NULL DEFAULT 0,
+                    owner_human_id TEXT NULL,
                     owner_name TEXT NULL,
                     owner_orcid TEXT NULL,
+                    owner_orcid_attribution TEXT NULL,
+                    owner_orcid_verified_at TIMESTAMPTZ NULL,
                     revoked BOOLEAN NOT NULL DEFAULT FALSE,
                     created_at TIMESTAMPTZ NOT NULL
                 )
                 """
             )
+            cur.execute("ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS owner_human_id TEXT NULL")
             cur.execute("ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS owner_name TEXT NULL")
             cur.execute("ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS owner_orcid TEXT NULL")
+            cur.execute("ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS owner_orcid_attribution TEXT NULL")
+            cur.execute("ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS owner_orcid_verified_at TIMESTAMPTZ NULL")
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS api_key_usage (
@@ -724,20 +759,41 @@ class PostgresRuntimeRepository:
         *,
         label: str = "",
         daily_limit: int = 0,
+        owner_human_id: str | None = None,
         owner_name: str | None = None,
         owner_orcid: str | None = None,
+        owner_orcid_attribution: str | None = None,
+        owner_orcid_verified_at: datetime | None = None,
     ) -> ApiKeyCreateResponse:
         raw_key = f"rk_{secrets.token_urlsafe(32)}"
         key_hash = self._hash_key(raw_key)
         created_at = datetime.now(timezone.utc)
         normalized_orcid = normalize_orcid(owner_orcid)
+        normalized_attribution = normalize_orcid_attribution(owner_orcid_attribution, has_orcid=normalized_orcid is not None)
+        human_id = owner_human_id or (f"orcid:{normalized_orcid}" if normalized_orcid else None)
+        verified_at = owner_orcid_verified_at or (created_at if normalized_orcid else None)
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO api_keys (key_hash, agent_id, label, daily_limit, owner_name, owner_orcid, revoked, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s)
+                INSERT INTO api_keys (
+                    key_hash, agent_id, label, daily_limit, owner_human_id, owner_name,
+                    owner_orcid, owner_orcid_attribution, owner_orcid_verified_at,
+                    revoked, created_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE, %s)
                 """,
-                (key_hash, agent_id, label, daily_limit, owner_name, normalized_orcid, created_at),
+                (
+                    key_hash,
+                    agent_id,
+                    label,
+                    daily_limit,
+                    human_id,
+                    owner_name,
+                    normalized_orcid,
+                    normalized_attribution,
+                    verified_at,
+                    created_at,
+                ),
             )
             conn.commit()
         return ApiKeyCreateResponse(
@@ -745,8 +801,11 @@ class PostgresRuntimeRepository:
             agent_id=agent_id,
             label=label,
             daily_limit=daily_limit,
+            owner_human_id=human_id,
             owner_name=owner_name,
             owner_orcid=normalized_orcid,
+            owner_orcid_attribution=normalized_attribution,
+            owner_orcid_verified_at=verified_at,
             raw_key=raw_key,
             created_at=created_at,
         )
@@ -775,8 +834,11 @@ class PostgresRuntimeRepository:
                 agent_id=agent_id,
                 label=row["label"],
                 daily_limit=daily_limit,
+                owner_human_id=row.get("owner_human_id"),
                 owner_name=row.get("owner_name"),
                 owner_orcid=row.get("owner_orcid"),
+                owner_orcid_attribution=row.get("owner_orcid_attribution"),
+                owner_orcid_verified_at=row.get("owner_orcid_verified_at"),
                 revoked=row["revoked"],
                 created_at=row["created_at"],
             )
@@ -804,8 +866,11 @@ class PostgresRuntimeRepository:
                 agent_id=r["agent_id"],
                 label=r["label"],
                 daily_limit=r["daily_limit"],
+                owner_human_id=r.get("owner_human_id"),
                 owner_name=r.get("owner_name"),
                 owner_orcid=r.get("owner_orcid"),
+                owner_orcid_attribution=r.get("owner_orcid_attribution"),
+                owner_orcid_verified_at=r.get("owner_orcid_verified_at"),
                 revoked=r["revoked"],
                 created_at=r["created_at"],
             )

@@ -308,6 +308,20 @@ def test_ops_create_key_accepts_owner_orcid(client: TestClient, monkeypatch) -> 
     data = response.json()
     assert data["owner_name"] == "Dominic Lynch"
     assert data["owner_orcid"] == VALID_ORCID
+    assert data["owner_human_id"] == f"orcid:{VALID_ORCID}"
+    assert data["owner_orcid_attribution"] == "researka_admin_assigned"
+    assert data["owner_orcid_verified_at"]
+
+
+def test_ops_create_key_rejects_invalid_orcid_attribution(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    response = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={"agent_id": "agent-1", "owner_orcid": VALID_ORCID, "orcid_attribution": "twitter_verified"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"].startswith("invalid_orcid_attribution")
 
 
 def test_ops_create_key_rejects_invalid_owner_orcid(client: TestClient, monkeypatch) -> None:
@@ -408,9 +422,22 @@ def test_per_agent_key_attaches_trusted_orcid_and_overrides_claimed_agent(client
     assert metadata["author_agent_id"] == "agent-v3-full-paper"
     assert metadata["claimed_author_agent_id"] == "spoofed-agent"
     assert metadata["authenticated_agent_id"] == "agent-v3-full-paper"
+    assert metadata["human_owner_id"] == f"orcid:{VALID_ORCID}"
     assert metadata["human_owner_name"] == "Dominic Lynch"
     assert metadata["orcid"] == VALID_ORCID
     assert metadata["author_orcid"] == VALID_ORCID
+    assert metadata["orcid_attribution"] == "researka_admin_assigned"
+    assert metadata["orcid_verified_at"]
+    assert metadata["authors"] == [
+        {
+            "human_id": f"orcid:{VALID_ORCID}",
+            "name": "Dominic Lynch",
+            "orcid": VALID_ORCID,
+            "role": "author",
+            "orcid_attribution": "researka_admin_assigned",
+            "orcid_verified_at": metadata["orcid_verified_at"],
+        }
+    ]
 
 
 def test_per_agent_key_rejects_mismatched_submitter_orcid(client: TestClient, monkeypatch) -> None:

@@ -150,8 +150,14 @@ def test_publication_carries_orcid_and_osf_pending_metadata(client: TestClient, 
 
     publication = _repository(client).list_objects("publication")[0]
     assert publication.metadata["author_agent_id"] == "agent-v3-full-paper"
+    assert publication.metadata["human_owner_id"] == f"orcid:{VALID_ORCID}"
     assert publication.metadata["human_owner_name"] == "Dominic Lynch"
     assert publication.metadata["orcid"] == VALID_ORCID
+    assert publication.metadata["orcid_at_publication"] == VALID_ORCID
+    assert publication.metadata["orcid_attribution"] == "researka_admin_assigned"
+    assert publication.metadata["orcid_verified_at"]
+    assert publication.metadata["authors"][0]["orcid"] == VALID_ORCID
+    assert publication.metadata["authors"][0]["role"] == "author"
     assert publication.metadata["doi"] is None
     assert publication.metadata["doi_status"] == "pending_osf_credentials"
     assert publication.metadata["osf"]["status"] == "pending_osf_credentials"

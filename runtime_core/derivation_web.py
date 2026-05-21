@@ -146,11 +146,6 @@ class DerivationWebClient:
         return response
 
 
-def _agent_actor_id(agent_id: str | None) -> str:
-    clean = (agent_id or "unknown-agent").strip() or "unknown-agent"
-    return f"researka:agent:{clean}"
-
-
 def emit_publication_chain(
     *,
     submission: ResearchObject,
@@ -165,10 +160,8 @@ def emit_publication_chain(
 
     client = DerivationWebClient(resolved_config)
     agent_id = str(submission.metadata.get("author_agent_id") or "unknown-agent")
-    agent_actor_id = _agent_actor_id(agent_id)
 
     client.ensure_actor(SYSTEM_ACTOR_ID, kind="system", name="Researka v2 gatekeeper")
-    client.ensure_actor(agent_actor_id, kind="agent", name=agent_id)
 
     submission_artifact = client.create_artifact(
         kind="source",
@@ -187,8 +180,13 @@ def emit_publication_chain(
             "researka_submission_id": submission.id,
             "title": submission.title,
             "author_agent_id": agent_id,
+            "human_owner_id": submission.metadata.get("human_owner_id"),
+            "human_owner_name": submission.metadata.get("human_owner_name"),
+            "orcid": submission.metadata.get("orcid"),
+            "orcid_attribution": submission.metadata.get("orcid_attribution"),
+            "orcid_verified_at": submission.metadata.get("orcid_verified_at"),
         },
-        actor_id=agent_actor_id,
+        actor_id=SYSTEM_ACTOR_ID,
     )
 
     publication_artifact = client.create_artifact(
@@ -205,6 +203,12 @@ def emit_publication_chain(
             "decision_id": decision.id if decision is not None else None,
             "author_agent_id": publication.metadata.get("author_agent_id"),
             "orcid": publication.metadata.get("orcid"),
+            "orcid_at_publication": publication.metadata.get("orcid_at_publication"),
+            "orcid_attribution": publication.metadata.get("orcid_attribution"),
+            "orcid_verified_at": publication.metadata.get("orcid_verified_at"),
+            "human_owner_id": publication.metadata.get("human_owner_id"),
+            "human_owner_name": publication.metadata.get("human_owner_name"),
+            "authors": publication.metadata.get("authors"),
             "article_type": publication.metadata.get("article_type"),
         },
         actor_id=SYSTEM_ACTOR_ID,

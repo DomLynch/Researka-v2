@@ -31,14 +31,21 @@ def _publication_identity_metadata(submission_metadata: dict) -> dict:
         "identity_source",
         "authenticated_agent_id",
         "claimed_author_agent_id",
+        "human_owner_id",
         "human_owner_name",
         "human_owner_orcid",
         "author_orcid",
         "orcid",
+        "orcid_attribution",
+        "orcid_verified_at",
         "submitter_name",
         "submitter_orcid",
+        "authors",
     )
-    return {key: submission_metadata[key] for key in keys if submission_metadata.get(key)}
+    metadata = {key: submission_metadata[key] for key in keys if submission_metadata.get(key)}
+    if metadata.get("orcid"):
+        metadata["orcid_at_publication"] = metadata["orcid"]
+    return metadata
 
 
 def _osf_publication_metadata() -> dict:

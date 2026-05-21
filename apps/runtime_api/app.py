@@ -3,12 +3,24 @@ from __future__ import annotations
 import json
 import os
 import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException, Request
 
 from apps.worker.main import WorkerApp
-from contracts import AuditReview, AuditVerdict, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload, normalize_orcid
+from contracts import (
+    AuditReview,
+    AuditVerdict,
+    Decision,
+    ObjectType,
+    ResearchObject,
+    RuntimeJob,
+    Stage,
+    SubmissionPayload,
+    normalize_orcid,
+    normalize_orcid_attribution,
+)
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 
@@ -100,11 +112,20 @@ def _legacy_identity() -> dict[str, str | None]:
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=f"invalid_default_orcid:{exc}") from exc
     owner_name = os.environ.get("RESEARKA_V2_DEFAULT_OWNER_NAME")
+    human_id = os.environ.get("RESEARKA_V2_DEFAULT_HUMAN_ID")
+    attribution = os.environ.get("RESEARKA_V2_DEFAULT_ORCID_ATTRIBUTION")
+    try:
+        owner_orcid_attribution = normalize_orcid_attribution(attribution, has_orcid=owner_orcid is not None)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=f"invalid_default_orcid_attribution:{exc}") from exc
     return {
         "auth_source": "legacy_api_key",
         "agent_id": None,
+        "owner_human_id": human_id.strip() if human_id else (f"orcid:{owner_orcid}" if owner_orcid else None),
         "owner_name": owner_name.strip() if owner_name else None,
         "owner_orcid": owner_orcid,
+        "owner_orcid_attribution": owner_orcid_attribution,
+        "owner_orcid_verified_at": os.environ.get("RESEARKA_V2_DEFAULT_ORCID_VERIFIED_AT"),
     }
 
 
@@ -132,8 +153,11 @@ def _check_api_key(repo: RuntimeRepository, request: Request) -> dict[str, str |
         return {
             "auth_source": "api_key",
             "agent_id": key_info.agent_id,
+            "owner_human_id": key_info.owner_human_id,
             "owner_name": key_info.owner_name,
             "owner_orcid": key_info.owner_orcid,
+            "owner_orcid_attribution": key_info.owner_orcid_attribution,
+            "owner_orcid_verified_at": key_info.owner_orcid_verified_at.isoformat() if key_info.owner_orcid_verified_at else None,
         }
 
     raise HTTPException(status_code=403, detail="invalid_api_key")
@@ -171,10 +195,27 @@ def _trusted_submission_metadata(payload: SubmissionPayload, identity: dict[str,
         metadata["orcid"] = final_orcid
         metadata["author_orcid"] = final_orcid
         metadata["human_owner_orcid"] = final_orcid
+        metadata["orcid_attribution"] = identity.get("owner_orcid_attribution") or "owner_self_claim_backfill"
+        if identity.get("owner_orcid_verified_at"):
+            metadata["orcid_verified_at"] = identity["owner_orcid_verified_at"]
 
     owner_name = identity.get("owner_name") or metadata.get("submitter_name")
+    owner_human_id = identity.get("owner_human_id")
+    if owner_human_id:
+        metadata["human_owner_id"] = owner_human_id
     if owner_name:
         metadata["human_owner_name"] = owner_name
+    if owner_name or final_orcid:
+        metadata["authors"] = [
+            {
+                "human_id": owner_human_id,
+                "name": owner_name,
+                "orcid": final_orcid,
+                "role": "author",
+                "orcid_attribution": metadata.get("orcid_attribution"),
+                "orcid_verified_at": metadata.get("orcid_verified_at"),
+            }
+        ]
     return metadata
 
 
@@ -404,16 +445,38 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         owner_name = body.get("owner_name")
         if isinstance(owner_name, str):
             owner_name = owner_name.strip() or None
+        owner_human_id = body.get("owner_human_id")
+        if isinstance(owner_human_id, str):
+            owner_human_id = owner_human_id.strip() or None
         try:
             owner_orcid = normalize_orcid(body.get("owner_orcid"))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"invalid_owner_orcid:{exc}") from exc
+        try:
+            owner_orcid_attribution = normalize_orcid_attribution(
+                body.get("owner_orcid_attribution") or body.get("orcid_attribution"),
+                has_orcid=owner_orcid is not None,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"invalid_orcid_attribution:{exc}") from exc
+        owner_orcid_verified_at = None
+        raw_verified_at = body.get("owner_orcid_verified_at") or body.get("orcid_verified_at")
+        if raw_verified_at:
+            try:
+                owner_orcid_verified_at = datetime.fromisoformat(str(raw_verified_at).replace("Z", "+00:00"))
+                if owner_orcid_verified_at.tzinfo is None:
+                    owner_orcid_verified_at = owner_orcid_verified_at.replace(tzinfo=timezone.utc)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="invalid_orcid_verified_at") from exc
         response = app.state.repository.create_api_key(
             agent_id,
             label=label,
             daily_limit=daily_limit,
+            owner_human_id=owner_human_id,
             owner_name=owner_name,
             owner_orcid=owner_orcid,
+            owner_orcid_attribution=owner_orcid_attribution,
+            owner_orcid_verified_at=owner_orcid_verified_at,
         )
         return response.model_dump(mode="json")
 
