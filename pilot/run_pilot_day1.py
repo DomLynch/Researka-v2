@@ -101,8 +101,6 @@ def parse_md(path: Path) -> dict:
             continue
         src_title = title_match.group(1).strip()
         src_year = int(title_match.group(2))
-        # Detect directness + tier from the labels
-        directness = "direct" if " direct " in meta_part or "| direct |" in meta_part else "indirect"
         # Extract DOI ONLY from doi.org URLs and only if it matches Researka's
         # `10.XXXX/suffix` shape. PubMed (`pubmed.ncbi.nlm.nih.gov/<pmid>`),
         # EuropePMC (`/MED/<pmid>`), and ClinicalTrials.gov URLs carry PMIDs
@@ -218,7 +216,7 @@ def get_decision(sid: str, api_key: str) -> dict:
 
 def main() -> None:
     api_key = load_pilot_key()
-    print(f"=== Pilot day-1: 5 distinct topics from research-agent-bot ===")
+    print("=== Pilot day-1: 5 distinct topics from research-agent-bot ===")
     print(f"Endpoint: {URL}")
     print(f"Key: pilot-house-bot ({api_key[:10]}...{api_key[-4:]})")
     print()
@@ -227,7 +225,7 @@ def main() -> None:
     for i, path in enumerate(DRAFTS, 1):
         print(f"[{i}/5] {path.name}")
         if not path.exists():
-            print(f"  SKIP: file missing")
+            print("  SKIP: file missing")
             submissions.append({"path": str(path), "error": "missing_file"})
             continue
         parsed = parse_md(path)

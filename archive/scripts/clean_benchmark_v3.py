@@ -97,8 +97,6 @@ def clean_entry(entry: dict, idx: int) -> tuple[dict, list[str]]:
         if not isinstance(text, str):
             continue
 
-        original = text
-
         # Fix 1: double periods
         cleaned = fix_double_periods(text)
         if cleaned != text:

@@ -105,7 +105,7 @@ def fetch_all_abstracts(dois: list[str]) -> dict[str, str]:
             source = "CrossRef"
             delay = 0.3
             if not abstract:
-                print(f"  trying OpenAlex...", end=" ", flush=True)
+                print("  trying OpenAlex...", end=" ", flush=True)
                 abstract = fetch_openalex(doi)
                 source = "OpenAlex"
 
@@ -113,7 +113,7 @@ def fetch_all_abstracts(dois: list[str]) -> dict[str, str]:
             abstracts[doi] = abstract
             print(f"OK ({source}, {len(abstract)} chars)")
         else:
-            print(f"MISS")
+            print("MISS")
 
         time.sleep(delay)
 

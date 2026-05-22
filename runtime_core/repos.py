@@ -6,9 +6,66 @@ import os
 import secrets
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Protocol
 
 from contracts import ApiKeyCreateResponse, ApiKeyInfo, AuditReview, AuditVerdict, FailureClass, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob
+
+OSF_TOKEN_METADATA_ENCRYPTION_PREFIX = "fernet:v1:"
+
+
+def _read_secret_value(*, direct_env: str, path_env: str) -> str | None:
+    direct = os.environ.get(direct_env)
+    if direct and direct.strip():
+        return direct.strip()
+    secret_path = os.environ.get(path_env)
+    if secret_path and secret_path.strip():
+        path = Path(secret_path.strip())
+        if not path.exists():
+            raise RuntimeError(f"{path_env.lower()}_missing")
+        value = path.read_text().strip()
+        if not value:
+            raise RuntimeError(f"{path_env.lower()}_empty")
+        return value
+    return None
+
+
+def _osf_token_cipher():
+    key = _read_secret_value(
+        direct_env="RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY",
+        path_env="RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH",
+    )
+    if not key:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+    except ImportError as exc:
+        raise RuntimeError("cryptography_required_for_osf_token_encryption") from exc
+    try:
+        return Fernet(key.encode("ascii"))
+    except Exception as exc:
+        raise RuntimeError("invalid_osf_token_encryption_key") from exc
+
+
+def _encode_osf_token_metadata(token_metadata: dict) -> str:
+    payload = json.dumps(token_metadata, separators=(",", ":"), sort_keys=True)
+    cipher = _osf_token_cipher()
+    if cipher is None:
+        return payload
+    return OSF_TOKEN_METADATA_ENCRYPTION_PREFIX + cipher.encrypt(payload.encode("utf-8")).decode("ascii")
+
+
+def _decode_osf_token_metadata(raw: str) -> dict | None:
+    if raw.startswith(OSF_TOKEN_METADATA_ENCRYPTION_PREFIX):
+        cipher = _osf_token_cipher()
+        if cipher is None:
+            raise RuntimeError("osf_token_encryption_key_required")
+        encrypted = raw.removeprefix(OSF_TOKEN_METADATA_ENCRYPTION_PREFIX)
+        payload = cipher.decrypt(encrypted.encode("ascii")).decode("utf-8")
+    else:
+        payload = raw
+    token = json.loads(payload)
+    return token if isinstance(token, dict) else None
 
 
 class RuntimeRepository(Protocol):
@@ -815,7 +872,7 @@ class PostgresRuntimeRepository:
                 ON CONFLICT (agent_id)
                 DO UPDATE SET token_metadata = EXCLUDED.token_metadata, updated_at = EXCLUDED.updated_at
                 """,
-                (agent_id, json.dumps(token_metadata), datetime.now(timezone.utc)),
+                (agent_id, _encode_osf_token_metadata(token_metadata), datetime.now(timezone.utc)),
             )
             conn.commit()
 
@@ -825,8 +882,7 @@ class PostgresRuntimeRepository:
             row = cur.fetchone()
         if row is None:
             return None
-        token = json.loads(row["token_metadata"])
-        return token if isinstance(token, dict) else None
+        return _decode_osf_token_metadata(row["token_metadata"])
 
     def _audit_from_row(self, row: dict) -> AuditReview:
         return AuditReview(

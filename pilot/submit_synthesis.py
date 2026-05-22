@@ -185,7 +185,7 @@ def main() -> None:
         "core_claims_resolved": True,
     }
 
-    print(f"=== Submitting as research_synthesis ===")
+    print("=== Submitting as research_synthesis ===")
     print(f"Title: {title}")
     print(f"Sections: {len(sections)} ({sorted(sections.keys())})")
     print(f"Source bundle: {len(source_bundle)} entries")
@@ -219,7 +219,7 @@ def main() -> None:
     print(f"  decision: {dec.get('decision') or dec.get('status')}")
     print(f"  decision_object_id: {dec.get('decision_object_id')}")
     if dec.get("gate_failures"):
-        print(f"  gate_failures:")
+        print("  gate_failures:")
         for g in dec["gate_failures"]:
             print(f"    - {g.get('name')}: {g.get('reason')}")
 

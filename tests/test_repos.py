@@ -1,7 +1,16 @@
 import threading
 
+from cryptography.fernet import Fernet
+
 from contracts import FailureClass, JobStatus, RuntimeJob, Stage
-from runtime_core.repos import InMemoryRuntimeRepository, PostgresRuntimeRepository, postgres_dsn_from_env, postgres_runtime_available
+from runtime_core.repos import (
+    InMemoryRuntimeRepository,
+    PostgresRuntimeRepository,
+    _decode_osf_token_metadata,
+    _encode_osf_token_metadata,
+    postgres_dsn_from_env,
+    postgres_runtime_available,
+)
 
 
 def test_inmemory_claim_sets_lease_and_reclaims_expired_job() -> None:
@@ -26,6 +35,41 @@ def test_inmemory_fail_job_persists_failure_class() -> None:
     assert failed.payload["failure_reason"] == "structure_gate: missing conclusion"
     assert failed.payload["failure_class"] == FailureClass.STRUCTURE_GATE.value
     assert failed.lease_expires_at is None
+
+
+def test_osf_token_metadata_encryption_roundtrip(monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+
+    encoded = _encode_osf_token_metadata({"access_token": "access-secret", "refresh_token": "refresh-secret"})
+
+    assert encoded.startswith("fernet:v1:")
+    assert "access-secret" not in encoded
+    assert "refresh-secret" not in encoded
+    assert _decode_osf_token_metadata(encoded) == {"access_token": "access-secret", "refresh_token": "refresh-secret"}
+
+
+def test_osf_token_metadata_missing_encryption_key_file_fails(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH", str(tmp_path / "missing.key"))
+
+    try:
+        _encode_osf_token_metadata({"access_token": "access-secret"})
+    except RuntimeError as exc:
+        assert str(exc) == "researka_v2_osf_token_encryption_key_path_missing"
+    else:
+        raise AssertionError("missing configured encryption key file should fail closed")
+
+
+def test_osf_token_metadata_empty_encryption_key_file_fails(monkeypatch, tmp_path) -> None:
+    key_path = tmp_path / "empty.key"
+    key_path.write_text("\n")
+    monkeypatch.setenv("RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH", str(key_path))
+
+    try:
+        _encode_osf_token_metadata({"access_token": "access-secret"})
+    except RuntimeError as exc:
+        assert str(exc) == "researka_v2_osf_token_encryption_key_path_empty"
+    else:
+        raise AssertionError("empty configured encryption key file should fail closed")
 
 
 def test_postgres_claim_sets_lease_and_reclaims_expired_job() -> None:

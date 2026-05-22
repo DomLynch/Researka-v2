@@ -9,9 +9,7 @@ Usage:
 """
 
 import json
-import hashlib
 from pathlib import Path
-from itertools import product as cart_product
 
 # ---------------------------------------------------------------------------
 # Domain / topic matrices
@@ -176,9 +174,9 @@ def _baseline_sections(topic: str, domain: str) -> dict:
         "Research Question": _pad(f"What is the current state of evidence for {topic} in {domain}?"),
         "Search Summary": _pad(f"We conducted a systematic search of PubMed, Embase, and Cochrane for studies on {topic} published 2015-2025."),
         "Evidence Landscape": _pad(f"The evidence base for {topic} includes randomized controlled trials, observational studies, and mechanistic work in {domain}."),
-        "Methods": _pad(f"Studies were selected using predefined inclusion criteria. Quality was assessed using the Cochrane risk of bias tool for randomized studies."),
+        "Methods": _pad("Studies were selected using predefined inclusion criteria. Quality was assessed using the Cochrane risk of bias tool for randomized studies."),
         "Key Findings": _pad(f"Current evidence suggests moderate benefit for {topic} outcomes. Effect sizes vary across study designs and populations."),
-        "Limitations": _pad(f"Most studies have small sample sizes. Publication bias may affect the overall evidence picture. Heterogeneity in outcome measures limits comparability."),
+        "Limitations": _pad("Most studies have small sample sizes. Publication bias may affect the overall evidence picture. Heterogeneity in outcome measures limits comparability."),
         "Conclusion": _pad(f"The evidence for {topic} is promising but requires larger confirmatory trials before clinical translation."),
     }
 
@@ -225,7 +223,6 @@ def gen_self_citation_loop(count: int) -> list[dict]:
         domain = DOMAINS[i % len(DOMAINS)]
         topic = TOPICS[domain][i % len(TOPICS[domain])]
         sections = _baseline_sections(topic, domain)
-        lab = f"Chen et al. Laboratory"
         bundle = []
         for j in range(12):
             bundle.append({

@@ -76,14 +76,10 @@ def oauth_config_from_env() -> OSFOAuthConfig | None:
     redirect_uri = os.environ.get("RESEARKA_V2_OSF_OAUTH_REDIRECT_URI")
     if not client_id or not client_id.strip() or not client_secret or not redirect_uri or not redirect_uri.strip():
         return None
-    state_secret = (
-        os.environ.get("RESEARKA_V2_OSF_OAUTH_STATE_SECRET")
-        or _read_secret(
-            direct_env="RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET",
-            path_env="RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET_PATH",
-        )
-        or client_secret
-    )
+    state_secret = _read_secret(
+        direct_env="RESEARKA_V2_OSF_OAUTH_STATE_SECRET",
+        path_env="RESEARKA_V2_OSF_OAUTH_STATE_SECRET_PATH",
+    ) or client_secret
     return OSFOAuthConfig(
         authorization_url=os.environ.get("RESEARKA_V2_OSF_OAUTH_AUTHORIZE_URL", "https://accounts.osf.io/oauth2/authorize"),
         token_url=os.environ.get("RESEARKA_V2_OSF_OAUTH_TOKEN_URL", "https://accounts.osf.io/oauth2/token"),

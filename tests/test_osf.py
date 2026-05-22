@@ -7,6 +7,7 @@ from runtime_core.osf import (
     OSFConfig,
     build_oauth_authorization_url,
     mint_publication_doi,
+    oauth_config_from_env,
     sign_oauth_state,
     verify_oauth_state,
 )
@@ -122,6 +123,20 @@ def test_oauth_state_rejects_wrong_secret() -> None:
         assert str(exc) == "invalid_oauth_state_signature"
     else:
         raise AssertionError("wrong secret should fail")
+
+
+def test_oauth_config_prefers_dedicated_state_secret(monkeypatch, tmp_path) -> None:
+    state_secret_path = tmp_path / "state-secret"
+    state_secret_path.write_text("dedicated-state-secret\n")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_REDIRECT_URI", "https://api.researka.org/oauth/osf/callback")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_STATE_SECRET_PATH", str(state_secret_path))
+
+    config = oauth_config_from_env()
+
+    assert config is not None
+    assert config.state_secret == "dedicated-state-secret"
 
 
 def test_build_oauth_authorization_url_contains_osf_app_contract() -> None:
