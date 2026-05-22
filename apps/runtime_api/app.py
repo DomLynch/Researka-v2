@@ -14,6 +14,7 @@ from apps.worker.main import WorkerApp
 from contracts import AuditReview, AuditVerdict, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
 from runtime_core.osf import (
+    backfill_missing_publication_dois,
     build_oauth_authorization_url,
     exchange_oauth_code,
     oauth_config_from_env,
@@ -273,16 +274,25 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             except Exception as exc:
                 token_metadata["osf_user_lookup_error"] = str(exc)[:160]
             app.state.repository.store_osf_oauth_token(agent_id, token_metadata)
+            publication_id = state_payload.get("publication_id")
+            doi_backfill = (
+                backfill_missing_publication_dois(app.state.repository, apply=True, publication_id=publication_id)
+                if isinstance(publication_id, str) and publication_id.strip()
+                else None
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except RuntimeError as exc:
             raise HTTPException(status_code=502, detail=str(exc)[:240]) from exc
-        return {
+        response = {
             "status": "connected",
             "agent_id": agent_id,
             "osf_user_id": token_metadata.get("osf_user_id"),
             "scope": token_metadata.get("scope") or token_metadata.get("oauth_scope_requested"),
         }
+        if doi_backfill is not None:
+            response["doi_backfill"] = doi_backfill
+        return response
 
     @app.post("/submissions")
     def submit(payload: SubmissionPayload, request: Request) -> dict:

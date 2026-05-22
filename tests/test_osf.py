@@ -143,12 +143,18 @@ def test_backfill_missing_publication_dois_uses_agent_oauth_token(monkeypatch) -
 
 
 def test_oauth_state_roundtrip() -> None:
-    state = sign_oauth_state(agent_id="agent-v3-full-paper", secret="state-secret", issued_at=1_000_000)
+    state = sign_oauth_state(
+        agent_id="agent-v3-full-paper",
+        secret="state-secret",
+        issued_at=1_000_000,
+        publication_id="pub-1",
+    )
 
     payload = verify_oauth_state(state, secret="state-secret", max_age_seconds=10_000_000_000)
 
     assert payload["agent_id"] == "agent-v3-full-paper"
     assert payload["iat"] == 1_000_000
+    assert payload["publication_id"] == "pub-1"
 
 
 def test_oauth_state_rejects_wrong_secret() -> None:

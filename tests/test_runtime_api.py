@@ -123,6 +123,38 @@ def test_osf_oauth_callback_stores_token_without_exposing_it(client: TestClient,
     assert stored["refresh_token"] == "oauth-refresh-token"
 
 
+def test_osf_oauth_callback_can_backfill_target_publication(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_STATE_SECRET", "state-secret")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_REDIRECT_URI", "https://api.researka.org/oauth/osf/callback")
+    state = sign_oauth_state(agent_id="agent-v3-full-paper", secret="state-secret", publication_id="pub-1")
+
+    def fake_exchange(config, *, code: str) -> dict[str, str]:
+        return {"access_token": "oauth-access-token", "refresh_token": "oauth-refresh-token", "scope": "osf.full_write"}
+
+    def fake_user_lookup(access_token: str, **kwargs) -> dict[str, str]:
+        return {"osf_user_id": "osf-user-1"}
+
+    def fake_backfill(repository, *, apply: bool, publication_id: str | None):
+        assert repository is _repository(client)
+        assert apply is True
+        assert publication_id == "pub-1"
+        return {"apply": True, "eligible": 1, "minted": 1, "failed": 0, "records": [{"publication_id": "pub-1"}]}
+
+    monkeypatch.setattr("apps.runtime_api.app.exchange_oauth_code", fake_exchange)
+    monkeypatch.setattr("apps.runtime_api.app.osf_user_metadata_from_token", fake_user_lookup)
+    monkeypatch.setattr("apps.runtime_api.app.backfill_missing_publication_dois", fake_backfill)
+
+    response = client.get(f"/oauth/osf/callback?code=oauth-code&state={quote(state)}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "connected"
+    assert body["agent_id"] == "agent-v3-full-paper"
+    assert body["doi_backfill"]["minted"] == 1
+
+
 def test_submission_creates_intake_job(client: TestClient) -> None:
     response = client.post(
         "/submissions",

@@ -104,8 +104,10 @@ def _b64url_decode(raw: str) -> bytes:
     return base64.urlsafe_b64decode(padded.encode("ascii"))
 
 
-def sign_oauth_state(*, agent_id: str, secret: str, issued_at: int | None = None) -> str:
+def sign_oauth_state(*, agent_id: str, secret: str, issued_at: int | None = None, publication_id: str | None = None) -> str:
     payload = {"agent_id": agent_id, "iat": issued_at or int(time.time())}
+    if publication_id and publication_id.strip():
+        payload["publication_id"] = publication_id.strip()
     body = _b64url_encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
     signature = hmac.new(secret.encode("utf-8"), body.encode("ascii"), hashlib.sha256).digest()
     return f"{body}.{_b64url_encode(signature)}"
@@ -129,7 +131,11 @@ def verify_oauth_state(state: str, *, secret: str, max_age_seconds: int = 900) -
         raise ValueError("invalid_oauth_state_agent")
     if not isinstance(issued_at, int) or int(time.time()) - issued_at > max_age_seconds:
         raise ValueError("expired_oauth_state")
-    return {"agent_id": agent_id.strip(), "iat": issued_at}
+    result: dict[str, Any] = {"agent_id": agent_id.strip(), "iat": issued_at}
+    publication_id = payload.get("publication_id")
+    if isinstance(publication_id, str) and publication_id.strip():
+        result["publication_id"] = publication_id.strip()
+    return result
 
 
 def build_oauth_authorization_url(config: OSFOAuthConfig, *, state: str) -> str:

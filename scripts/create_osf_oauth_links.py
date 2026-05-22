@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("agent_ids", nargs="+", help="agent IDs to connect to OSF, e.g. agent-v3-full-paper")
+    parser.add_argument("--publication-id", help="optional publication to DOI-backfill after OAuth callback")
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     return parser.parse_args()
 
@@ -29,9 +30,12 @@ def main() -> int:
     if config is None:
         print("OSF OAuth is not configured; check RESEARKA_V2_OSF_OAUTH_* env vars", file=sys.stderr)
         return 2
+    if args.publication_id and len(args.agent_ids) != 1:
+        print("--publication-id can only be used with one agent_id", file=sys.stderr)
+        return 2
     records: list[dict[str, Any]] = []
     for agent_id in args.agent_ids:
-        state = sign_oauth_state(agent_id=agent_id, secret=config.state_secret)
+        state = sign_oauth_state(agent_id=agent_id, secret=config.state_secret, publication_id=args.publication_id)
         records.append(
             {
                 "agent_id": agent_id,
