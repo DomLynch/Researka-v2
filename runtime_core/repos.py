@@ -492,7 +492,8 @@ class PostgresRuntimeRepository:
                 cur.execute("SELECT * FROM research_objects ORDER BY created_at ASC")
             else:
                 cur.execute("SELECT * FROM research_objects WHERE object_type = %s ORDER BY created_at ASC", (str(object_type),))
-            return [self._object_from_row(row) for row in cur.fetchall()]
+            objects = [self._object_from_row(row) for row in cur.fetchall()]
+            return [obj for obj in objects if obj is not None]
 
     def children_of(self, parent_object_id: str, object_type: ObjectType | str | None = None) -> list[ResearchObject]:
         with self._connect() as conn, conn.cursor() as cur:
@@ -506,7 +507,8 @@ class PostgresRuntimeRepository:
                     "SELECT * FROM research_objects WHERE parent_object_id = %s AND object_type = %s ORDER BY created_at ASC",
                     (parent_object_id, str(object_type)),
                 )
-            return [self._object_from_row(row) for row in cur.fetchall()]
+            objects = [self._object_from_row(row) for row in cur.fetchall()]
+            return [obj for obj in objects if obj is not None]
 
     def publication_for_target(self, target_object_id: str) -> ResearchObject | None:
         with self._connect() as conn, conn.cursor() as cur:
@@ -545,7 +547,10 @@ class PostgresRuntimeRepository:
                 )
                 existing = cur.fetchone()
                 if existing is not None:
-                    return self._job_from_row(existing)
+                    existing_job = self._job_from_row(existing)
+                    if existing_job is None:
+                        raise RuntimeError("existing_job_decode_failed")
+                    return existing_job
         self._insert_job(job)
         return job
 
@@ -582,7 +587,8 @@ class PostgresRuntimeRepository:
                     "SELECT * FROM runtime_jobs WHERE status = 'queued' AND stage = %s ORDER BY created_at ASC",
                     (stage,),
                 )
-            return [self._job_from_row(row) for row in cur.fetchall()]
+            jobs = [self._job_from_row(row) for row in cur.fetchall()]
+            return [job for job in jobs if job is not None]
 
     def claim_next_job(self, *, target_object_id: str | None = None) -> RuntimeJob | None:
         now = datetime.now(timezone.utc)

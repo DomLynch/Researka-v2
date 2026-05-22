@@ -6,6 +6,7 @@ from contracts import ArticleType, Decision, ObjectType, ResearchObject, Runtime
 
 from .compiler import compile_publication
 from .derivation_web import emit_decision_to_derivation_web, emit_publication_to_derivation_web
+from .osf import mint_publication_doi, osf_publication_metadata_from_env
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
 from .reviewer_panel import reviewer_from_env
@@ -23,6 +24,28 @@ REVIEW_RUBRIC_KEYS = (
 CLAIM_SUPPORT_VERDICTS = {"supported", "partially_supported", "unsupported"}
 OVERCLAIM_VERDICTS = {"none", "mild", "significant"}
 SYNTHESIS_QUALITY_VERDICTS = {"strong", "adequate", "weak", "empty"}
+
+
+def _publication_identity_metadata(submission_metadata: dict) -> dict:
+    keys = (
+        "identity_source",
+        "authenticated_agent_id",
+        "claimed_author_agent_id",
+        "human_owner_id",
+        "human_owner_name",
+        "human_owner_orcid",
+        "author_orcid",
+        "orcid",
+        "orcid_attribution",
+        "orcid_verified_at",
+        "submitter_name",
+        "submitter_orcid",
+        "authors",
+    )
+    metadata = {key: submission_metadata[key] for key in keys if submission_metadata.get(key)}
+    if metadata.get("orcid"):
+        metadata["orcid_at_publication"] = metadata["orcid"]
+    return metadata
 
 
 class WorkflowEngine:
@@ -513,6 +536,8 @@ class WorkflowEngine:
                 "counts": artifact.counts.model_dump(mode="json"),
                 "gates": [gate.model_dump(mode="json") for gate in artifact.gates],
                 "author_agent_id": submission.metadata.get("author_agent_id"),
+                **_publication_identity_metadata(submission.metadata),
+                **osf_publication_metadata_from_env(),
                 **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
             },
         )
@@ -523,13 +548,26 @@ class WorkflowEngine:
         ]
         decision = decisions[-1] if decisions else None
         review = repository.get_object(str(decision.metadata["review_id"])) if decision and decision.metadata.get("review_id") else None
-        publication.metadata.update(
-            emit_publication_to_derivation_web(
+        publication = repository.create_object(publication)
+        try:
+            osf_metadata = mint_publication_doi(publication)
+            if osf_metadata:
+                publication = repository.update_object_metadata(publication.id, {**publication.metadata, **osf_metadata}) or publication
+        except Exception as exc:
+            publication = repository.update_object_metadata(
+                publication.id,
+                {**publication.metadata, "osf_status": "failed", "doi_status": "failed", "osf_error": str(exc)[:240]},
+            ) or publication
+
+        try:
+            dw_metadata = emit_publication_to_derivation_web(
                 submission=submission,
                 publication=publication,
                 review=review,
                 decision=decision,
             )
-        )
-        publication = repository.create_object(publication)
+            if dw_metadata:
+                publication = repository.update_object_metadata(publication.id, {**publication.metadata, **dw_metadata}) or publication
+        except Exception as exc:
+            repository.update_object_metadata(publication.id, {**publication.metadata, "dw_status": "failed", "dw_error": str(exc)[:240]})
         return {"publication_id": publication.id, "deduped": False}

@@ -2,8 +2,12 @@ from typing import Any, cast
 
 from fastapi.testclient import TestClient
 
-from contracts import RuntimeJob, Stage
+from contracts import ResearchObject, RuntimeJob, Stage
 from runtime_core.prompts import EDITOR_PROMPT_VERSION
+
+
+def _repository(client: TestClient) -> Any:
+    return cast(Any, client.app).state.repository
 
 
 def _valid_source_bundle() -> list[dict[str, object]]:
@@ -39,7 +43,7 @@ def _submission_payload(search_summary: str) -> dict:
 
 
 def _assert_publish_happy_path(client: TestClient) -> None:
-    repository = client.app.state.repository
+    repository = _repository(client)
     seed = client.post(
         "/submissions",
         json=_submission_payload(
@@ -91,12 +95,12 @@ def test_leakage_submission_is_rejected_at_intake(client: TestClient) -> None:
     assert decision["status"] == "complete"
     assert decision["decision"] == "reject"
     assert decision["gate_failures"]
-    assert client.app.state.repository.list_objects("review") == []
+    assert _repository(client).list_objects("review") == []
 
 
 def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
     _assert_publish_happy_path(client)
-    publications = client.app.state.repository.list_objects("publication")
+    publications = _repository(client).list_objects("publication")
     assert len(publications) == 1
     first_pub_id = publications[0].id
 
@@ -114,7 +118,7 @@ def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
             break
         client.post("/jobs/run-once")
 
-    publications = client.app.state.repository.list_objects("publication")
+    publications = _repository(client).list_objects("publication")
     assert len(publications) == 1
     assert publications[0].id == first_pub_id
 
@@ -140,9 +144,68 @@ def test_end_to_end_publish_uses_full_body_when_present(client: TestClient) -> N
         if not client.get("/jobs/queue").json()["queued"]:
             break
         assert client.post("/jobs/run-once").status_code == 200
-    publication = client.app.state.repository.list_objects("publication")[0]
+    publication = _repository(client).list_objects("publication")[0]
     assert "## References" in publication.body_markdown
     assert "DOI: 10.1234/example" in publication.body_markdown
+
+
+def test_publication_mints_osf_doi_before_derivation_web_metadata(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_PROJECT_ID", "root-osf-node")
+    monkeypatch.setenv("RESEARKA_V2_OSF_TOKEN", "test-token")
+    captured: dict[str, object] = {}
+
+    def fake_mint_publication_doi(publication: ResearchObject) -> dict[str, object]:
+        assert publication.metadata["doi_status"] == "pending_osf_export"
+        return {
+            "doi": "10.17605/OSF.IO/ABC12",
+            "doi_status": "minted",
+            "osf_status": "minted",
+            "osf_project_id": "root-osf-node",
+            "osf_guid": "abc12",
+            "osf_url": "https://osf.io/abc12/",
+            "osf": {
+                "enabled": True,
+                "status": "minted",
+                "project_id": "root-osf-node",
+                "guid": "abc12",
+                "url": "https://osf.io/abc12/",
+                "doi": "10.17605/OSF.IO/ABC12",
+            },
+        }
+
+    def fake_emit_publication_to_derivation_web(**kwargs: object) -> dict[str, object]:
+        publication = cast(ResearchObject, kwargs["publication"])
+        captured["doi_seen_by_dw"] = publication.metadata.get("doi")
+        return {
+            "dw_artifact_id": "art_dw_publication",
+            "dw_chain_url": "https://provenance.researka.org/artifacts/art_dw_publication/chain",
+            "content_hash": "sha256:real-dw-hash",
+            "sha256": "sha256:real-dw-hash",
+        }
+
+    monkeypatch.setattr("runtime_core.workflow.mint_publication_doi", fake_mint_publication_doi)
+    monkeypatch.setattr("runtime_core.workflow.emit_publication_to_derivation_web", fake_emit_publication_to_derivation_web)
+
+    seed = client.post(
+        "/submissions",
+        json=_submission_payload(
+            "Databases searched include PubMed and review corpora, with a documented date window, explicit inclusion logic, and a stated narrowing rule that explains why these retained receipts best match the scoped research question."
+        ),
+    )
+    assert seed.status_code == 200
+
+    for _ in range(12):
+        queue = client.get("/jobs/queue").json()["queued"]
+        if not queue:
+            break
+        assert client.post("/jobs/run-once").status_code == 200
+
+    publication = cast(Any, client.app).state.repository.list_objects("publication")[0]
+    assert publication.metadata["doi"] == "10.17605/OSF.IO/ABC12"
+    assert publication.metadata["doi_status"] == "minted"
+    assert publication.metadata["osf_guid"] == "abc12"
+    assert publication.metadata["dw_artifact_id"] == "art_dw_publication"
+    assert captured["doi_seen_by_dw"] == "10.17605/OSF.IO/ABC12"
 
 
 def test_publish_attaches_derivation_web_publication_metadata(client: TestClient, monkeypatch) -> None:
