@@ -62,6 +62,7 @@ def test_architecture(client: TestClient) -> None:
 def test_osf_oauth_start_uses_authenticated_agent_key(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_ID", "client-id")
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_STATE_SECRET", "state-secret")
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_REDIRECT_URI", "https://api.researka.org/oauth/osf/callback")
     raw_key = _repository(client).create_api_key("agent-v4-alpha-memo").raw_key
 
@@ -91,8 +92,9 @@ def test_osf_oauth_start_requires_per_agent_key(client: TestClient, monkeypatch)
 def test_osf_oauth_callback_stores_token_without_exposing_it(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_ID", "client-id")
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_STATE_SECRET", "state-secret")
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_REDIRECT_URI", "https://api.researka.org/oauth/osf/callback")
-    state = sign_oauth_state(agent_id="agent-v4-alpha-memo", secret="client-secret")
+    state = sign_oauth_state(agent_id="agent-v4-alpha-memo", secret="state-secret")
 
     def fake_exchange(config, *, code: str) -> dict[str, str]:
         assert code == "oauth-code"

@@ -32,6 +32,7 @@ def test_inmemory_fail_job_persists_failure_class() -> None:
     assert claimed is not None
     repo.fail_job(job.id, reason="structure_gate: missing conclusion", failure_class=FailureClass.STRUCTURE_GATE)
     failed = repo.get_job(job.id)
+    assert failed is not None
     assert failed.payload["failure_reason"] == "structure_gate: missing conclusion"
     assert failed.payload["failure_class"] == FailureClass.STRUCTURE_GATE.value
     assert failed.lease_expires_at is None
@@ -72,10 +73,24 @@ def test_osf_token_metadata_empty_encryption_key_file_fails(monkeypatch, tmp_pat
         raise AssertionError("empty configured encryption key file should fail closed")
 
 
+def test_osf_token_metadata_missing_encryption_key_fails(monkeypatch) -> None:
+    monkeypatch.delenv("RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH", raising=False)
+
+    try:
+        _encode_osf_token_metadata({"access_token": "access-secret"})
+    except RuntimeError as exc:
+        assert str(exc) == "researka_v2_osf_token_encryption_key_required"
+    else:
+        raise AssertionError("OSF OAuth tokens must not fall back to plaintext storage")
+
+
 def test_postgres_claim_sets_lease_and_reclaims_expired_job() -> None:
     if not postgres_runtime_available():
         return
-    repo = PostgresRuntimeRepository(postgres_dsn_from_env(), lease_ttl_seconds=-1)
+    dsn = postgres_dsn_from_env()
+    assert dsn is not None
+    repo = PostgresRuntimeRepository(dsn, lease_ttl_seconds=-1)
     repo.reset()
     job = repo.enqueue_job(RuntimeJob(target_object_id="obj-3", stage=Stage.INTAKE))
     claimed = repo.claim_next_job()
@@ -90,13 +105,16 @@ def test_postgres_claim_sets_lease_and_reclaims_expired_job() -> None:
 def test_postgres_fail_job_persists_failure_class() -> None:
     if not postgres_runtime_available():
         return
-    repo = PostgresRuntimeRepository(postgres_dsn_from_env())
+    dsn = postgres_dsn_from_env()
+    assert dsn is not None
+    repo = PostgresRuntimeRepository(dsn)
     repo.reset()
     job = repo.enqueue_job(RuntimeJob(target_object_id="obj-4", stage=Stage.REVIEW))
     claimed = repo.claim_next_job()
     assert claimed is not None
     repo.fail_job(job.id, reason="structure_gate: missing conclusion", failure_class=FailureClass.STRUCTURE_GATE)
     failed = repo.get_job(job.id)
+    assert failed is not None
     assert failed.payload["failure_reason"] == "structure_gate: missing conclusion"
     assert failed.payload["failure_class"] == FailureClass.STRUCTURE_GATE.value
     assert failed.lease_expires_at is None
@@ -106,6 +124,7 @@ def test_postgres_single_job_cannot_be_double_claimed() -> None:
     if not postgres_runtime_available():
         return
     dsn = postgres_dsn_from_env()
+    assert dsn is not None
     setup_repo = PostgresRuntimeRepository(dsn)
     setup_repo.reset()
     job = setup_repo.enqueue_job(RuntimeJob(target_object_id="obj-5", stage=Stage.REVIEW))

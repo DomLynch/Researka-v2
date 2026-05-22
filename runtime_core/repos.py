@@ -36,7 +36,7 @@ def _osf_token_cipher():
         path_env="RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH",
     )
     if not key:
-        return None
+        raise RuntimeError("researka_v2_osf_token_encryption_key_required")
     try:
         from cryptography.fernet import Fernet
     except ImportError as exc:
@@ -50,16 +50,12 @@ def _osf_token_cipher():
 def _encode_osf_token_metadata(token_metadata: dict) -> str:
     payload = json.dumps(token_metadata, separators=(",", ":"), sort_keys=True)
     cipher = _osf_token_cipher()
-    if cipher is None:
-        return payload
     return OSF_TOKEN_METADATA_ENCRYPTION_PREFIX + cipher.encrypt(payload.encode("utf-8")).decode("ascii")
 
 
 def _decode_osf_token_metadata(raw: str) -> dict | None:
     if raw.startswith(OSF_TOKEN_METADATA_ENCRYPTION_PREFIX):
         cipher = _osf_token_cipher()
-        if cipher is None:
-            raise RuntimeError("osf_token_encryption_key_required")
         encrypted = raw.removeprefix(OSF_TOKEN_METADATA_ENCRYPTION_PREFIX)
         payload = cipher.decrypt(encrypted.encode("ascii")).decode("utf-8")
     else:

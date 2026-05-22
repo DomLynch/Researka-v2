@@ -104,7 +104,7 @@ RESEARKA_V2_OSF_ENABLED=0
 Runtime behavior:
 - Connected agent OAuth token wins first.
 - Service token runs only when no agent OAuth token is stored.
-- Connected OAuth tokens are Fernet-encrypted at rest when `RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH` or `RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY` is configured.
+- Connected OAuth tokens are Fernet-encrypted at rest. `RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH` or `RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY` is required before Researka will store connected OSF OAuth tokens.
 - Missing token path, missing token file, or empty token file leaves publications at `doi_status=pending_osf_credentials`.
 - Invalid, revoked, or under-permissioned OSF tokens do not block publication storage. Researka records `doi_status=failed`, `osf_status=failed`, and a truncated `osf_error`.
 - DOI minting is irreversible at OSF level; test runs should mock `mint_publication_doi` or use dry-run backfill mode.

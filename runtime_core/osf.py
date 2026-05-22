@@ -79,7 +79,9 @@ def oauth_config_from_env() -> OSFOAuthConfig | None:
     state_secret = _read_secret(
         direct_env="RESEARKA_V2_OSF_OAUTH_STATE_SECRET",
         path_env="RESEARKA_V2_OSF_OAUTH_STATE_SECRET_PATH",
-    ) or client_secret
+    )
+    if not state_secret:
+        raise RuntimeError("researka_v2_osf_oauth_state_secret_required")
     return OSFOAuthConfig(
         authorization_url=os.environ.get("RESEARKA_V2_OSF_OAUTH_AUTHORIZE_URL", "https://accounts.osf.io/oauth2/authorize"),
         token_url=os.environ.get("RESEARKA_V2_OSF_OAUTH_TOKEN_URL", "https://accounts.osf.io/oauth2/token"),

@@ -139,6 +139,19 @@ def test_oauth_config_prefers_dedicated_state_secret(monkeypatch, tmp_path) -> N
     assert config.state_secret == "dedicated-state-secret"
 
 
+def test_oauth_config_requires_dedicated_state_secret(monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_REDIRECT_URI", "https://api.researka.org/oauth/osf/callback")
+
+    try:
+        oauth_config_from_env()
+    except RuntimeError as exc:
+        assert str(exc) == "researka_v2_osf_oauth_state_secret_required"
+    else:
+        raise AssertionError("OAuth state signing must not reuse the OSF client secret")
+
+
 def test_build_oauth_authorization_url_contains_osf_app_contract() -> None:
     from runtime_core.osf import OSFOAuthConfig
 
