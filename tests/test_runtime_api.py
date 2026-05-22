@@ -72,7 +72,7 @@ def test_osf_oauth_start_uses_authenticated_agent_key(client: TestClient, monkey
     location = response.headers["location"]
     parsed = urlparse(location)
     query = parse_qs(parsed.query)
-    assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://accounts.osf.io/oauth2/authorize"
+    assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://osf.io/oauth2/authorize"
     assert query["client_id"] == ["client-id"]
     assert query["redirect_uri"] == ["https://api.researka.org/oauth/osf/callback"]
     assert query["scope"] == ["osf.full_write"]

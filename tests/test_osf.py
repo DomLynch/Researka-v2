@@ -200,7 +200,7 @@ def test_build_oauth_authorization_url_contains_osf_app_contract() -> None:
 
     url = build_oauth_authorization_url(
         OSFOAuthConfig(
-            authorization_url="https://accounts.osf.io/oauth2/authorize",
+            authorization_url="https://osf.io/oauth2/authorize",
             token_url="https://accounts.osf.io/oauth2/token",
             api_base_url="https://api.osf.io/v2",
             client_id="client-id",
@@ -212,7 +212,7 @@ def test_build_oauth_authorization_url_contains_osf_app_contract() -> None:
         state="signed-state",
     )
 
-    assert url.startswith("https://accounts.osf.io/oauth2/authorize?")
+    assert url.startswith("https://osf.io/oauth2/authorize?")
     assert "response_type=code" in url
     assert "client_id=client-id" in url
     assert "redirect_uri=https%3A%2F%2Fapi.researka.org%2Foauth%2Fosf%2Fcallback" in url
