@@ -232,11 +232,12 @@ def test_can_list_publications_after_processing(client: TestClient) -> None:
     sidecar = client.get(f"/publications/{publication['id']}/sidecars/evidence_table.csv")
     assert sidecar.status_code == 200
     assert sidecar.headers["content-type"].startswith("text/csv")
-    assert "population,intervention_or_exposure,comparator,endpoint,effect,risk_of_bias,directness" in sidecar.text
+    assert sidecar.text.splitlines()[0] == "study,population,intervention_or_exposure,comparator,endpoint,effect,risk_of_bias,directness"
 
     graph = client.get(f"/publications/{publication['id']}/sidecars/claim_graph.json")
     assert graph.status_code == 200
     assert graph.json()["publication_id"] == publication["id"]
+    assert graph.json()["screening"]["flow"] == ["identified", "screened", "excluded_with_reasons", "included"]
 
 
 def test_submission_timeline(client: TestClient) -> None:

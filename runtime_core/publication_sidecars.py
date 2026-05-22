@@ -116,12 +116,14 @@ def screening_summary(publication: ResearchObject) -> dict[str, Any]:
         "identified": candidate_count,
         "screened": candidate_count,
         "excluded": 0,
+        "included": retained_count,
         "included_or_retained": retained_count,
+        "flow": ["identified", "screened", "excluded_with_reasons", "included"],
         "wording": (
             f"{retained_count} candidate receipts retained after source retrieval, deduplication, and topic filtering. "
             "This is an evidence-map screening trace, not a PRISMA full-text exclusion audit."
         ),
-        "exclusion_reasons": [],
+        "exclusion_reasons": ["No PRISMA full-text exclusion-stage filter was applied."],
     }
 
 
@@ -150,9 +152,6 @@ def build_sidecar(publication: ResearchObject, submission: ResearchObject | None
         output = io.StringIO()
         fieldnames = [
             "study",
-            "year",
-            "doi",
-            "url",
             "population",
             "intervention_or_exposure",
             "comparator",
@@ -161,7 +160,7 @@ def build_sidecar(publication: ResearchObject, submission: ResearchObject | None
             "risk_of_bias",
             "directness",
         ]
-        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
         return output.getvalue(), "text/csv", sidecar_name
