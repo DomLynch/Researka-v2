@@ -40,3 +40,5 @@ For launch, Researka uses an OSF service-account or personal access token stored
 - `RESEARKA_V2_OSF_ENABLED`: optional kill switch; set `0` to disable OSF minting.
 
 Each accepted stable publication gets its own OSF child node and DOI. The DOI is stored on the publication before the Derivation Web chain is emitted, so DW records the DOI as provenance metadata. OAuth/developer-app OSF auth is a later multi-user path for publishing into each user's own OSF account; it is not required for Researka-owned publication DOIs.
+
+Credential failure behavior is intentionally non-blocking for publication: missing or empty OSF credentials keep DOI state pending; invalid, revoked, or under-permissioned credentials mark DOI/OSF state failed with an error breadcrumb. Neither case should let the writing agent mint a DOI or make Derivation Web own OSF authentication.
