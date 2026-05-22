@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from contracts import ObjectType, ResearchObject
+from runtime_core.repos import InMemoryRuntimeRepository
 from runtime_core.osf import (
     OSFConfig,
+    backfill_missing_publication_dois,
     build_oauth_authorization_url,
     mint_publication_doi,
     oauth_config_from_env,
@@ -103,6 +105,41 @@ def test_mint_publication_doi_reuses_existing_publication_node() -> None:
     assert client.created == 0
     assert client.minted == 0
     assert metadata["doi"] == "10.17605/OSF.IO/EXIST"
+
+
+def test_backfill_missing_publication_dois_uses_agent_oauth_token(monkeypatch) -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = repo.create_object(ResearchObject(object_type=ObjectType.SUBMISSION, title="Submission"))
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title="Accepted memo",
+            metadata={"author_agent_id": "agent-v4-alpha-memo"},
+        )
+    )
+    repo.store_osf_oauth_token("agent-v4-alpha-memo", {"access_token": "oauth-token", "root_project_id": "root-node"})
+
+    def fake_mint(publication_arg: ResearchObject, *, token_metadata: dict[str, object], **_: object):
+        assert publication_arg.id == publication.id
+        assert token_metadata["access_token"] == "oauth-token"
+        return (
+            {
+                "doi": "10.17605/OSF.IO/OAUTH1",
+                "doi_status": "minted",
+                "osf_status": "minted",
+            },
+            token_metadata,
+        )
+
+    monkeypatch.setattr("runtime_core.osf.mint_publication_doi_with_oauth", fake_mint)
+
+    summary = backfill_missing_publication_dois(repo, apply=True, publication_id=publication.id)
+    updated = repo.get_object(publication.id)
+
+    assert summary["minted"] == 1
+    assert updated is not None
+    assert updated.metadata["doi"] == "10.17605/OSF.IO/OAUTH1"
 
 
 def test_oauth_state_roundtrip() -> None:

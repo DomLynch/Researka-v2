@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 
 from apps.worker.main import WorkerApp
 from contracts import AuditReview, AuditVerdict, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
@@ -22,6 +22,7 @@ from runtime_core.osf import (
     verify_oauth_state,
 )
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
+from runtime_core.publication_sidecars import build_sidecar, sidecar_manifest
 
 _calibration_cache: dict | None = None
 _calibration_path: str | None = None
@@ -346,7 +347,26 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         publication = app.state.repository.get_object(publication_id)
         if publication is None or publication.object_type != ObjectType.PUBLICATION:
             raise HTTPException(status_code=404, detail="publication_not_found")
-        return publication.model_dump(mode="json")
+        payload = publication.model_dump(mode="json")
+        payload["sidecars"] = sidecar_manifest(publication.id)
+        return payload
+
+    @app.get("/publications/{publication_id}/sidecars/{sidecar_name}")
+    def get_publication_sidecar(publication_id: str, sidecar_name: str):
+        publication = app.state.repository.get_object(publication_id)
+        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+            raise HTTPException(status_code=404, detail="publication_not_found")
+        submission = app.state.repository.get_object(publication.parent_object_id) if publication.parent_object_id else None
+        if submission is not None and submission.object_type != ObjectType.SUBMISSION:
+            submission = None
+        try:
+            payload, media_type, filename = build_sidecar(publication, submission, sidecar_name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="sidecar_not_found") from exc
+        headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+        if isinstance(payload, str):
+            return PlainTextResponse(payload, media_type=media_type, headers=headers)
+        return JSONResponse(payload, media_type=media_type, headers=headers)
 
     @app.get("/submissions/{submission_id}/provenance")
     def get_submission_provenance(submission_id: str) -> dict:

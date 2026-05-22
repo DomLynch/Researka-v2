@@ -505,15 +505,32 @@ def backfill_missing_publication_dois(
     }
     if not apply:
         for publication in candidates:
-            summary["records"].append({"publication_id": publication.id, "title": publication.title, "status": "dry_run"})
+            agent_id = str(publication.metadata.get("author_agent_id") or publication.metadata.get("authenticated_agent_id") or "").strip()
+            has_oauth = bool(agent_id and repository.get_osf_oauth_token(agent_id))
+            summary["records"].append(
+                {
+                    "publication_id": publication.id,
+                    "title": publication.title,
+                    "agent_id": agent_id or None,
+                    "status": "dry_run",
+                    "mint_source": "oauth_agent_token" if has_oauth else "service_token" if resolved_config else "not_configured",
+                }
+            )
         return summary
-    if resolved_config is None:
-        raise RuntimeError("osf_not_configured")
 
     for publication in candidates:
         record: dict[str, Any] = {"publication_id": publication.id, "title": publication.title}
         try:
-            metadata = mint_fn(publication, config=resolved_config)
+            agent_id = str(publication.metadata.get("author_agent_id") or publication.metadata.get("authenticated_agent_id") or "").strip()
+            token_metadata = repository.get_osf_oauth_token(agent_id) if agent_id else None
+            if token_metadata:
+                metadata, updated_token_metadata = mint_publication_doi_with_oauth(publication, token_metadata=token_metadata)
+                if updated_token_metadata != token_metadata:
+                    repository.store_osf_oauth_token(agent_id, updated_token_metadata)
+            elif resolved_config is not None:
+                metadata = mint_fn(publication, config=resolved_config)
+            else:
+                raise RuntimeError("osf_not_configured_for_agent")
             updated = repository.update_object_metadata(publication.id, {**publication.metadata, **metadata})
             if updated is None:
                 raise RuntimeError("publication_disappeared")

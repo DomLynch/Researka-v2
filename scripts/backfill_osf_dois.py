@@ -35,12 +35,6 @@ def main() -> int:
         print("RESEARKA_V2_POSTGRES_DSN is required", file=sys.stderr)
         return 2
     config = config_from_env() if args.apply else None
-    if args.apply and config is None:
-        print(
-            "OSF is not configured; set RESEARKA_V2_OSF_PROJECT_ID and RESEARKA_V2_OSF_TOKEN or RESEARKA_V2_OSF_TOKEN_PATH",
-            file=sys.stderr,
-        )
-        return 2
 
     try:
         repo = PostgresRuntimeRepository(dsn)

@@ -227,6 +227,16 @@ def test_can_list_publications_after_processing(client: TestClient) -> None:
     detail = client.get(f"/publications/{publication['id']}")
     assert detail.status_code == 200
     assert detail.json()["parent_object_id"] == submission["id"]
+    assert detail.json()["sidecars"][0]["name"].endswith(".json") or detail.json()["sidecars"][0]["name"].endswith(".csv")
+
+    sidecar = client.get(f"/publications/{publication['id']}/sidecars/evidence_table.csv")
+    assert sidecar.status_code == 200
+    assert sidecar.headers["content-type"].startswith("text/csv")
+    assert "population,intervention_or_exposure,comparator,endpoint,effect,risk_of_bias,directness" in sidecar.text
+
+    graph = client.get(f"/publications/{publication['id']}/sidecars/claim_graph.json")
+    assert graph.status_code == 200
+    assert graph.json()["publication_id"] == publication["id"]
 
 
 def test_submission_timeline(client: TestClient) -> None:
