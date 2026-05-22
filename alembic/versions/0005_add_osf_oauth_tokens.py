@@ -4,7 +4,7 @@ from alembic import op  # type: ignore[attr-defined]
 
 
 revision = "0005_add_osf_oauth_tokens"
-down_revision = "0004_add_api_key_orcid_attribution"
+down_revision = "0002_add_api_keys"
 branch_labels = None
 depends_on = None
 
