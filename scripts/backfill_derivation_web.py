@@ -22,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=None, help="maximum eligible publications to process")
     parser.add_argument("--publication-id", default=None, help="process one publication id")
     parser.add_argument("--dsn", default=None, help="Postgres DSN; defaults to RESEARKA_V2_POSTGRES_DSN")
+    parser.add_argument("--refresh-existing", action="store_true", help="replace existing DW metadata with a fresh chain")
     return parser.parse_args()
 
 
@@ -44,6 +45,7 @@ def main() -> int:
         apply=args.apply,
         limit=args.limit,
         publication_id=args.publication_id,
+        refresh_existing=args.refresh_existing,
     )
     print(json.dumps(summary, indent=2, sort_keys=True, default=str))
     return 1 if summary["failed"] else 0

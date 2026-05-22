@@ -255,9 +255,12 @@ def test_emit_publication_to_derivation_web_returns_metadata(monkeypatch):
     assert result["dw_status"] == "registered"
     assert result["dw_artifact_id"] == "art_publication"
     assert result["sha256"] == "sha256:abc123"
+    assert len(result["dw_input_artifact_ids"]) == 6
     assert result["dw_chain_url"] == "https://provenance.researka.org/artifacts/art_publication/chain"
-    assert [path for path, _, _ in calls] == ["/api/actors", "/api/artifacts", "/api/artifacts", "/api/steps"]
+    assert [path for path, _, _ in calls].count("/api/artifacts") == 8
+    assert [path for path, _, _ in calls][-1] == "/api/steps"
     assert calls[-1][1]["output_artifact_id"] == "art_publication"
+    assert len(calls[-1][1]["input_artifact_ids"]) == 7
 
 
 def test_dw_backfill_dry_run_does_not_call_emitter() -> None:
@@ -336,6 +339,37 @@ def test_dw_backfill_skips_already_registered_publication() -> None:
 
     assert summary["already_registered"] == 1
     assert summary["items"][0]["status"] == "already_registered"
+
+
+def test_dw_backfill_refreshes_existing_publication_when_requested() -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = repo.create_object(ResearchObject(object_type=ObjectType.SUBMISSION, title="Submission"))
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title="Publication",
+            body_markdown="Publication body",
+            metadata={"dw_artifact_id": "art_old"},
+        )
+    )
+
+    def fake_emit(**_: object) -> dict[str, object]:
+        return {
+            "dw_artifact_id": "art_new",
+            "dw_chain_url": "https://provenance.researka.org/artifacts/art_new/chain",
+            "dw_status": "registered",
+            "sha256": "sha256:new",
+        }
+
+    dry_run = backfill_missing_publication_chains(repo, refresh_existing=True, emit_fn=fake_emit)
+    summary = backfill_missing_publication_chains(repo, apply=True, refresh_existing=True, emit_fn=fake_emit)
+    updated = repo.get_object(publication.id)
+
+    assert dry_run["items"][0]["status"] == "would_refresh"
+    assert summary["registered"] == 1
+    assert updated is not None
+    assert updated.metadata["dw_artifact_id"] == "art_new"
 
 
 def test_dw_backfill_apply_failure_does_not_mark_registered() -> None:

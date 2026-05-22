@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from contracts import Decision, ObjectType, ResearchObject
+from runtime_core.publication_sidecars import build_sidecar, screening_summary, sidecar_manifest
 
 ACTOR_ID = "researka:v2"
 
@@ -119,6 +120,7 @@ def _emit_claim_chain(
     decision_value: Any,
     created_at: datetime,
     api_key: str,
+    extra_input_payloads: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     _post("/api/actors", {"id": ACTOR_ID, "kind": "agent", "name": "Researka v2"}, api_key=api_key)
     source_status, source_artifact = _post(
@@ -145,13 +147,18 @@ def _emit_claim_chain(
     )
     source_id = source_artifact.get("id")
     claim_id = claim_artifact.get("id")
+    extra_artifacts: list[dict[str, Any]] = []
+    for payload in extra_input_payloads or []:
+        _, artifact = _post("/api/artifacts", payload, api_key=api_key)
+        if artifact.get("id"):
+            extra_artifacts.append(artifact)
     step: dict[str, Any] = {}
     if source_id and claim_id:
         _, step = _post(
             "/api/steps",
             {
                 "step_type": "classify",
-                "input_artifact_ids": [source_id],
+                "input_artifact_ids": [source_id, *[artifact["id"] for artifact in extra_artifacts]],
                 "output_artifact_id": claim_id,
                 "actor_id": ACTOR_ID,
                 "method": {"system": "researka-v2", "stage": stage, "decision": decision_value},
@@ -164,8 +171,66 @@ def _emit_claim_chain(
         "claim_status": claim_status,
         "source_artifact": source_artifact,
         "claim_artifact": claim_artifact,
+        "extra_artifacts": extra_artifacts,
         "step": step,
     }
+
+
+def _publication_dw_inputs(
+    *,
+    submission: ResearchObject,
+    publication: ResearchObject,
+    review: ResearchObject | None,
+    decision: ResearchObject | None,
+) -> list[dict[str, Any]]:
+    inputs: list[dict[str, Any]] = []
+    for sidecar in sidecar_manifest(publication.id):
+        try:
+            payload, media_type, filename = build_sidecar(publication, submission, sidecar["name"])
+        except KeyError:
+            continue
+        body_text = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        inputs.append(
+            {
+                "kind": "source",
+                "content_type": media_type,
+                "body_text": body_text,
+                "metadata": {
+                    "researka_object_type": "publication_sidecar",
+                    "researka_publication_id": publication.id,
+                    "researka_submission_id": submission.id,
+                    "sidecar_name": filename,
+                    "sidecar_url": sidecar["url"],
+                },
+                "actor_id": ACTOR_ID,
+            }
+        )
+    if decision is not None:
+        inputs.append(
+            {
+                "kind": "source",
+                "content_type": "application/json",
+                "body_text": json.dumps(
+                    {
+                        "decision": decision.metadata.get("decision"),
+                        "notes": decision.metadata.get("notes", []),
+                        "gate_failures": decision.metadata.get("gate_failures", []),
+                        "review_recommendation": review.metadata.get("recommendation") if review else None,
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+                "metadata": {
+                    "researka_object_type": "publication_decision_trace",
+                    "researka_publication_id": publication.id,
+                    "researka_submission_id": submission.id,
+                    "researka_decision_id": decision.id,
+                    "researka_review_id": review.id if review else decision.metadata.get("review_id"),
+                },
+                "actor_id": ACTOR_ID,
+            }
+        )
+    return inputs
 
 
 def emit_decision_to_derivation_web(
@@ -237,6 +302,7 @@ def emit_publication_to_derivation_web(
             claim_content_type="text/markdown",
             claim_body=publication.body_markdown,
             claim_metadata={
+                "provenance_schema_version": "publication_sidecars_v1",
                 "researka_object_type": ObjectType.PUBLICATION.value,
                 "researka_publication_id": publication.id,
                 "researka_submission_id": submission.id,
@@ -248,12 +314,20 @@ def emit_publication_to_derivation_web(
                 "author_agent_id": publication.metadata.get("author_agent_id"),
                 "decision": decision_value,
                 "prompt_version": publication.metadata.get("prompt_version"),
+                "screening": screening_summary(publication),
+                "sidecars": sidecar_manifest(publication.id),
                 **_fallback_metadata(review),
             },
             stage="autonomous_publish",
             decision_value=decision_value,
             created_at=publication.created_at,
             api_key=api_key,
+            extra_input_payloads=_publication_dw_inputs(
+                submission=submission,
+                publication=publication,
+                review=review,
+                decision=decision,
+            ),
         )
         artifact_id = chain["claim_artifact"].get("id")
         if not artifact_id:
@@ -263,6 +337,7 @@ def emit_publication_to_derivation_web(
             "dw_chain_url": f"{_base_url()}/artifacts/{artifact_id}/chain",
             "dw_api_chain_url": f"{_base_url()}/api/artifacts/{artifact_id}/chain",
             "dw_source_artifact_id": chain["source_artifact"].get("id"),
+            "dw_input_artifact_ids": [artifact.get("id") for artifact in chain["extra_artifacts"] if artifact.get("id")],
             "dw_step_id": chain["step"].get("id"),
             "dw_step_hash": chain["step"].get("step_hash"),
             "dw_status": "registered",
@@ -296,6 +371,7 @@ def backfill_missing_publication_chains(
     apply: bool = False,
     limit: int | None = None,
     publication_id: str | None = None,
+    refresh_existing: bool = False,
     emit_fn: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Backfill DW metadata for existing publications.
@@ -328,7 +404,7 @@ def backfill_missing_publication_chains(
             "title": publication.title,
             "status": "",
         }
-        if publication.metadata.get("dw_artifact_id"):
+        if publication.metadata.get("dw_artifact_id") and not refresh_existing:
             summary["already_registered"] += 1
             item["status"] = "already_registered"
             summary["items"].append(item)
@@ -354,7 +430,7 @@ def backfill_missing_publication_chains(
         decision = _latest_accept_decision(repository, submission.id)
         review = _review_for_decision(repository, decision)
         if not apply:
-            item["status"] = "would_register"
+            item["status"] = "would_refresh" if publication.metadata.get("dw_artifact_id") else "would_register"
             summary["items"].append(item)
             continue
 
