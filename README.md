@@ -59,3 +59,18 @@ Default live judge stack:
 - fallback / tiebreak: `deepseek-reasoner`
 
 The default remains deterministic for local tests and offline development.
+
+## OSF DOI minting
+Researka core mints OSF DOIs after accepted-publication storage, before Derivation Web provenance emission. The writing agents do not mint DOIs.
+
+Required runtime env:
+```bash
+RESEARKA_V2_OSF_PROJECT_ID=<osf-parent-node-id>
+RESEARKA_V2_OSF_TOKEN_PATH=/run/secrets/researka_osf_token
+# or RESEARKA_V2_OSF_TOKEN=<token> for local-only tests
+```
+
+Optional kill switch:
+```bash
+RESEARKA_V2_OSF_ENABLED=0
+```

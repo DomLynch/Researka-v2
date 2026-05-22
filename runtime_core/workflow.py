@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 
 from contracts import ArticleType, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, WorkflowContext, WorkflowOutcome, publication_template_for, run_submission_template_checks
 
 from .compiler import compile_publication
 from .derivation_web import emit_publication_chain
+from .osf import mint_publication_doi, osf_publication_metadata_from_env
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
 from .reviewer_panel import reviewer_from_env
@@ -46,33 +46,6 @@ def _publication_identity_metadata(submission_metadata: dict) -> dict:
     if metadata.get("orcid"):
         metadata["orcid_at_publication"] = metadata["orcid"]
     return metadata
-
-
-def _osf_publication_metadata() -> dict:
-    enabled = os.environ.get("RESEARKA_V2_OSF_ENABLED", "1").strip().lower() not in {"0", "false", "no"}
-    project_id = os.environ.get("RESEARKA_V2_OSF_PROJECT_ID")
-    token_configured = bool(os.environ.get("RESEARKA_V2_OSF_TOKEN"))
-    if not enabled:
-        status = "disabled"
-    elif project_id and token_configured:
-        status = "pending_osf_export"
-    else:
-        status = "pending_osf_credentials"
-    return {
-        "doi": None,
-        "doi_status": status,
-        "osf_status": status,
-        "osf_project_id": project_id,
-        "osf_guid": None,
-        "osf_url": None,
-        "osf": {
-            "enabled": enabled,
-            "status": status,
-            "project_id": project_id,
-            "guid": None,
-            "url": None,
-        },
-    }
 
 
 class WorkflowEngine:
@@ -527,7 +500,7 @@ class WorkflowEngine:
                 "gates": [gate.model_dump(mode="json") for gate in artifact.gates],
                 "author_agent_id": submission.metadata.get("author_agent_id"),
                 **_publication_identity_metadata(submission.metadata),
-                **_osf_publication_metadata(),
+                **osf_publication_metadata_from_env(),
                 **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
             },
         )
@@ -540,18 +513,26 @@ class WorkflowEngine:
         review = None
         if decision is not None and decision.metadata.get("review_id"):
             review = repository.get_object(str(decision.metadata["review_id"]))
-        try:
-            publication.metadata.update(
-                emit_publication_chain(
-                    submission=submission,
-                    publication=publication,
-                    review=review,
-                    decision=decision,
-                )
-            )
-        except Exception as exc:
-            publication.metadata["dw_status"] = "failed"
-            publication.metadata["dw_error"] = str(exc)[:240]
-
         publication = repository.create_object(publication)
+        try:
+            osf_metadata = mint_publication_doi(publication)
+            if osf_metadata:
+                publication = repository.update_object_metadata(publication.id, {**publication.metadata, **osf_metadata}) or publication
+        except Exception as exc:
+            publication = repository.update_object_metadata(
+                publication.id,
+                {**publication.metadata, "osf_status": "failed", "doi_status": "failed", "osf_error": str(exc)[:240]},
+            ) or publication
+
+        try:
+            dw_metadata = emit_publication_chain(
+                submission=submission,
+                publication=publication,
+                review=review,
+                decision=decision,
+            )
+            if dw_metadata:
+                publication = repository.update_object_metadata(publication.id, {**publication.metadata, **dw_metadata}) or publication
+        except Exception as exc:
+            repository.update_object_metadata(publication.id, {**publication.metadata, "dw_status": "failed", "dw_error": str(exc)[:240]})
         return {"publication_id": publication.id, "deduped": False}

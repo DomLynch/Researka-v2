@@ -32,3 +32,11 @@ The same metadata rule applies to future challenges, revisions, or audit artifac
 ## DOI / OSF Boundary
 
 OSF DOI minting is backend-owned after final public acceptance. Bots do not upload to OSF. Drafts, revise records, rejects, and unstable memos keep Researka/DW IDs only until they become publish-stable.
+
+For launch, Researka uses an OSF service-account or personal access token stored only in runtime env. The required env values are:
+
+- `RESEARKA_V2_OSF_PROJECT_ID`: parent OSF project/node that owns Researka publication components.
+- `RESEARKA_V2_OSF_TOKEN` or `RESEARKA_V2_OSF_TOKEN_PATH`: OSF token with write/admin access to that parent node.
+- `RESEARKA_V2_OSF_ENABLED`: optional kill switch; set `0` to disable OSF minting.
+
+Each accepted stable publication gets its own OSF child node and DOI. The DOI is stored on the publication before the Derivation Web chain is emitted, so DW records the DOI as provenance metadata. OAuth/developer-app OSF auth is a later multi-user path for publishing into each user's own OSF account; it is not required for Researka-owned publication DOIs.
