@@ -208,8 +208,55 @@ def test_publication_mints_osf_doi_before_derivation_web_metadata(client: TestCl
     assert captured["doi_seen_by_dw"] == "10.17605/OSF.IO/ABC12"
 
 
+def test_osf_failure_marks_publication_without_blocking_derivation_web(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_PROJECT_ID", "root-osf-node")
+    monkeypatch.setenv("RESEARKA_V2_OSF_TOKEN", "revoked-token")
+    captured: dict[str, object] = {}
+
+    def fake_mint_publication_doi(publication: ResearchObject) -> dict[str, object]:
+        raise RuntimeError("osf_request_failed:POST:/nodes/root-osf-node/identifiers/:403:Forbidden")
+
+    def fake_emit_publication_to_derivation_web(**kwargs: object) -> dict[str, object]:
+        publication = cast(ResearchObject, kwargs["publication"])
+        captured["doi_status_seen_by_dw"] = publication.metadata.get("doi_status")
+        return {
+            "dw_artifact_id": "art_dw_publication",
+            "dw_chain_url": "https://provenance.researka.org/artifacts/art_dw_publication/chain",
+            "content_hash": "sha256:real-dw-hash",
+            "sha256": "sha256:real-dw-hash",
+        }
+
+    monkeypatch.setattr("runtime_core.workflow.mint_publication_doi", fake_mint_publication_doi)
+    monkeypatch.setattr("runtime_core.workflow.emit_publication_to_derivation_web", fake_emit_publication_to_derivation_web)
+
+    seed = client.post(
+        "/submissions",
+        json=_submission_payload(
+            "Databases searched include PubMed and review corpora, with a documented date window, explicit inclusion logic, and a stated narrowing rule that explains why these retained receipts best match the scoped research question."
+        ),
+    )
+    assert seed.status_code == 200
+
+    for _ in range(12):
+        queue = client.get("/jobs/queue").json()["queued"]
+        if not queue:
+            break
+        assert client.post("/jobs/run-once").status_code == 200
+
+    publication = _repository(client).list_objects("publication")[0]
+    assert publication.metadata["doi"] is None
+    assert publication.metadata["doi_status"] == "failed"
+    assert publication.metadata["osf_status"] == "failed"
+    assert publication.metadata["osf_error"].startswith("osf_request_failed")
+    assert publication.metadata["dw_artifact_id"] == "art_dw_publication"
+    assert captured["doi_status_seen_by_dw"] == "failed"
+
+
 def test_publish_attaches_derivation_web_publication_metadata(client: TestClient, monkeypatch) -> None:
-    def fake_emit_publication_to_derivation_web(**_: object) -> dict[str, object]:
+    captured: dict[str, object] = {}
+
+    def fake_emit_publication_to_derivation_web(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
         return {
             "dw_artifact_id": "art_publication",
             "dw_chain_url": "https://provenance.researka.org/artifacts/art_publication/chain",

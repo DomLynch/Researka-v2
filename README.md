@@ -77,3 +77,8 @@ Optional kill switch:
 ```bash
 RESEARKA_V2_OSF_ENABLED=0
 ```
+
+Runtime behavior:
+- Missing token path, missing token file, or empty token file leaves publications at `doi_status=pending_osf_credentials`.
+- Invalid, revoked, or under-permissioned OSF tokens do not block publication storage. Researka records `doi_status=failed`, `osf_status=failed`, and a truncated `osf_error`.
+- DOI minting is irreversible at OSF level; test runs should mock `mint_publication_doi` or use dry-run backfill mode.
