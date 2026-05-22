@@ -66,7 +66,23 @@ When `/etc/derivation-web/researka.key` exists, decisions are mirrored to `https
 ## OSF DOI minting
 Researka core mints OSF DOIs after accepted-publication storage, before Derivation Web provenance emission. The writing agents do not mint DOIs.
 
-Required runtime env:
+Default public-launch path: OSF OAuth per Researka agent/API key.
+
+Required runtime env for the OAuth app:
+```bash
+RESEARKA_V2_OSF_OAUTH_CLIENT_ID=<osf-developer-app-client-id>
+RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET_PATH=/run/secrets/researka_osf_oauth_client_secret
+RESEARKA_V2_OSF_OAUTH_REDIRECT_URI=https://api.researka.org/oauth/osf/callback
+```
+
+Agent connection flow:
+```bash
+curl -I -H "x-api-key: <agent-api-key>" https://api.researka.org/oauth/osf/start
+```
+
+Open the returned `Location` URL in a browser, approve the OSF app, and OSF redirects back to `/oauth/osf/callback`. Researka stores the connected OSF token against that authenticated `agent_id`. Future accepted publications from that agent use the connected OSF account to create an OSF project/component and mint the DOI.
+
+Optional service-token fallback:
 ```bash
 RESEARKA_V2_OSF_PROJECT_ID=<osf-parent-node-id>
 RESEARKA_V2_OSF_TOKEN_PATH=/run/secrets/researka_osf_token
@@ -79,6 +95,8 @@ RESEARKA_V2_OSF_ENABLED=0
 ```
 
 Runtime behavior:
+- Connected agent OAuth token wins first.
+- Service token runs only when no agent OAuth token is stored.
 - Missing token path, missing token file, or empty token file leaves publications at `doi_status=pending_osf_credentials`.
 - Invalid, revoked, or under-permissioned OSF tokens do not block publication storage. Researka records `doi_status=failed`, `osf_status=failed`, and a truncated `osf_error`.
 - DOI minting is irreversible at OSF level; test runs should mock `mint_publication_doi` or use dry-run backfill mode.

@@ -1,4 +1,12 @@
+from typing import Any, cast
 from fastapi.testclient import TestClient
+from urllib.parse import parse_qs, quote, urlparse
+
+from runtime_core.osf import sign_oauth_state
+
+
+def _repository(client: TestClient) -> Any:
+    return cast(Any, client.app).state.repository
 
 
 def _valid_source_bundle() -> list[dict[str, object]]:
@@ -49,6 +57,68 @@ def test_architecture(client: TestClient) -> None:
     data = response.json()
     assert "runtime_core" in data["top_level_modules"]
     assert data["critical_flow"] == ["intake", "review", "editorial", "publish"]
+
+
+def test_osf_oauth_start_uses_authenticated_agent_key(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_REDIRECT_URI", "https://api.researka.org/oauth/osf/callback")
+    raw_key = _repository(client).create_api_key("agent-v4-alpha-memo").raw_key
+
+    response = client.get("/oauth/osf/start", headers={"x-api-key": raw_key}, follow_redirects=False)
+
+    assert response.status_code == 302
+    location = response.headers["location"]
+    parsed = urlparse(location)
+    query = parse_qs(parsed.query)
+    assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://accounts.osf.io/oauth2/authorize"
+    assert query["client_id"] == ["client-id"]
+    assert query["redirect_uri"] == ["https://api.researka.org/oauth/osf/callback"]
+    assert query["scope"] == ["osf.full_write"]
+
+
+def test_osf_oauth_start_requires_per_agent_key(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_REDIRECT_URI", "https://api.researka.org/oauth/osf/callback")
+
+    response = client.get("/oauth/osf/start")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "per_agent_api_key_required"
+
+
+def test_osf_oauth_callback_stores_token_without_exposing_it(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_REDIRECT_URI", "https://api.researka.org/oauth/osf/callback")
+    state = sign_oauth_state(agent_id="agent-v4-alpha-memo", secret="client-secret")
+
+    def fake_exchange(config, *, code: str) -> dict[str, str]:
+        assert code == "oauth-code"
+        assert config.client_id == "client-id"
+        return {"access_token": "oauth-access-token", "refresh_token": "oauth-refresh-token", "scope": "osf.full_write"}
+
+    def fake_user_lookup(access_token: str, **kwargs) -> dict[str, str]:
+        assert access_token == "oauth-access-token"
+        return {"osf_user_id": "osf-user-1", "osf_user_name": "Dominic Lynch"}
+
+    monkeypatch.setattr("apps.runtime_api.app.exchange_oauth_code", fake_exchange)
+    monkeypatch.setattr("apps.runtime_api.app.osf_user_metadata_from_token", fake_user_lookup)
+
+    response = client.get(f"/oauth/osf/callback?code=oauth-code&state={quote(state)}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {
+        "status": "connected",
+        "agent_id": "agent-v4-alpha-memo",
+        "osf_user_id": "osf-user-1",
+        "scope": "osf.full_write",
+    }
+    stored = _repository(client).get_osf_oauth_token("agent-v4-alpha-memo")
+    assert stored["access_token"] == "oauth-access-token"
+    assert stored["refresh_token"] == "oauth-refresh-token"
 
 
 def test_submission_creates_intake_job(client: TestClient) -> None:
@@ -557,7 +627,7 @@ def test_ops_summary_cost_from_reviews(client: TestClient, monkeypatch) -> None:
     monkeypatch.delenv("RESEARKA_V2_API_KEY", raising=False)
     from contracts import ObjectType, ResearchObject
     # Inject a review with non-zero cost to simulate real provider usage
-    repo = client.app.state.repository
+    repo = _repository(client)
     review = ResearchObject(
         object_type=ObjectType.REVIEW,
         title="cost-test-review",

@@ -35,6 +35,8 @@ class RuntimeRepository(Protocol):
     def list_api_keys(self) -> list[ApiKeyInfo]: ...
     def record_api_key_usage(self, key_hash: str) -> None: ...
     def get_api_key_usage_today(self, key_hash: str) -> int: ...
+    def store_osf_oauth_token(self, agent_id: str, token_metadata: dict) -> None: ...
+    def get_osf_oauth_token(self, agent_id: str) -> dict | None: ...
 
     # Audit review management
     def create_audit_review(self, review: AuditReview) -> AuditReview: ...
@@ -52,6 +54,7 @@ class InMemoryRuntimeRepository:
         self.publication_by_target: dict[str, str] = {}
         self.api_keys: dict[str, ApiKeyInfo] = {}
         self.api_key_usage: dict[tuple[str, str], int] = {}
+        self.osf_oauth_tokens: dict[str, dict] = {}
         self.audit_reviews: list[AuditReview] = []
         self.lease_ttl_seconds = lease_ttl_seconds
 
@@ -64,6 +67,7 @@ class InMemoryRuntimeRepository:
         self.publication_by_target.clear()
         self.api_keys.clear()
         self.api_key_usage.clear()
+        self.osf_oauth_tokens.clear()
         self.audit_reviews.clear()
 
     def create_object(self, obj: ResearchObject) -> ResearchObject:
@@ -224,6 +228,13 @@ class InMemoryRuntimeRepository:
     def get_api_key_usage_today(self, key_hash: str) -> int:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         return self.api_key_usage.get((key_hash, today), 0)
+
+    def store_osf_oauth_token(self, agent_id: str, token_metadata: dict) -> None:
+        self.osf_oauth_tokens[agent_id] = dict(token_metadata)
+
+    def get_osf_oauth_token(self, agent_id: str) -> dict | None:
+        token = self.osf_oauth_tokens.get(agent_id)
+        return dict(token) if token is not None else None
 
     def create_audit_review(self, review: AuditReview) -> AuditReview:
         self.audit_reviews.append(review)
@@ -390,6 +401,15 @@ class PostgresRuntimeRepository:
             )
             cur.execute(
                 """
+                CREATE TABLE IF NOT EXISTS osf_oauth_tokens (
+                    agent_id TEXT PRIMARY KEY,
+                    token_metadata TEXT NOT NULL,
+                    updated_at TIMESTAMPTZ NOT NULL
+                )
+                """
+            )
+            cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS audit_reviews (
                     submission_id TEXT NOT NULL,
                     auditor_id TEXT NOT NULL,
@@ -407,7 +427,7 @@ class PostgresRuntimeRepository:
 
     def reset(self) -> None:
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("TRUNCATE audit_reviews, api_key_usage, api_keys, runtime_events, runtime_jobs, research_objects;")
+            cur.execute("TRUNCATE audit_reviews, osf_oauth_tokens, api_key_usage, api_keys, runtime_events, runtime_jobs, research_objects;")
             conn.commit()
 
     def _object_from_row(self, row: dict | None) -> ResearchObject | None:
@@ -785,6 +805,28 @@ class PostgresRuntimeRepository:
             )
             row = cur.fetchone()
             return row["count"] if row else 0
+
+    def store_osf_oauth_token(self, agent_id: str, token_metadata: dict) -> None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO osf_oauth_tokens (agent_id, token_metadata, updated_at)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (agent_id)
+                DO UPDATE SET token_metadata = EXCLUDED.token_metadata, updated_at = EXCLUDED.updated_at
+                """,
+                (agent_id, json.dumps(token_metadata), datetime.now(timezone.utc)),
+            )
+            conn.commit()
+
+    def get_osf_oauth_token(self, agent_id: str) -> dict | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT token_metadata FROM osf_oauth_tokens WHERE agent_id = %s", (agent_id,))
+            row = cur.fetchone()
+        if row is None:
+            return None
+        token = json.loads(row["token_metadata"])
+        return token if isinstance(token, dict) else None
 
     def _audit_from_row(self, row: dict) -> AuditReview:
         return AuditReview(

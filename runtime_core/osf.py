@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import base64
+import hmac
+import hashlib
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
-from urllib import error, request
+from urllib import error, parse, request
 
 from contracts import ObjectType, ResearchObject
 
@@ -22,6 +26,19 @@ class OSFConfig:
     timeout_seconds: float = 10.0
 
 
+@dataclass(frozen=True)
+class OSFOAuthConfig:
+    authorization_url: str
+    token_url: str
+    api_base_url: str
+    client_id: str
+    client_secret: str
+    redirect_uri: str
+    scope: str
+    state_secret: str
+    timeout_seconds: float = 10.0
+
+
 def _read_token() -> str | None:
     direct = os.environ.get("RESEARKA_V2_OSF_TOKEN") or os.environ.get("OSF_ACCESS_TOKEN")
     if direct and direct.strip():
@@ -32,6 +49,130 @@ def _read_token() -> str | None:
         if path.exists():
             return path.read_text().strip()
     return None
+
+
+def _read_secret(*, direct_env: str, path_env: str) -> str | None:
+    direct = os.environ.get(direct_env)
+    if direct and direct.strip():
+        return direct.strip()
+    secret_path = os.environ.get(path_env)
+    if secret_path and secret_path.strip():
+        path = Path(secret_path.strip())
+        if path.exists():
+            value = path.read_text().strip()
+            return value or None
+    return None
+
+
+def oauth_config_from_env() -> OSFOAuthConfig | None:
+    enabled = os.environ.get("RESEARKA_V2_OSF_ENABLED", "1").strip().lower()
+    if enabled in {"0", "false", "no"}:
+        return None
+    client_id = os.environ.get("RESEARKA_V2_OSF_OAUTH_CLIENT_ID")
+    client_secret = _read_secret(
+        direct_env="RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET",
+        path_env="RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET_PATH",
+    )
+    redirect_uri = os.environ.get("RESEARKA_V2_OSF_OAUTH_REDIRECT_URI")
+    if not client_id or not client_id.strip() or not client_secret or not redirect_uri or not redirect_uri.strip():
+        return None
+    state_secret = (
+        os.environ.get("RESEARKA_V2_OSF_OAUTH_STATE_SECRET")
+        or _read_secret(
+            direct_env="RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET",
+            path_env="RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET_PATH",
+        )
+        or client_secret
+    )
+    return OSFOAuthConfig(
+        authorization_url=os.environ.get("RESEARKA_V2_OSF_OAUTH_AUTHORIZE_URL", "https://accounts.osf.io/oauth2/authorize"),
+        token_url=os.environ.get("RESEARKA_V2_OSF_OAUTH_TOKEN_URL", "https://accounts.osf.io/oauth2/token"),
+        api_base_url=os.environ.get("RESEARKA_V2_OSF_API_BASE_URL", "https://api.osf.io/v2").rstrip("/"),
+        client_id=client_id.strip(),
+        client_secret=client_secret,
+        redirect_uri=redirect_uri.strip(),
+        scope=os.environ.get("RESEARKA_V2_OSF_OAUTH_SCOPE", "osf.full_write").strip(),
+        state_secret=state_secret,
+        timeout_seconds=float(os.environ.get("RESEARKA_V2_OSF_TIMEOUT_SECONDS", "15")),
+    )
+
+
+def _b64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _b64url_decode(raw: str) -> bytes:
+    padded = raw + ("=" * (-len(raw) % 4))
+    return base64.urlsafe_b64decode(padded.encode("ascii"))
+
+
+def sign_oauth_state(*, agent_id: str, secret: str, issued_at: int | None = None) -> str:
+    payload = {"agent_id": agent_id, "iat": issued_at or int(time.time())}
+    body = _b64url_encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+    signature = hmac.new(secret.encode("utf-8"), body.encode("ascii"), hashlib.sha256).digest()
+    return f"{body}.{_b64url_encode(signature)}"
+
+
+def verify_oauth_state(state: str, *, secret: str, max_age_seconds: int = 900) -> dict[str, Any]:
+    try:
+        body, provided_signature = state.split(".", 1)
+    except ValueError as exc:
+        raise ValueError("invalid_oauth_state") from exc
+    expected = _b64url_encode(hmac.new(secret.encode("utf-8"), body.encode("ascii"), hashlib.sha256).digest())
+    if not hmac.compare_digest(provided_signature, expected):
+        raise ValueError("invalid_oauth_state_signature")
+    try:
+        payload = json.loads(_b64url_decode(body))
+    except Exception as exc:
+        raise ValueError("invalid_oauth_state_payload") from exc
+    agent_id = payload.get("agent_id")
+    issued_at = payload.get("iat")
+    if not isinstance(agent_id, str) or not agent_id.strip():
+        raise ValueError("invalid_oauth_state_agent")
+    if not isinstance(issued_at, int) or int(time.time()) - issued_at > max_age_seconds:
+        raise ValueError("expired_oauth_state")
+    return {"agent_id": agent_id.strip(), "iat": issued_at}
+
+
+def build_oauth_authorization_url(config: OSFOAuthConfig, *, state: str) -> str:
+    params = {
+        "response_type": "code",
+        "client_id": config.client_id,
+        "redirect_uri": config.redirect_uri,
+        "scope": config.scope,
+        "state": state,
+    }
+    return f"{config.authorization_url}?{parse.urlencode(params)}"
+
+
+def exchange_oauth_code(config: OSFOAuthConfig, *, code: str) -> dict[str, Any]:
+    payload = parse.urlencode(
+        {
+            "grant_type": "authorization_code",
+            "client_id": config.client_id,
+            "client_secret": config.client_secret,
+            "redirect_uri": config.redirect_uri,
+            "code": code,
+        }
+    ).encode("utf-8")
+    req = request.Request(
+        config.token_url,
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with request.urlopen(req, timeout=config.timeout_seconds) as response:
+            data = response.read().decode("utf-8")
+    except error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"osf_oauth_exchange_failed:{exc.code}:{detail}") from exc
+    except error.URLError as exc:
+        raise RuntimeError(f"osf_oauth_unreachable:{exc.reason}") from exc
+    parsed = json.loads(data)
+    if not isinstance(parsed, dict) or not parsed.get("access_token"):
+        raise RuntimeError("osf_oauth_exchange_missing_access_token")
+    return parsed
 
 
 def osf_publication_metadata_from_env() -> dict[str, Any]:
@@ -117,6 +258,32 @@ class OSFClient:
         response = self._request("GET", f"/nodes/{node_id}/children/")
         data = response.get("data", []) if response else []
         return [item for item in data if isinstance(item, dict)]
+
+    def current_user(self) -> dict[str, Any] | None:
+        response = self._request("GET", "/users/me/")
+        data = response.get("data") if response else None
+        return data if isinstance(data, dict) else None
+
+    def create_node(self, *, title: str, description: str, tags: list[str]) -> dict[str, Any]:
+        response = self._request(
+            "POST",
+            "/nodes/",
+            payload={
+                "data": {
+                    "type": "nodes",
+                    "attributes": {
+                        "title": title,
+                        "category": "project",
+                        "description": description,
+                        "public": True,
+                        "tags": tags,
+                    },
+                }
+            },
+        )
+        if not response or not isinstance(response.get("data"), dict):
+            raise RuntimeError("osf_create_root_node_empty_response")
+        return response["data"]
 
     def create_child_node(self, node_id: str, *, title: str, description: str, tags: list[str]) -> dict[str, Any]:
         response = self._request(
@@ -251,6 +418,62 @@ def mint_publication_doi(
             "doi": doi,
         },
     }
+
+
+def osf_user_metadata_from_token(
+    access_token: str,
+    *,
+    api_base_url: str | None = None,
+    timeout_seconds: float = 10.0,
+) -> dict[str, Any]:
+    config = OSFConfig(
+        api_base_url=(api_base_url or os.environ.get("RESEARKA_V2_OSF_API_BASE_URL", "https://api.osf.io/v2")).rstrip("/"),
+        token=access_token,
+        root_project_id="_unused",
+        timeout_seconds=timeout_seconds,
+    )
+    user = OSFClient(config).current_user()
+    if not user:
+        return {}
+    attributes = user.get("attributes", {})
+    return {
+        "osf_user_id": user.get("id"),
+        "osf_user_name": attributes.get("full_name") if isinstance(attributes, dict) else None,
+    }
+
+
+def mint_publication_doi_with_oauth(
+    publication: ResearchObject,
+    *,
+    token_metadata: dict[str, Any],
+    api_base_url: str | None = None,
+    client_factory: Callable[[OSFConfig], OSFClient] = OSFClient,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    access_token = str(token_metadata.get("access_token") or "").strip()
+    if not access_token:
+        return {}, token_metadata
+    base_url = (api_base_url or os.environ.get("RESEARKA_V2_OSF_API_BASE_URL", "https://api.osf.io/v2")).rstrip("/")
+    timeout = float(os.environ.get("RESEARKA_V2_OSF_TIMEOUT_SECONDS", "15"))
+    root_project_id = str(token_metadata.get("root_project_id") or "").strip()
+    updated_token_metadata = dict(token_metadata)
+    if not root_project_id:
+        bootstrap_client = client_factory(OSFConfig(api_base_url=base_url, token=access_token, root_project_id="_bootstrap", timeout_seconds=timeout))
+        root_node = bootstrap_client.create_node(
+            title="Researka Publications",
+            description="Root OSF project for Researka accepted publications and alpha memos.",
+            tags=["researka", "researka-publications"],
+        )
+        root_project_id = str(root_node["id"])
+        updated_token_metadata["root_project_id"] = root_project_id
+        updated_token_metadata["root_project_url"] = _node_html_url(root_node)
+    metadata = mint_publication_doi(
+        publication,
+        config=OSFConfig(api_base_url=base_url, token=access_token, root_project_id=root_project_id, timeout_seconds=timeout),
+        client=client_factory(OSFConfig(api_base_url=base_url, token=access_token, root_project_id=root_project_id, timeout_seconds=timeout)),
+    )
+    if metadata:
+        metadata["osf_auth_source"] = "oauth_agent_token"
+    return metadata, updated_token_metadata
 
 
 def backfill_missing_publication_dois(

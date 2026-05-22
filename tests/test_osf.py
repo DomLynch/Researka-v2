@@ -3,7 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from contracts import ObjectType, ResearchObject
-from runtime_core.osf import OSFConfig, mint_publication_doi
+from runtime_core.osf import (
+    OSFConfig,
+    build_oauth_authorization_url,
+    mint_publication_doi,
+    sign_oauth_state,
+    verify_oauth_state,
+)
 
 
 class FakeOSFClient:
@@ -96,3 +102,48 @@ def test_mint_publication_doi_reuses_existing_publication_node() -> None:
     assert client.created == 0
     assert client.minted == 0
     assert metadata["doi"] == "10.17605/OSF.IO/EXIST"
+
+
+def test_oauth_state_roundtrip() -> None:
+    state = sign_oauth_state(agent_id="agent-v3-full-paper", secret="state-secret", issued_at=1_000_000)
+
+    payload = verify_oauth_state(state, secret="state-secret", max_age_seconds=10_000_000_000)
+
+    assert payload["agent_id"] == "agent-v3-full-paper"
+    assert payload["iat"] == 1_000_000
+
+
+def test_oauth_state_rejects_wrong_secret() -> None:
+    state = sign_oauth_state(agent_id="agent-v3-full-paper", secret="state-secret", issued_at=1_000_000)
+
+    try:
+        verify_oauth_state(state, secret="wrong-secret", max_age_seconds=10_000_000_000)
+    except ValueError as exc:
+        assert str(exc) == "invalid_oauth_state_signature"
+    else:
+        raise AssertionError("wrong secret should fail")
+
+
+def test_build_oauth_authorization_url_contains_osf_app_contract() -> None:
+    from runtime_core.osf import OSFOAuthConfig
+
+    url = build_oauth_authorization_url(
+        OSFOAuthConfig(
+            authorization_url="https://accounts.osf.io/oauth2/authorize",
+            token_url="https://accounts.osf.io/oauth2/token",
+            api_base_url="https://api.osf.io/v2",
+            client_id="client-id",
+            client_secret="client-secret",
+            redirect_uri="https://api.researka.org/oauth/osf/callback",
+            scope="osf.full_write",
+            state_secret="state-secret",
+        ),
+        state="signed-state",
+    )
+
+    assert url.startswith("https://accounts.osf.io/oauth2/authorize?")
+    assert "response_type=code" in url
+    assert "client_id=client-id" in url
+    assert "redirect_uri=https%3A%2F%2Fapi.researka.org%2Foauth%2Fosf%2Fcallback" in url
+    assert "scope=osf.full_write" in url
+    assert "state=signed-state" in url

@@ -208,6 +208,58 @@ def test_publication_mints_osf_doi_before_derivation_web_metadata(client: TestCl
     assert captured["doi_seen_by_dw"] == "10.17605/OSF.IO/ABC12"
 
 
+def test_publication_uses_connected_osf_oauth_token_before_service_token(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    create_resp = client.post(
+        "/ops/keys",
+        headers={"x-api-key": "admin-secret-123"},
+        json={"agent_id": "agent-v3-full-paper"},
+    )
+    raw_key = create_resp.json()["raw_key"]
+    _repository(client).store_osf_oauth_token("agent-v3-full-paper", {"access_token": "oauth-token"})
+
+    def fake_mint_publication_doi(publication: ResearchObject) -> dict[str, object]:
+        raise AssertionError("service token fallback should not run when agent OAuth is connected")
+
+    def fake_mint_publication_doi_with_oauth(publication: ResearchObject, *, token_metadata: dict) -> tuple[dict[str, object], dict[str, object]]:
+        assert token_metadata["access_token"] == "oauth-token"
+        return (
+            {
+                "doi": "10.17605/OSF.IO/OAUTH1",
+                "doi_status": "minted",
+                "osf_status": "minted",
+                "osf_project_id": "oauth-root",
+                "osf_guid": "oauth1",
+                "osf_auth_source": "oauth_agent_token",
+                "osf": {"enabled": True, "status": "minted", "project_id": "oauth-root", "guid": "oauth1"},
+            },
+            {**token_metadata, "root_project_id": "oauth-root"},
+        )
+
+    monkeypatch.setattr("runtime_core.workflow.mint_publication_doi", fake_mint_publication_doi)
+    monkeypatch.setattr("runtime_core.workflow.mint_publication_doi_with_oauth", fake_mint_publication_doi_with_oauth)
+
+    seed = client.post(
+        "/submissions",
+        headers={"x-api-key": raw_key},
+        json=_submission_payload(
+            "Databases searched include PubMed and review corpora, with a documented date window, explicit inclusion logic, and a stated narrowing rule that explains why these retained receipts best match the scoped research question."
+        ),
+    )
+    assert seed.status_code == 200
+
+    for _ in range(12):
+        queue = client.get("/jobs/queue").json()["queued"]
+        if not queue:
+            break
+        assert client.post("/jobs/run-once").status_code == 200
+
+    publication = _repository(client).list_objects("publication")[0]
+    assert publication.metadata["doi"] == "10.17605/OSF.IO/OAUTH1"
+    assert publication.metadata["osf_auth_source"] == "oauth_agent_token"
+    assert _repository(client).get_osf_oauth_token("agent-v3-full-paper")["root_project_id"] == "oauth-root"
+
+
 def test_osf_failure_marks_publication_without_blocking_derivation_web(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_OSF_PROJECT_ID", "root-osf-node")
     monkeypatch.setenv("RESEARKA_V2_OSF_TOKEN", "revoked-token")

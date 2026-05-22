@@ -3,14 +3,24 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi.responses import RedirectResponse
 
 from apps.worker.main import WorkerApp
 from contracts import AuditReview, AuditVerdict, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
+from runtime_core.osf import (
+    build_oauth_authorization_url,
+    exchange_oauth_code,
+    oauth_config_from_env,
+    osf_user_metadata_from_token,
+    sign_oauth_state,
+    verify_oauth_state,
+)
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 
 _calibration_cache: dict | None = None
@@ -156,7 +166,7 @@ def _check_api_key(repo: RuntimeRepository, request: Request) -> str | None:
     # Per-agent key
     agent_id = repo.validate_api_key(provided)
     if agent_id is not None:
-        key_hash = repo._hash_key(provided)
+        key_hash = hashlib.sha256(provided.encode()).hexdigest()
         repo.record_api_key_usage(key_hash)
         return agent_id
 
@@ -172,11 +182,31 @@ def _check_admin(request: Request) -> None:
     raise HTTPException(status_code=403, detail="admin_key_required")
 
 
+def _osf_oauth_config_or_error():
+    config = oauth_config_from_env()
+    if config is None:
+        raise HTTPException(status_code=500, detail="osf_oauth_not_configured")
+    return config
+
+
+def _submission_metadata_for_agent(payload: SubmissionPayload, agent_id: str | None) -> dict:
+    metadata = payload.model_dump(mode="json")
+    if not agent_id:
+        return metadata
+    claimed_agent_id = metadata.get("author_agent_id")
+    if claimed_agent_id != agent_id:
+        metadata["claimed_author_agent_id"] = claimed_agent_id
+    metadata["author_agent_id"] = agent_id
+    metadata["authenticated_agent_id"] = agent_id
+    metadata["identity_source"] = "api_key"
+    return metadata
+
+
 def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     if repository is not None:
         repo = repository
-    elif postgres_dsn_from_env():
-        repo = PostgresRuntimeRepository(postgres_dsn_from_env())
+    elif dsn := postgres_dsn_from_env():
+        repo = PostgresRuntimeRepository(dsn)
     else:
         repo = InMemoryRuntimeRepository()
     app = FastAPI(title="Researka v2 Runtime API")
@@ -204,15 +234,65 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             "critical_flow": ["intake", "review", "editorial", "publish"],
         }
 
+    @app.get("/oauth/osf/start")
+    def osf_oauth_start(request: Request) -> RedirectResponse:
+        agent_id = _check_api_key(app.state.repository, request)
+        if not agent_id:
+            raise HTTPException(status_code=400, detail="per_agent_api_key_required")
+        config = _osf_oauth_config_or_error()
+        state = sign_oauth_state(agent_id=agent_id, secret=config.state_secret)
+        return RedirectResponse(build_oauth_authorization_url(config, state=state), status_code=302)
+
+    @app.get("/oauth/osf/callback")
+    def osf_oauth_callback(code: str | None = None, state: str | None = None, error: str | None = None) -> dict:
+        if error:
+            raise HTTPException(status_code=400, detail=f"osf_oauth_error:{error}")
+        if not code or not state:
+            raise HTTPException(status_code=400, detail="missing_oauth_code_or_state")
+        config = _osf_oauth_config_or_error()
+        try:
+            state_payload = verify_oauth_state(state, secret=config.state_secret)
+            agent_id = str(state_payload["agent_id"])
+            token_metadata = exchange_oauth_code(config, code=code)
+            token_metadata.update(
+                {
+                    "agent_id": agent_id,
+                    "connected_at": datetime.now(timezone.utc).isoformat(),
+                    "oauth_scope_requested": config.scope,
+                }
+            )
+            try:
+                token_metadata.update(
+                    osf_user_metadata_from_token(
+                        str(token_metadata["access_token"]),
+                        api_base_url=config.api_base_url,
+                        timeout_seconds=config.timeout_seconds,
+                    )
+                )
+            except Exception as exc:
+                token_metadata["osf_user_lookup_error"] = str(exc)[:160]
+            app.state.repository.store_osf_oauth_token(agent_id, token_metadata)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)[:240]) from exc
+        return {
+            "status": "connected",
+            "agent_id": agent_id,
+            "osf_user_id": token_metadata.get("osf_user_id"),
+            "scope": token_metadata.get("scope") or token_metadata.get("oauth_scope_requested"),
+        }
+
     @app.post("/submissions")
     def submit(payload: SubmissionPayload, request: Request) -> dict:
-        _check_api_key(app.state.repository, request)
+        agent_id = _check_api_key(app.state.repository, request)
+        metadata = _submission_metadata_for_agent(payload, agent_id)
         submission = app.state.repository.create_object(
             ResearchObject(
                 object_type=ObjectType.SUBMISSION,
                 title=payload.title,
                 body_markdown=payload.body_markdown or payload.abstract,
-                metadata=payload.model_dump(mode="json"),
+                metadata=metadata,
             )
         )
         job = app.state.repository.enqueue_job(

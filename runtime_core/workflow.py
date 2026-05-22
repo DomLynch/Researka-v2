@@ -6,7 +6,7 @@ from contracts import ArticleType, Decision, ObjectType, ResearchObject, Runtime
 
 from .compiler import compile_publication
 from .derivation_web import emit_decision_to_derivation_web, emit_publication_to_derivation_web
-from .osf import mint_publication_doi, osf_publication_metadata_from_env
+from .osf import mint_publication_doi, mint_publication_doi_with_oauth, osf_publication_metadata_from_env
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
 from .reviewer_panel import reviewer_from_env
@@ -46,6 +46,21 @@ def _publication_identity_metadata(submission_metadata: dict) -> dict:
     if metadata.get("orcid"):
         metadata["orcid_at_publication"] = metadata["orcid"]
     return metadata
+
+
+def _mint_publication_doi(repository: RuntimeRepository, publication: ResearchObject) -> dict:
+    agent_id = str(publication.metadata.get("author_agent_id") or publication.metadata.get("authenticated_agent_id") or "").strip()
+    if agent_id:
+        token_metadata = repository.get_osf_oauth_token(agent_id)
+        if token_metadata:
+            osf_metadata, updated_token_metadata = mint_publication_doi_with_oauth(
+                publication,
+                token_metadata=token_metadata,
+            )
+            if updated_token_metadata != token_metadata:
+                repository.store_osf_oauth_token(agent_id, updated_token_metadata)
+            return osf_metadata
+    return mint_publication_doi(publication)
 
 
 class WorkflowEngine:
@@ -550,7 +565,7 @@ class WorkflowEngine:
         review = repository.get_object(str(decision.metadata["review_id"])) if decision and decision.metadata.get("review_id") else None
         publication = repository.create_object(publication)
         try:
-            osf_metadata = mint_publication_doi(publication)
+            osf_metadata = _mint_publication_doi(repository, publication)
             if osf_metadata:
                 publication = repository.update_object_metadata(publication.id, {**publication.metadata, **osf_metadata}) or publication
         except Exception as exc:
