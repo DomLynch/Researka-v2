@@ -43,6 +43,24 @@ def _base_url() -> str:
     return os.getenv("RESEARKA_DW_URL", "https://provenance.researka.org").rstrip("/")
 
 
+def _public_api_base_url() -> str:
+    return os.getenv("RESEARKA_PUBLIC_API_BASE_URL", "https://api.researka.org").rstrip("/")
+
+
+def _absolute_sidecar_url(path_or_url: str) -> str:
+    if path_or_url.startswith(("http://", "https://")):
+        return path_or_url
+    path = path_or_url if path_or_url.startswith("/") else f"/{path_or_url}"
+    return f"{_public_api_base_url()}{path}"
+
+
+def _dw_sidecar_manifest(publication_id: str) -> list[dict[str, str]]:
+    return [
+        {**sidecar, "url": _absolute_sidecar_url(sidecar["url"])}
+        for sidecar in sidecar_manifest(publication_id)
+    ]
+
+
 def _post(path: str, payload: dict[str, Any], *, api_key: str) -> tuple[int, dict[str, Any]]:
     attempts = max(1, int(os.getenv("RESEARKA_DW_POST_ATTEMPTS", "4")))
     for attempt in range(attempts):
@@ -184,7 +202,7 @@ def _publication_dw_inputs(
     decision: ResearchObject | None,
 ) -> list[dict[str, Any]]:
     inputs: list[dict[str, Any]] = []
-    for sidecar in sidecar_manifest(publication.id):
+    for sidecar in _dw_sidecar_manifest(publication.id):
         try:
             payload, media_type, filename = build_sidecar(publication, submission, sidecar["name"])
         except KeyError:
@@ -313,9 +331,12 @@ def emit_publication_to_derivation_web(
                 "article_type": publication.metadata.get("article_type"),
                 "author_agent_id": publication.metadata.get("author_agent_id"),
                 "decision": decision_value,
+                "doi": publication.metadata.get("doi"),
+                "doi_status": publication.metadata.get("doi_status"),
+                "osf_url": publication.metadata.get("osf_url"),
                 "prompt_version": publication.metadata.get("prompt_version"),
                 "screening": screening_summary(publication),
-                "sidecars": sidecar_manifest(publication.id),
+                "sidecars": _dw_sidecar_manifest(publication.id),
                 **_fallback_metadata(review),
             },
             stage="autonomous_publish",

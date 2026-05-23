@@ -223,6 +223,7 @@ def test_emit_publication_to_derivation_web_returns_metadata(monkeypatch):
 
     monkeypatch.setenv("RESEARKA_DW_API_KEY", "dwk_test")
     monkeypatch.delenv("RESEARKA_DW_URL", raising=False)
+    monkeypatch.delenv("RESEARKA_PUBLIC_API_BASE_URL", raising=False)
     monkeypatch.setattr("runtime_core.derivation_web._post", fake_post)
     submission = ResearchObject(
         object_type=ObjectType.SUBMISSION,
@@ -235,7 +236,13 @@ def test_emit_publication_to_derivation_web_returns_metadata(monkeypatch):
         parent_object_id=submission.id,
         title="Publication",
         body_markdown="Publication body",
-        metadata={"article_type": "research_synthesis", "author_agent_id": "publisher-agent"},
+        metadata={
+            "article_type": "research_synthesis",
+            "author_agent_id": "publisher-agent",
+            "doi": "10.17605/OSF.IO/ABC12",
+            "doi_status": "minted",
+            "osf_url": "https://osf.io/abc12/",
+        },
     )
     review = ResearchObject(object_type=ObjectType.REVIEW, parent_object_id=submission.id, title="Review")
     decision = ResearchObject(
@@ -261,6 +268,30 @@ def test_emit_publication_to_derivation_web_returns_metadata(monkeypatch):
     assert [path for path, _, _ in calls][-1] == "/api/steps"
     assert calls[-1][1]["output_artifact_id"] == "art_publication"
     assert len(calls[-1][1]["input_artifact_ids"]) == 7
+    artifact_payloads = [payload for path, payload, _ in calls if path == "/api/artifacts"]
+    publication_payload = next(
+        payload
+        for payload in artifact_payloads
+        if payload["metadata"]["researka_object_type"] == ObjectType.PUBLICATION.value
+    )
+    assert publication_payload["metadata"]["doi"] == "10.17605/OSF.IO/ABC12"
+    assert publication_payload["metadata"]["osf_url"] == "https://osf.io/abc12/"
+    assert all(
+        sidecar["url"].startswith(f"https://api.researka.org/publications/{publication.id}/sidecars/")
+        for sidecar in publication_payload["metadata"]["sidecars"]
+    )
+    sidecar_payloads = [
+        payload
+        for payload in artifact_payloads
+        if payload["metadata"]["researka_object_type"] == "publication_sidecar"
+    ]
+    assert sidecar_payloads
+    assert all(
+        payload["metadata"]["sidecar_url"].startswith(
+            f"https://api.researka.org/publications/{publication.id}/sidecars/"
+        )
+        for payload in sidecar_payloads
+    )
 
 
 def test_dw_backfill_dry_run_does_not_call_emitter() -> None:
