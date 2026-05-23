@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import hashlib
+import hmac
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -176,10 +177,10 @@ def _check_api_key(repo: RuntimeRepository, request: Request) -> str | None:
 
 
 def _check_admin(request: Request) -> None:
-    """Require admin key for /ops/* endpoints."""
+    """Require admin key for privileged operator endpoints."""
     provided = request.headers.get("x-api-key", "")
     admin_key = os.environ.get("RESEARKA_V2_ADMIN_KEY")
-    if admin_key and provided == admin_key:
+    if admin_key and hmac.compare_digest(provided, admin_key):
         return
     raise HTTPException(status_code=403, detail="admin_key_required")
 
@@ -323,7 +324,8 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         return submission.model_dump(mode="json")
 
     @app.post("/jobs/run-once")
-    def run_one_job(target_object_id: str | None = None) -> dict:
+    def run_one_job(request: Request, target_object_id: str | None = None) -> dict:
+        _check_admin(request)
         return app.state.worker.run_once(target_object_id=target_object_id)
 
     @app.get("/jobs/queue")

@@ -1,0 +1,19 @@
+[Unit]
+Description=Researka v2 queue worker
+After=network-online.target postgresql.service researka-v2.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/Researka-v2
+EnvironmentFile=/etc/researka/researka-v2-worker.env
+EnvironmentFile=-/etc/researka/openrouter.env
+EnvironmentFile=-/etc/researka/osf-oauth.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/Researka-v2/.venv/bin/python -m apps.worker.loop
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target

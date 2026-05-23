@@ -1,3 +1,4 @@
+import os
 from typing import Any, cast
 
 from fastapi.testclient import TestClient
@@ -21,6 +22,10 @@ def _valid_source_bundle() -> list[dict[str, object]]:
         }
         for index, (year, evidence_type) in enumerate(zip(years, evidence_types, strict=True), start=1)
     ]
+
+
+def _worker_headers() -> dict[str, str]:
+    return {"x-api-key": os.environ.get("RESEARKA_V2_ADMIN_KEY", "test-admin-key")}
 
 
 def _submission_payload(search_summary: str) -> dict:
@@ -57,7 +62,7 @@ def _assert_publish_happy_path(client: TestClient) -> None:
         queue = client.get("/jobs/queue").json()["queued"]
         if not queue:
             break
-        response = client.post("/jobs/run-once")
+        response = client.post("/jobs/run-once", headers=_worker_headers())
         assert response.status_code == 200
 
     publications = repository.list_objects("publication")
@@ -69,7 +74,7 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     assert publication.metadata["prompt_version"] == EDITOR_PROMPT_VERSION
 
     repository.enqueue_job(RuntimeJob(target_object_id=publication.parent_object_id, stage=Stage.PUBLISH))
-    duplicate_publish = client.post("/jobs/run-once")
+    duplicate_publish = client.post("/jobs/run-once", headers=_worker_headers())
     assert duplicate_publish.status_code == 200
     assert len(repository.list_objects("publication")) == 1
     stages_seen = {event.payload["stage"] for event in repository.list_events() if "stage" in event.payload}
@@ -90,7 +95,7 @@ def test_leakage_submission_is_rejected_at_intake(client: TestClient) -> None:
         json=_submission_payload("The Search Summary is incomplete and lacks reproducibility."),
     )
     submission_id = response.json()["submission"]["id"]
-    client.post("/jobs/run-once")
+    client.post("/jobs/run-once", headers=_worker_headers())
     decision = client.get(f"/submissions/{submission_id}/decision").json()
     assert decision["status"] == "complete"
     assert decision["decision"] == "reject"
@@ -116,7 +121,7 @@ def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
         queue = client.get("/jobs/queue").json()["queued"]
         if not queue:
             break
-        client.post("/jobs/run-once")
+        client.post("/jobs/run-once", headers=_worker_headers())
 
     publications = _repository(client).list_objects("publication")
     assert len(publications) == 1
@@ -143,7 +148,7 @@ def test_end_to_end_publish_uses_full_body_when_present(client: TestClient) -> N
     for _ in range(12):
         if not client.get("/jobs/queue").json()["queued"]:
             break
-        assert client.post("/jobs/run-once").status_code == 200
+        assert client.post("/jobs/run-once", headers=_worker_headers()).status_code == 200
     publication = _repository(client).list_objects("publication")[0]
     assert "## References" in publication.body_markdown
     assert "DOI: 10.1234/example" in publication.body_markdown
@@ -198,7 +203,7 @@ def test_publication_mints_osf_doi_before_derivation_web_metadata(client: TestCl
         queue = client.get("/jobs/queue").json()["queued"]
         if not queue:
             break
-        assert client.post("/jobs/run-once").status_code == 200
+        assert client.post("/jobs/run-once", headers=_worker_headers()).status_code == 200
 
     publication = cast(Any, client.app).state.repository.list_objects("publication")[0]
     assert publication.metadata["doi"] == "10.17605/OSF.IO/ABC12"
@@ -252,7 +257,7 @@ def test_publication_uses_connected_osf_oauth_token_before_service_token(client:
         queue = client.get("/jobs/queue").json()["queued"]
         if not queue:
             break
-        assert client.post("/jobs/run-once").status_code == 200
+        assert client.post("/jobs/run-once", headers=_worker_headers()).status_code == 200
 
     publication = _repository(client).list_objects("publication")[0]
     assert publication.metadata["doi"] == "10.17605/OSF.IO/OAUTH1"
@@ -293,7 +298,7 @@ def test_osf_failure_marks_publication_without_blocking_derivation_web(client: T
         queue = client.get("/jobs/queue").json()["queued"]
         if not queue:
             break
-        assert client.post("/jobs/run-once").status_code == 200
+        assert client.post("/jobs/run-once", headers=_worker_headers()).status_code == 200
 
     publication = _repository(client).list_objects("publication")[0]
     assert publication.metadata["doi"] is None

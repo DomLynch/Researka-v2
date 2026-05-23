@@ -1,3 +1,4 @@
+import os
 from typing import Any, cast
 from fastapi.testclient import TestClient
 from urllib.parse import parse_qs, quote, urlparse
@@ -22,12 +23,16 @@ def _valid_source_bundle() -> list[dict[str, object]]:
     ]
 
 
+def _worker_headers() -> dict[str, str]:
+    return {"x-api-key": os.environ.get("RESEARKA_V2_ADMIN_KEY", "test-admin-key")}
+
+
 def _run_until_idle(client: TestClient, limit: int = 12) -> None:
     for _ in range(limit):
         queue = client.get("/jobs/queue").json()["queued"]
         if not queue:
             return
-        client.post("/jobs/run-once")
+        client.post("/jobs/run-once", headers=_worker_headers())
 
 
 def test_health(client: TestClient) -> None:
@@ -57,6 +62,22 @@ def test_architecture(client: TestClient) -> None:
     data = response.json()
     assert "runtime_core" in data["top_level_modules"]
     assert data["critical_flow"] == ["intake", "review", "editorial", "publish"]
+
+
+def test_run_once_requires_admin_not_submission_key(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    response = client.post("/jobs/run-once", headers={"x-api-key": "test-legacy-key"})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "admin_key_required"
+
+
+def test_run_once_rejects_fake_key(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    response = client.post("/jobs/run-once", headers={"x-api-key": "ANYTHING"})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "admin_key_required"
 
 
 def test_osf_oauth_start_uses_authenticated_agent_key(client: TestClient, monkeypatch) -> None:

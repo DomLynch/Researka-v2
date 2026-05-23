@@ -20,6 +20,7 @@ def inmemory_repo():
 @pytest.fixture
 def client(inmemory_repo, monkeypatch):
     monkeypatch.setenv("RESEARKA_V2_API_KEY", "test-legacy-key")
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "test-admin-key")
     return TestClient(
         create_app(inmemory_repo),
         headers={"x-api-key": "test-legacy-key"},
@@ -36,5 +37,7 @@ def postgres_repo():
 
 
 @pytest.fixture
-def postgres_client(postgres_repo):
-    return TestClient(create_app(postgres_repo))
+def postgres_client(postgres_repo, monkeypatch):
+    monkeypatch.setenv("RESEARKA_V2_API_KEY", "test-postgres-key")
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "test-postgres-admin-key")
+    return TestClient(create_app(postgres_repo), headers={"x-api-key": "test-postgres-key"})
