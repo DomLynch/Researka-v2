@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contracts import GateResult, PublicationArtifact, PublicationCounts, publication_template_for
+from contracts import ArticleType, GateResult, PublicationArtifact, PublicationCounts, publication_template_for
 
 from .gates import run_publish_gates
 from .sanitizer import extract_markdown_section, sanitize_publication_body, validate_template_structure
@@ -58,7 +58,11 @@ def compile_publication(
         compiled_body = "\n\n".join(ordered_sections).strip()
     compiled_body, _ = sanitize_publication_body(compiled_body)
     if body_markdown and body_markdown.strip():
-        _validate_full_manuscript_body(compiled_body)
+        if template.article_type == ArticleType.ALPHA_MEMO.value:
+            if not compiled_body.strip():
+                raise ValueError("structure_gate: alpha memo body empty")
+        else:
+            _validate_full_manuscript_body(compiled_body)
     else:
         validate_template_structure(compiled_body, template.required_sections)
     counts = canonical_bundle_facts(source_bundle)

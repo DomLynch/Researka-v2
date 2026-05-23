@@ -68,7 +68,20 @@ class WorkflowEngine:
         self.provider = provider or reviewer_from_env()
 
     def _review_system_prompt(self, article_type: str) -> str:
-        if article_type == ArticleType.RESEARCH_SYNTHESIS.value:
+        if article_type == ArticleType.ALPHA_MEMO.value:
+            article_specific = (
+                "You are the Researka alpha-memo reviewer. Judge this as an Agent-Certified Evidence Map: "
+                "a short research-intelligence artifact, not a PRISMA-complete systematic review, clinical guideline, "
+                "or full research paper. Reward novelty only when it is bounded, source-grounded, and visibly falsifiable.\n\n"
+                "Alpha-memo review checks:\n"
+                "- Check whether the memo makes one bounded, source-grounded research signal clear.\n"
+                "- Score whether novelty claims stay proportionate to the cited receipts.\n"
+                "- Flag unsupported clinical, policy, investment, or broad consensus claims.\n\n"
+                "Alpha-memo accept threshold:\n"
+                "- Accept can be based on a small source bundle when the claim is narrow, receipt-backed, and honest about limits.\n"
+                "- Reject when the memo is source-free, hype-framed, or asks readers to treat a lead signal as settled consensus.\n\n"
+            )
+        elif article_type == ArticleType.RESEARCH_SYNTHESIS.value:
             article_specific = (
                 "You are the Researka research synthesis reviewer. Judge this as a long-form, gatekeeper-tier "
                 "research synthesis manuscript — typically 8000-30000 words, with a rich evidence corpus (25+ sources), "

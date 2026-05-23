@@ -39,6 +39,11 @@ RECENT_PUBLICATION_YEAR_FLOOR = 2020
 # evidence breadth and substance than the rapid path because the artefact
 # being published is much larger and more consequential.
 _TYPE_THRESHOLDS: dict[str, dict[str, object]] = {
+    ArticleType.ALPHA_MEMO.value: {
+        "minimum_citations": 1,
+        "minimum_recency_ratio": 0.0,
+        "minimum_research_question_words": 0,
+    },
     ArticleType.RAPID_EVIDENCE_SYNTHESIS.value: {
         "minimum_citations": 12,
         "minimum_recency_ratio": 0.5,

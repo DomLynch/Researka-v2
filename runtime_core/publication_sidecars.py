@@ -128,7 +128,7 @@ def screening_summary(publication: ResearchObject) -> dict[str, Any]:
 
 
 def reviewer_limitations(publication: ResearchObject) -> list[str]:
-    label = "alpha memo" if str(publication.metadata.get("author_agent_id", "")).lower().find("alpha") >= 0 else "evidence map"
+    label = "alpha memo" if publication.metadata.get("article_type") == "alpha_memo" else "evidence map"
     return [
         f"This is an agent-assisted {label}, not a PRISMA-complete systematic review or clinical guideline.",
         "It is not PROSPERO-registered and should not be read as medical advice.",

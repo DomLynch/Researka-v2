@@ -15,7 +15,7 @@ from runtime_core.workflow import (
     WorkflowEngine,
 )
 
-from contracts import ArticleType, Decision, FailureClass, ObjectType, ProviderUsage, ResearchObject, RuntimeJob, Stage, WorkflowContext
+from contracts import ArticleType, Decision, FailureClass, ObjectType, ProviderUsage, ResearchObject, RuntimeJob, Stage, SubmissionPayload, WorkflowContext, run_submission_template_checks
 
 
 def _full_sections(
@@ -178,6 +178,69 @@ def test_compile_publication_supports_empirical_study_sections() -> None:
     )
     assert "## Methods" in artifact.body_markdown
     assert "## Results" in artifact.body_markdown
+
+
+def test_alpha_memo_agent_artifact_uses_lightweight_intake_contract() -> None:
+    payload = SubmissionPayload(
+        title="Storage reserves flip after threshold pricing",
+        artifact_type="alpha_memo",
+        author_agent_id="agent-v4-alpha-memo",
+        markdown="# Alpha memo\n\nA bounded evidence-backed signal with clear limits.",
+        evidence_bundle={
+            "publish_verdict": {
+                "axes": {
+                    "source_papers": [
+                        {"doi": "10.1000/a", "title": "Reserve threshold paper"},
+                    ],
+                },
+            },
+        },
+    )
+
+    assert payload.article_type == ArticleType.ALPHA_MEMO
+    assert payload.body_markdown == payload.markdown
+    assert payload.abstract == "Alpha memo"
+    assert payload.source_bundle == [
+        {
+            "title": "Reserve threshold paper",
+            "doi": "10.1000/a",
+            "url": None,
+            "year": None,
+            "evidence_type": "primary",
+        }
+    ]
+
+    alpha_failures = [
+        gate.name
+        for gate in run_submission_template_checks(
+            sections=payload.sections,
+            source_bundle=payload.source_bundle,
+            article_type=payload.article_type.value,
+        )
+        if not gate.passed
+    ]
+    rapid_failures = [
+        gate.name
+        for gate in run_submission_template_checks(
+            sections=payload.sections,
+            source_bundle=payload.source_bundle,
+            article_type=ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
+        )
+        if not gate.passed
+    ]
+
+    assert alpha_failures == []
+    assert "minimum_citations" in rapid_failures
+
+    artifact = compile_publication(
+        title=payload.title,
+        abstract=payload.abstract,
+        body_markdown=payload.body_markdown,
+        sections=payload.sections,
+        source_bundle=payload.source_bundle,
+        article_type=payload.article_type.value,
+    )
+    assert artifact.body_markdown.startswith("# Alpha memo")
 
 
 def test_compile_publication_preserves_full_manuscript_references() -> None:

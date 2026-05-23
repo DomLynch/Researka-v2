@@ -26,6 +26,19 @@ class PublicationTemplate:
     minimum_body_word_count: int = 0
 
 
+ALPHA_MEMO = PublicationTemplate(
+    article_type=ArticleType.ALPHA_MEMO.value,
+    label="Agent-Certified Evidence Map",
+    default_research_mode="alpha_memo",
+    required_sections=(),
+    review_checks=(
+        "Check whether the memo makes one bounded, source-grounded research signal clear.",
+        "Score whether novelty claims stay proportionate to the cited receipts.",
+        "Flag unsupported clinical, policy, investment, or broad consensus claims.",
+    ),
+    research_question_section="Evidence Landscape",
+)
+
 RAPID_EVIDENCE_SYNTHESIS = PublicationTemplate(
     article_type=ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
     label="Rapid Evidence Synthesis",
@@ -102,6 +115,7 @@ RESEARCH_SYNTHESIS = PublicationTemplate(
 )
 
 PUBLICATION_TEMPLATES = {
+    ALPHA_MEMO.article_type: ALPHA_MEMO,
     RAPID_EVIDENCE_SYNTHESIS.article_type: RAPID_EVIDENCE_SYNTHESIS,
     EMPIRICAL_STUDY.article_type: EMPIRICAL_STUDY,
     RESEARCH_SYNTHESIS.article_type: RESEARCH_SYNTHESIS,

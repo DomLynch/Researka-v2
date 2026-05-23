@@ -23,7 +23,7 @@ from .models import (
     WorkflowContext,
     WorkflowOutcome,
 )
-from .templates import EMPIRICAL_STUDY, PUBLICATION_TEMPLATES, PublicationTemplate, RAPID_EVIDENCE_SYNTHESIS, RESEARCH_SYNTHESIS, publication_template_for
+from .templates import ALPHA_MEMO, EMPIRICAL_STUDY, PUBLICATION_TEMPLATES, PublicationTemplate, RAPID_EVIDENCE_SYNTHESIS, RESEARCH_SYNTHESIS, publication_template_for
 from .submissions import SourceBundleEntry, SubmissionTemplateV1, run_submission_template_checks, submission_template_for
 from .frozen import IntakeRejectReason, INTAKE_REJECT_REASONS, SUBMISSION_CONTRACT
 
@@ -34,6 +34,7 @@ __all__ = [
     "AuditReview",
     "AuditVerdict",
     "Decision",
+    "ALPHA_MEMO",
     "EMPIRICAL_STUDY",
     "EventType",
     "FailureClass",

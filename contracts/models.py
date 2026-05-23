@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 def utc_now() -> datetime:
@@ -32,6 +32,7 @@ class Decision(StrEnum):
 
 
 class ArticleType(StrEnum):
+    ALPHA_MEMO = "alpha_memo"
     RAPID_EVIDENCE_SYNTHESIS = "rapid_evidence_synthesis"
     EMPIRICAL_STUDY = "empirical_study"
     # RESEARCH_SYNTHESIS is the v2 long-form path: full multi-section research
@@ -125,6 +126,41 @@ class ResearchObject(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+def _markdown_summary(markdown: str | None, fallback: str) -> str:
+    for line in str(markdown or "").splitlines():
+        text = line.lstrip("#").strip()
+        if text:
+            return text[:500]
+    return fallback
+
+
+def _review_like_source(item: dict) -> bool:
+    text = f"{item.get('title', '')} {item.get('evidence_type', '')}".lower()
+    return any(token in text for token in ("review", "meta-analysis", "systematic"))
+
+
+def _source_bundle_from_evidence_bundle(evidence_bundle: dict) -> list[dict]:
+    verdict = evidence_bundle.get("publish_verdict") if isinstance(evidence_bundle, dict) else {}
+    axes = verdict.get("axes") if isinstance(verdict, dict) else {}
+    papers = axes.get("source_papers") if isinstance(axes, dict) else []
+    if not isinstance(papers, list):
+        return []
+    bundle: list[dict] = []
+    for index, paper in enumerate(papers, start=1):
+        if not isinstance(paper, dict):
+            continue
+        title = str(paper.get("title") or f"Alpha memo source {index}").strip()
+        entry = {
+            "title": title,
+            "doi": paper.get("doi") or None,
+            "url": paper.get("url") or None,
+            "year": paper.get("year") if isinstance(paper.get("year"), int) else None,
+            "evidence_type": "review" if _review_like_source(paper) else "primary",
+        }
+        bundle.append(entry)
+    return bundle
+
+
 class SubmissionPayload(BaseModel):
     title: str
     abstract: str
@@ -133,10 +169,39 @@ class SubmissionPayload(BaseModel):
     source_bundle: list[dict] = Field(default_factory=list)
     author_agent_id: str
     article_type: ArticleType = ArticleType.RAPID_EVIDENCE_SYNTHESIS
+    artifact_type: str | None = None
+    agent_id: str | None = None
+    topic: str | None = None
+    markdown: str | None = None
+    novelty_score: float | str | None = None
+    confidence_score: float | str | None = None
+    evidence_bundle: dict = Field(default_factory=dict)
     author_signature: str | None = None
     domain_slug: str = "general"
     core_claims_resolved: bool = True
     submitted_at: datetime = Field(default_factory=utc_now)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_agent_artifact(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        values = dict(data)
+        if values.get("artifact_type") != ArticleType.ALPHA_MEMO.value and values.get("article_type") != ArticleType.ALPHA_MEMO.value:
+            return values
+        values["article_type"] = ArticleType.ALPHA_MEMO.value
+        markdown = str(values.get("markdown") or values.get("body_markdown") or "")
+        if markdown and not values.get("body_markdown"):
+            values["body_markdown"] = markdown
+        if not values.get("abstract"):
+            values["abstract"] = _markdown_summary(markdown, str(values.get("title") or "Alpha memo"))
+        if markdown and not values.get("sections"):
+            values["sections"] = {"Evidence Landscape": markdown}
+        if not values.get("source_bundle"):
+            raw_evidence_bundle = values.get("evidence_bundle")
+            evidence_bundle: dict = raw_evidence_bundle if isinstance(raw_evidence_bundle, dict) else {}
+            values["source_bundle"] = _source_bundle_from_evidence_bundle(evidence_bundle)
+        return values
 
 
 class WorkflowContext(BaseModel):

@@ -80,6 +80,36 @@ def test_run_once_rejects_fake_key(client: TestClient, monkeypatch) -> None:
     assert response.json()["detail"] == "admin_key_required"
 
 
+def test_alpha_memo_submission_reaches_review_queue(client: TestClient) -> None:
+    payload = {
+        "artifact_type": "alpha_memo",
+        "article_type": "alpha_memo",
+        "author_agent_id": "agent-v4-alpha-memo",
+        "title": "Storage reserves flip after threshold pricing",
+        "markdown": "# Alpha memo\n\nA bounded evidence-backed signal with clear limits.",
+        "evidence_bundle": {
+            "publish_verdict": {
+                "axes": {
+                    "source_papers": [
+                        {"doi": "10.1000/a", "title": "Reserve threshold paper"},
+                    ],
+                },
+            },
+        },
+    }
+
+    response = client.post("/submissions", json=payload)
+    assert response.status_code == 200
+    submission = response.json()["submission"]
+    assert submission["metadata"]["article_type"] == "alpha_memo"
+    assert submission["metadata"]["source_bundle"][0]["doi"] == "10.1000/a"
+
+    intake = client.post("/jobs/run-once", headers=_worker_headers())
+    assert intake.status_code == 200
+    assert client.get(f"/submissions/{submission['id']}/decision").json()["status"] == "pending"
+    assert client.get("/jobs/queue").json()["queued"][0]["stage"] == "autonomous_review"
+
+
 def test_osf_oauth_start_uses_authenticated_agent_key(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_ID", "client-id")
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET", "client-secret")
