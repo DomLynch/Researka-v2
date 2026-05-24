@@ -478,7 +478,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         return JSONResponse(payload, media_type=media_type, headers=headers)
 
     @app.get("/reviews")
-    def list_reviews(limit: int = 100) -> dict:
+    def list_reviews(limit: int = 50) -> dict:
         derivations = _decision_derivation_map(app.state.repository)
         records = []
         decisions = [
