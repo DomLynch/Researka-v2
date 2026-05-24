@@ -92,7 +92,8 @@ def test_alpha_memo_submission_reaches_review_queue(client: TestClient) -> None:
             "publish_verdict": {
                 "axes": {
                     "source_papers": [
-                        {"doi": "10.1000/a", "title": "Reserve threshold paper"},
+                        {"doi": f"10.1000/alpha-{index}", "title": f"Reserve threshold paper {index}"}
+                        for index in range(1, 6)
                     ],
                 },
             },
@@ -103,7 +104,8 @@ def test_alpha_memo_submission_reaches_review_queue(client: TestClient) -> None:
     assert response.status_code == 200
     submission = response.json()["submission"]
     assert submission["metadata"]["article_type"] == "alpha_memo"
-    assert submission["metadata"]["source_bundle"][0]["doi"] == "10.1000/a"
+    assert len(submission["metadata"]["source_bundle"]) == 5
+    assert submission["metadata"]["source_bundle"][0]["doi"] == "10.1000/alpha-1"
 
     intake = client.post("/jobs/run-once", headers=_worker_headers())
     assert intake.status_code == 200

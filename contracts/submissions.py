@@ -35,12 +35,11 @@ class SubmissionTemplateV1(BaseModel):
 SUBMISSION_TEMPLATE_V1 = SubmissionTemplateV1()
 RECENT_PUBLICATION_YEAR_FLOOR = 2020
 
-# Per-article-type intake thresholds. The synthesis path demands more
-# evidence breadth and substance than the rapid path because the artefact
-# being published is much larger and more consequential.
+# Per-article-type intake thresholds. Alpha memos are shorter than papers but
+# still need enough independent receipts for public auto-acceptance.
 _TYPE_THRESHOLDS: dict[str, dict[str, object]] = {
     ArticleType.ALPHA_MEMO.value: {
-        "minimum_citations": 1,
+        "minimum_citations": 5,
         "minimum_recency_ratio": 0.0,
         "minimum_research_question_words": 0,
     },

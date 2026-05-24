@@ -190,7 +190,8 @@ def test_alpha_memo_agent_artifact_uses_lightweight_intake_contract() -> None:
             "publish_verdict": {
                 "axes": {
                     "source_papers": [
-                        {"doi": "10.1000/a", "title": "Reserve threshold paper"},
+                        {"doi": f"10.1000/alpha-{index}", "title": f"Reserve threshold paper {index}"}
+                        for index in range(1, 6)
                     ],
                 },
             },
@@ -202,12 +203,13 @@ def test_alpha_memo_agent_artifact_uses_lightweight_intake_contract() -> None:
     assert payload.abstract == "Alpha memo"
     assert payload.source_bundle == [
         {
-            "title": "Reserve threshold paper",
-            "doi": "10.1000/a",
+            "title": f"Reserve threshold paper {index}",
+            "doi": f"10.1000/alpha-{index}",
             "url": None,
             "year": None,
             "evidence_type": "primary",
         }
+        for index in range(1, 6)
     ]
 
     alpha_failures = [
@@ -241,6 +243,26 @@ def test_alpha_memo_agent_artifact_uses_lightweight_intake_contract() -> None:
         article_type=payload.article_type.value,
     )
     assert artifact.body_markdown.startswith("# Alpha memo")
+
+
+def test_alpha_memo_with_four_sources_fails_public_intake_gate() -> None:
+    results = run_submission_template_checks(
+        sections={},
+        source_bundle=[
+            {
+                "title": f"Narrow alpha source {index}",
+                "doi": f"10.1000/narrow-{index}",
+                "evidence_type": "primary",
+            }
+            for index in range(1, 5)
+        ],
+        article_type=ArticleType.ALPHA_MEMO.value,
+    )
+    failures = {gate.name for gate in results if not gate.passed}
+    minimum_citations = next(gate for gate in results if gate.name == "minimum_citations")
+
+    assert failures == {"minimum_citations"}
+    assert minimum_citations.reason == "source bundle must contain at least 5 citations"
 
 
 def test_compile_publication_preserves_full_manuscript_references() -> None:
