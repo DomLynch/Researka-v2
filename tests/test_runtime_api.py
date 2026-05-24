@@ -375,7 +375,28 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
             object_type=ObjectType.REVIEW,
             parent_object_id=submission.id,
             title="Review for Exercise: thin alpha memo",
-            metadata={"recommendation": "reject", "provider": "reviewer-panel"},
+            body_markdown="Panel review: strong narrow memo, but single-trial caveat needs to be explicit.",
+            metadata={
+                "recommendation": "reject",
+                "provider": "reviewer-panel",
+                "model": "mimo-v2.5-pro|google/gemma-4-31b-it|mistralai/mistral-small-2603",
+                "route": "fallback_tiebreak",
+                "prompt_version": "editor-v1-clean-runtime",
+                "rubric_scores": {
+                    "research_question_quality": 5,
+                    "synthesis_quality": 5,
+                    "claim_evidence_alignment": 4,
+                    "limitations_quality": 5,
+                    "gaps_quality": 5,
+                    "source_grounding": 5,
+                },
+                "major_issues": [],
+                "minor_issues": ["Tighten the limitations wording."],
+                "required_revisions": ["Clarify that all evidence comes from a single trial."],
+                "claim_support_verdict": "supported",
+                "overclaim_verdict": "none",
+                "synthesis_quality_verdict": "strong",
+            },
         )
     )
     rejected = repo.create_object(
@@ -423,6 +444,17 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
     assert record["full_text"] == ""
     assert record["failure_category"] == "minimum_citations"
     assert record["failed_checks"] == ["expected at least 12 sources"]
+    assert record["rubric_scores"]["claim_evidence_alignment"] == 4
+    assert record["required_revisions"] == ["Clarify that all evidence comes from a single trial."]
+    assert record["major_issues"] == []
+    assert record["minor_issues"] == ["Tighten the limitations wording."]
+    assert record["claim_support_verdict"] == "supported"
+    assert record["overclaim_verdict"] == "none"
+    assert record["synthesis_quality_verdict"] == "strong"
+    assert record["review_markdown"].startswith("Panel review:")
+    assert record["panel_route"] == "fallback_tiebreak"
+    assert record["models"] == ["mimo-v2.5-pro", "google/gemma-4-31b-it", "mistralai/mistral-small-2603"]
+    assert record["prompt_version"] == "editor-v1-clean-runtime"
     assert record["dw_chain_url"] == "https://provenance.researka.org/artifacts/claim_failed_alpha/chain"
 
     detail = client.get(f"/reviews/{rejected.id}")

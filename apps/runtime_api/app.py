@@ -226,6 +226,26 @@ def _string_list(value: object) -> list[str]:
     return out
 
 
+def _score_dict(value: object) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    scores: dict[str, int] = {}
+    for key, raw in value.items():
+        try:
+            score = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= score <= 5:
+            scores[str(key)] = score
+    return scores
+
+
+def _model_list(value: object) -> list[str]:
+    if not isinstance(value, str):
+        return []
+    return [item.strip() for item in value.replace(",", "|").split("|") if item.strip()]
+
+
 def _decision_derivation_map(repo: RuntimeRepository) -> dict[str, dict]:
     derivations: dict[str, dict] = {}
     for event in repo.list_events():
@@ -254,8 +274,11 @@ def _public_decision_record(
     submission_metadata = submission.metadata if submission else {}
     review_metadata = review.metadata if review else {}
     gate_failures = decision_metadata.get("gate_failures", [])
-    failed_checks = _string_list(gate_failures) or _string_list(decision_metadata.get("failed_checks")) or _string_list(decision_metadata.get("notes"))
+    failed_checks = _string_list(gate_failures) or _string_list(decision_metadata.get("failed_checks"))
     decision_value = str(decision_metadata.get("decision") or "").strip().lower()
+    required_revisions = _string_list(review_metadata.get("required_revisions"))
+    major_issues = _string_list(review_metadata.get("major_issues"))
+    minor_issues = _string_list(review_metadata.get("minor_issues"))
     topic = submission_metadata.get("topic") or submission_metadata.get("domain_slug") or "research"
     agent_id = (
         submission_metadata.get("authenticated_agent_id")
@@ -264,8 +287,9 @@ def _public_decision_record(
         or "unknown-agent"
     )
     dw_artifact_id = (derivation or {}).get("decision_artifact_id") or decision_metadata.get("dw_artifact_id")
-    notes = _string_list(decision_metadata.get("notes"))
-    review_summary = "; ".join(notes + failed_checks) or f"Researka gate decision: {decision_value}."
+    review_markdown = (review.body_markdown if review else "").strip()
+    summary_parts = required_revisions or major_issues or failed_checks or ([review_markdown] if review_markdown else [])
+    review_summary = "; ".join(summary_parts) or f"Researka gate decision: {decision_value}."
     return {
         "id": decision.id,
         "artifact_id": decision.id,
@@ -280,9 +304,25 @@ def _public_decision_record(
         "agent_id": agent_id,
         "author_agent_id": agent_id,
         "decision": decision_value,
-        "failure_category": next((item.get("name") for item in gate_failures if isinstance(item, dict) and item.get("name")), decision_value),
+        "failure_category": next((item.get("name") for item in gate_failures if isinstance(item, dict) and item.get("name")), None),
         "failed_checks": failed_checks,
         "gate_failures": gate_failures if isinstance(gate_failures, list) else [],
+        "rubric_scores": _score_dict(review_metadata.get("rubric_scores")),
+        "required_revisions": required_revisions,
+        "major_issues": major_issues,
+        "minor_issues": minor_issues,
+        "claim_support_verdict": review_metadata.get("claim_support_verdict"),
+        "overclaim_verdict": review_metadata.get("overclaim_verdict"),
+        "synthesis_quality_verdict": review_metadata.get("synthesis_quality_verdict"),
+        "review_markdown": review_markdown[:4000],
+        "panel_route": review_metadata.get("route"),
+        "models": _model_list(review_metadata.get("model")),
+        "fallback_used": {
+            "primary": bool(review_metadata.get("primary_fallback_used")),
+            "sparring": bool(review_metadata.get("sparring_fallback_used")),
+        },
+        "prompt_version": review_metadata.get("prompt_version"),
+        "review_id": review.id if review else decision_metadata.get("review_id"),
         "review_summary": review_summary[:1000],
         "public_visible": True,
         "public_full_text": False,
