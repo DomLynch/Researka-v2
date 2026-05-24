@@ -478,13 +478,16 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         return JSONResponse(payload, media_type=media_type, headers=headers)
 
     @app.get("/reviews")
-    def list_reviews() -> dict:
+    def list_reviews(limit: int = 100) -> dict:
         derivations = _decision_derivation_map(app.state.repository)
         records = []
-        for decision in app.state.repository.list_objects(ObjectType.DECISION):
-            decision_value = str(decision.metadata.get("decision") or "").strip().lower()
-            if decision_value not in {Decision.REVISE.value, Decision.REJECT.value}:
-                continue
+        decisions = [
+            decision
+            for decision in app.state.repository.list_objects(ObjectType.DECISION)
+            if str(decision.metadata.get("decision") or "").strip().lower() in {Decision.REVISE.value, Decision.REJECT.value}
+        ]
+        decisions.sort(key=lambda item: item.created_at, reverse=True)
+        for decision in decisions[: max(1, min(limit, 250))]:
             submission = app.state.repository.get_object(decision.parent_object_id) if decision.parent_object_id else None
             review_id = decision.metadata.get("review_id")
             review = app.state.repository.get_object(str(review_id)) if review_id else None
@@ -496,7 +499,6 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                     derivation=derivations.get(decision.id),
                 )
             )
-        records.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
         return {"reviews": records}
 
     @app.get("/reviews/{decision_id}")
