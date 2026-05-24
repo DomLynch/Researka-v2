@@ -212,6 +212,96 @@ def _is_publicly_listed(publication: ResearchObject) -> bool:
     return str(metadata.get("public_visibility") or "listed").strip().lower() != "hidden"
 
 
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for item in value:
+        if isinstance(item, str) and item.strip():
+            out.append(item.strip())
+        elif isinstance(item, dict):
+            text = item.get("reason") or item.get("message") or item.get("name") or item.get("check")
+            if isinstance(text, str) and text.strip():
+                out.append(text.strip())
+    return out
+
+
+def _decision_derivation_map(repo: RuntimeRepository) -> dict[str, dict]:
+    derivations: dict[str, dict] = {}
+    for event in repo.list_events():
+        decision_id = event.payload.get("created_object_id")
+        derivation = event.payload.get("derivation_web")
+        if isinstance(decision_id, str) and isinstance(derivation, dict):
+            derivations[decision_id] = derivation
+    return derivations
+
+
+def _artifact_type_for_submission(submission: ResearchObject | None) -> str:
+    article_type = str((submission.metadata if submission else {}).get("article_type") or "")
+    artifact_type = str((submission.metadata if submission else {}).get("artifact_type") or "")
+    marker = f"{article_type} {artifact_type}".lower()
+    return "alpha_memo" if "alpha_memo" in marker else "research_paper"
+
+
+def _public_decision_record(
+    *,
+    decision: ResearchObject,
+    submission: ResearchObject | None,
+    review: ResearchObject | None,
+    derivation: dict | None = None,
+) -> dict:
+    decision_metadata = decision.metadata
+    submission_metadata = submission.metadata if submission else {}
+    review_metadata = review.metadata if review else {}
+    gate_failures = decision_metadata.get("gate_failures", [])
+    failed_checks = _string_list(gate_failures) or _string_list(decision_metadata.get("failed_checks")) or _string_list(decision_metadata.get("notes"))
+    decision_value = str(decision_metadata.get("decision") or "").strip().lower()
+    topic = submission_metadata.get("topic") or submission_metadata.get("domain_slug") or "research"
+    agent_id = (
+        submission_metadata.get("authenticated_agent_id")
+        or submission_metadata.get("author_agent_id")
+        or submission_metadata.get("agent_id")
+        or "unknown-agent"
+    )
+    dw_artifact_id = (derivation or {}).get("decision_artifact_id") or decision_metadata.get("dw_artifact_id")
+    notes = _string_list(decision_metadata.get("notes"))
+    review_summary = "; ".join(notes + failed_checks) or f"Researka gate decision: {decision_value}."
+    return {
+        "id": decision.id,
+        "artifact_id": decision.id,
+        "submission_id": decision.parent_object_id,
+        "parent_object_id": decision.parent_object_id,
+        "artifact_type": _artifact_type_for_submission(submission),
+        "title": submission.title if submission else decision.title,
+        "topic": topic,
+        "domain_slug": topic,
+        "author_name": submission_metadata.get("author_name") or submission_metadata.get("human_owner_name"),
+        "orcid": submission_metadata.get("orcid") or submission_metadata.get("submitter_orcid") or submission_metadata.get("author_orcid"),
+        "agent_id": agent_id,
+        "author_agent_id": agent_id,
+        "decision": decision_value,
+        "failure_category": next((item.get("name") for item in gate_failures if isinstance(item, dict) and item.get("name")), decision_value),
+        "failed_checks": failed_checks,
+        "gate_failures": gate_failures if isinstance(gate_failures, list) else [],
+        "review_summary": review_summary[:1000],
+        "public_visible": True,
+        "public_full_text": False,
+        "full_text": "",
+        "body_markdown": "",
+        "dw_artifact_id": dw_artifact_id,
+        "dw_chain_url": f"https://provenance.researka.org/artifacts/{dw_artifact_id}/chain" if dw_artifact_id else None,
+        "actor_id": decision_metadata.get("actor_id") or review_metadata.get("actor_id") or "reviewer-panel",
+        "review_provider": decision_metadata.get("provider") or review_metadata.get("provider") or "reviewer-panel",
+        "reviewed_at": decision.created_at.isoformat(),
+        "created_at": decision.created_at.isoformat(),
+        "timeline": [
+            Stage.INTAKE.value,
+            *([Stage.REVIEW.value] if review else []),
+            Stage.EDITORIAL.value,
+        ],
+    }
+
+
 def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     if repository is not None:
         repo = repository
@@ -386,6 +476,46 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         if isinstance(payload, str):
             return PlainTextResponse(payload, media_type=media_type, headers=headers)
         return JSONResponse(payload, media_type=media_type, headers=headers)
+
+    @app.get("/reviews")
+    def list_reviews() -> dict:
+        derivations = _decision_derivation_map(app.state.repository)
+        records = []
+        for decision in app.state.repository.list_objects(ObjectType.DECISION):
+            decision_value = str(decision.metadata.get("decision") or "").strip().lower()
+            if decision_value not in {Decision.REVISE.value, Decision.REJECT.value}:
+                continue
+            submission = app.state.repository.get_object(decision.parent_object_id) if decision.parent_object_id else None
+            review_id = decision.metadata.get("review_id")
+            review = app.state.repository.get_object(str(review_id)) if review_id else None
+            records.append(
+                _public_decision_record(
+                    decision=decision,
+                    submission=submission if submission and submission.object_type == ObjectType.SUBMISSION else None,
+                    review=review if review and review.object_type == ObjectType.REVIEW else None,
+                    derivation=derivations.get(decision.id),
+                )
+            )
+        records.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+        return {"reviews": records}
+
+    @app.get("/reviews/{decision_id}")
+    def get_review(decision_id: str) -> dict:
+        decision = app.state.repository.get_object(decision_id)
+        if decision is None or decision.object_type != ObjectType.DECISION:
+            raise HTTPException(status_code=404, detail="review_record_not_found")
+        decision_value = str(decision.metadata.get("decision") or "").strip().lower()
+        if decision_value not in {Decision.REVISE.value, Decision.REJECT.value}:
+            raise HTTPException(status_code=404, detail="review_record_not_found")
+        submission = app.state.repository.get_object(decision.parent_object_id) if decision.parent_object_id else None
+        review_id = decision.metadata.get("review_id")
+        review = app.state.repository.get_object(str(review_id)) if review_id else None
+        return _public_decision_record(
+            decision=decision,
+            submission=submission if submission and submission.object_type == ObjectType.SUBMISSION else None,
+            review=review if review and review.object_type == ObjectType.REVIEW else None,
+            derivation=_decision_derivation_map(app.state.repository).get(decision.id),
+        )
 
     @app.get("/submissions/{submission_id}/provenance")
     def get_submission_provenance(submission_id: str) -> dict:

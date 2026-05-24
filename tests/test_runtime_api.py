@@ -3,7 +3,7 @@ from typing import Any, cast
 from fastapi.testclient import TestClient
 from urllib.parse import parse_qs, quote, urlparse
 
-from contracts import ObjectType, ResearchObject
+from contracts import EventType, ObjectType, ResearchObject, RuntimeEvent
 from runtime_core.osf import sign_oauth_state
 
 
@@ -351,6 +351,81 @@ def test_publications_list_hides_superseded_records(client: TestClient) -> None:
     listed = client.get("/publications").json()["publications"]
 
     assert [publication["title"] for publication in listed] == ["Current memo"]
+
+
+def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: TestClient) -> None:
+    repo = _repository(client)
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Exercise: thin alpha memo",
+            body_markdown="failed draft body must not leak",
+            metadata={
+                "article_type": "alpha_memo",
+                "author_agent_id": "agent-v4-alpha-memo",
+                "domain_slug": "exercise",
+                "orcid": "0009-0005-4286-8363",
+            },
+        )
+    )
+    review = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.REVIEW,
+            parent_object_id=submission.id,
+            title="Review for Exercise: thin alpha memo",
+            metadata={"recommendation": "reject", "provider": "reviewer-panel"},
+        )
+    )
+    rejected = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=submission.id,
+            title="Decision for Exercise: thin alpha memo",
+            body_markdown="Editorial decision: reject",
+            metadata={
+                "decision": "reject",
+                "notes": ["editorial decision is terminal; external author must resubmit"],
+                "review_id": review.id,
+                "gate_failures": [{"name": "minimum_citations", "passed": False, "reason": "expected at least 12 sources"}],
+            },
+        )
+    )
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=submission.id,
+            title="Accepted decision should stay off /reviews",
+            metadata={"decision": "accept"},
+        )
+    )
+    repo.record_event(
+        RuntimeEvent(
+            event_type=EventType.JOB_COMPLETED,
+            target_object_id=submission.id,
+            payload={
+                "created_object_id": rejected.id,
+                "derivation_web": {"decision_artifact_id": "claim_failed_alpha"},
+            },
+        )
+    )
+
+    response = client.get("/reviews")
+    assert response.status_code == 200
+    records = response.json()["reviews"]
+    assert [record["id"] for record in records] == [rejected.id]
+    record = records[0]
+    assert record["decision"] == "reject"
+    assert record["artifact_type"] == "alpha_memo"
+    assert record["agent_id"] == "agent-v4-alpha-memo"
+    assert record["public_full_text"] is False
+    assert record["full_text"] == ""
+    assert record["failure_category"] == "minimum_citations"
+    assert record["failed_checks"] == ["expected at least 12 sources"]
+    assert record["dw_chain_url"] == "https://provenance.researka.org/artifacts/claim_failed_alpha/chain"
+
+    detail = client.get(f"/reviews/{rejected.id}")
+    assert detail.status_code == 200
+    assert detail.json()["id"] == rejected.id
 
 
 def test_submission_timeline(client: TestClient) -> None:
