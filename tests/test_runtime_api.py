@@ -3,6 +3,7 @@ from typing import Any, cast
 from fastapi.testclient import TestClient
 from urllib.parse import parse_qs, quote, urlparse
 
+from contracts import ObjectType, ResearchObject
 from runtime_core.osf import sign_oauth_state
 
 
@@ -321,6 +322,35 @@ def test_can_list_publications_after_processing(client: TestClient) -> None:
     assert graph.status_code == 200
     assert graph.json()["publication_id"] == publication["id"]
     assert graph.json()["screening"]["flow"] == ["identified", "screened", "excluded_with_reasons", "included"]
+
+
+def test_publications_list_hides_superseded_records(client: TestClient) -> None:
+    repo = _repository(client)
+    kept = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Current memo",
+            metadata={"article_type": "alpha_memo"},
+        )
+    )
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Superseded memo",
+            metadata={"article_type": "alpha_memo", "superseded_by": kept.id},
+        )
+    )
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Hidden memo",
+            metadata={"article_type": "alpha_memo", "public_visibility": "hidden"},
+        )
+    )
+
+    listed = client.get("/publications").json()["publications"]
+
+    assert [publication["title"] for publication in listed] == ["Current memo"]
 
 
 def test_submission_timeline(client: TestClient) -> None:

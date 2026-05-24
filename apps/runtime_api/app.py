@@ -205,6 +205,13 @@ def _submission_metadata_for_agent(payload: SubmissionPayload, agent_id: str | N
     return metadata
 
 
+def _is_publicly_listed(publication: ResearchObject) -> bool:
+    metadata = publication.metadata
+    if metadata.get("superseded_by"):
+        return False
+    return str(metadata.get("public_visibility") or "listed").strip().lower() != "hidden"
+
+
 def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     if repository is not None:
         repo = repository
@@ -352,7 +359,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     @app.get("/publications")
     def list_publications() -> dict:
         publications = app.state.repository.list_objects(ObjectType.PUBLICATION)
-        return {"publications": [publication.model_dump(mode="json") for publication in publications]}
+        return {"publications": [publication.model_dump(mode="json") for publication in publications if _is_publicly_listed(publication)]}
 
     @app.get("/publications/{publication_id}")
     def get_publication(publication_id: str) -> dict:
