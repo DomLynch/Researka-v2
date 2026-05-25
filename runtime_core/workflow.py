@@ -410,6 +410,7 @@ class WorkflowEngine:
                 sections=sections,
                 source_bundle=source_bundle,
                 article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
+                evidence_bundle=submission.metadata.get("evidence_bundle", {}),
             )
             if not gate.passed
         ]

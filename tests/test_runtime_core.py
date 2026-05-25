@@ -262,7 +262,59 @@ def test_alpha_memo_with_four_sources_fails_public_intake_gate() -> None:
     minimum_citations = next(gate for gate in results if gate.name == "minimum_citations")
 
     assert failures == {"minimum_citations"}
-    assert minimum_citations.reason == "source bundle must contain at least 5 citations"
+    assert "at least 5 citations" in minimum_citations.reason
+
+
+def test_alpha_memo_with_four_sources_can_use_structural_exception() -> None:
+    bundle = [
+        {
+            "title": f"Narrow alpha source {index}",
+            "doi": f"10.1000/narrow-{index}",
+            "evidence_type": "primary",
+        }
+        for index in range(1, 5)
+    ]
+    results = run_submission_template_checks(
+        sections={},
+        source_bundle=bundle,
+        article_type=ArticleType.ALPHA_MEMO.value,
+        evidence_bundle={
+            "publish_verdict": {
+                "decision": "ready_to_publish",
+                "publish_tier": "TIER_1",
+                "maturity_level": "L5",
+                "confidence_label": "evidence_backed_signal",
+                "axes": {
+                    "bound_receipts": 2,
+                    "a_core_receipts": 2,
+                    "source_papers": bundle,
+                },
+            },
+        },
+    )
+
+    failures = {gate.name for gate in results if not gate.passed}
+
+    assert "minimum_citations" not in failures
+
+
+def test_alpha_memo_single_source_cannot_use_structural_exception() -> None:
+    results = run_submission_template_checks(
+        sections={},
+        source_bundle=[{"title": "Single source", "doi": "10.1000/one", "evidence_type": "primary"}],
+        article_type=ArticleType.ALPHA_MEMO.value,
+        evidence_bundle={
+            "publish_verdict": {
+                "decision": "ready_to_publish",
+                "publish_tier": "TIER_1",
+                "maturity_level": "L5",
+                "confidence_label": "evidence_backed_signal",
+                "axes": {"bound_receipts": 4, "a_core_receipts": 4},
+            },
+        },
+    )
+
+    assert "minimum_citations" in {gate.name for gate in results if not gate.passed}
 
 
 def test_compile_publication_preserves_full_manuscript_references() -> None:
