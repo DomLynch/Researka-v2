@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from contracts import Decision, GoldSetCorpus, GoldSetEntry, ObjectType, ResearchObject, RuntimeJob, Stage
 
@@ -67,7 +67,7 @@ def run_gold_entry(entry: GoldSetEntry, engine: WorkflowEngine) -> dict:
         )
     )
 
-    record = {
+    record: dict[str, Any] = {
         "entry_id": entry.entry_id,
         "title": entry.submission.title,
         "article_type": entry.article_type.value,
@@ -138,10 +138,11 @@ def run_gold_entry(entry: GoldSetEntry, engine: WorkflowEngine) -> dict:
     record["actual_overclaim_verdict"] = review_metadata.get("overclaim_verdict")
     record["actual_synthesis_quality_verdict"] = review_metadata.get("synthesis_quality_verdict")
     record["accept_blockers"] = _accept_blockers(review_metadata)
+    actual_rubric_scores = record["actual_rubric_scores"]
     record["rubric_score_deltas"] = {
-        key: int(record["actual_rubric_scores"].get(key, 0) or 0) - int(entry.expected.rubric_scores.get(key, 0) or 0)
+        key: int(actual_rubric_scores.get(key, 0) or 0) - int(entry.expected.rubric_scores.get(key, 0) or 0)
         for key in REVIEW_RUBRIC_KEYS
-        if key in entry.expected.rubric_scores and key in record["actual_rubric_scores"]
+        if key in entry.expected.rubric_scores and key in actual_rubric_scores
     }
 
     try:

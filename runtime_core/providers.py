@@ -6,7 +6,7 @@ import random
 import time
 import urllib.error
 import urllib.request
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from pydantic import BaseModel, Field
 
@@ -161,8 +161,8 @@ class OpenAICompatibleProvider:
                 time.sleep(sleep_for)
                 continue
             except Exception as exc:
-                message = str(exc).lower()
-                error_class = ProviderErrorClass.TIMEOUT if "timed out" in message else ProviderErrorClass.PROVIDER_UNAVAILABLE
+                error_message = str(exc).lower()
+                error_class = ProviderErrorClass.TIMEOUT if "timed out" in error_message else ProviderErrorClass.PROVIDER_UNAVAILABLE
                 last_error = ProviderError(error_class=error_class, message=str(exc))
                 if not self._is_transient(error_class) or attempt >= self.max_attempts - 1:
                     return ProviderResult(ok=False, error=last_error)
@@ -170,9 +170,14 @@ class OpenAICompatibleProvider:
                 attempt += 1
                 continue
 
-        message = (((raw.get("choices") or [{}])[0]).get("message") or {})
+        raw_payload = cast(dict[str, Any], raw)
+        choices = raw_payload.get("choices") or [{}]
+        first_choice = choices[0] if isinstance(choices, list) and choices else {}
+        message = first_choice.get("message") if isinstance(first_choice, dict) else {}
+        message = message if isinstance(message, dict) else {}
         text = str(message.get("content") or message.get("reasoning_content") or "").strip()
-        usage = raw.get("usage") or {}
+        usage = raw_payload.get("usage") or {}
+        usage = usage if isinstance(usage, dict) else {}
         prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
         completion_tokens = int(usage.get("completion_tokens", 0) or 0)
         cost_usd = round(
@@ -185,7 +190,7 @@ class OpenAICompatibleProvider:
             response=ProviderResponse(
                 text=text,
                 provider=self.provider,
-                model=str(raw.get("model") or self.model),
+                model=str(raw_payload.get("model") or self.model),
                 usage=ProviderUsage(
                     input_tokens=prompt_tokens,
                     output_tokens=completion_tokens,
@@ -261,7 +266,7 @@ class MimoProvider(OpenAICompatibleProvider):
         super().__init__(
             provider="mimo",
             model=model,
-            api_key=api_key or os.getenv("MIMO_API_KEY", ""),
+            api_key=api_key or os.environ.get("MIMO_API_KEY", ""),
             base_url=base_url,
             input_cost_per_million=float(os.getenv("RESEARKA_V2_MIMO_INPUT_USD_PER_MILLION", "0")),
             output_cost_per_million=float(os.getenv("RESEARKA_V2_MIMO_OUTPUT_USD_PER_MILLION", "0")),
@@ -279,7 +284,7 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         super().__init__(
             provider="openrouter",
             model=model,
-            api_key=api_key or os.getenv("OPENROUTER_API_KEY", ""),
+            api_key=api_key or os.environ.get("OPENROUTER_API_KEY", ""),
             base_url=base_url,
         )
 

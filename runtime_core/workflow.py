@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from contracts import ArticleType, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, WorkflowContext, WorkflowOutcome, publication_template_for, run_submission_template_checks
 
 from .compiler import compile_publication
 from .derivation_web import emit_decision_to_derivation_web, emit_publication_to_derivation_web
+from .integrity_client import check_integrity, index_integrity
 from .osf import mint_publication_doi, mint_publication_doi_with_oauth, osf_publication_metadata_from_env
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
@@ -61,6 +63,30 @@ def _mint_publication_doi(repository: RuntimeRepository, publication: ResearchOb
                 repository.store_osf_oauth_token(agent_id, updated_token_metadata)
             return osf_metadata
     return mint_publication_doi(publication)
+
+
+def _integrity_payload_from_submission(submission: ResearchObject) -> dict[str, Any]:
+    return {
+        "submission_id": submission.id,
+        "title": submission.title,
+        "abstract": str(submission.metadata.get("abstract", "")).strip(),
+        "citations": list(submission.metadata.get("source_bundle", [])),
+        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+        "domain": submission.metadata.get("domain_slug", "default") or "default",
+    }
+
+
+def _integrity_payload_from_publication(publication: ResearchObject, submission: ResearchObject) -> dict[str, Any]:
+    payload = _integrity_payload_from_submission(submission)
+    payload.update(
+        {
+            "publication_id": publication.id,
+            "title": publication.title,
+            "abstract": str(publication.metadata.get("abstract") or payload["abstract"]).strip(),
+            "article_type": publication.metadata.get("article_type", payload["article_type"]),
+        }
+    )
+    return payload
 
 
 class WorkflowEngine:
@@ -273,6 +299,24 @@ class WorkflowEngine:
         }
         return recommendation, review_markdown, metadata
 
+    def _integrity_decision_metadata(self, submission: ResearchObject, integrity: dict[str, Any], recommendation: str) -> dict[str, object]:
+        feedback = str(integrity.get("feedback_for_agent") or "").strip()
+        reason = str(integrity.get("reason") or "integrity_duplicate").strip()
+        return {
+            "decision": recommendation,
+            "notes": ["integrity check decision"],
+            "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+            "failure_category": "integrity_duplicate",
+            "failed_checks": [feedback or reason],
+            "integrity": {
+                "matched_publication_id": integrity.get("matched_publication_id"),
+                "duplication_score": integrity.get("duplication_score"),
+                "breakdown": integrity.get("breakdown") or {},
+                "feedback_for_agent": feedback or None,
+            },
+            **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+        }
+
     def _validated_review_contract(
         self,
         payload: dict[str, object],
@@ -445,6 +489,20 @@ class WorkflowEngine:
             )
             derivation = emit_decision_to_derivation_web(submission=submission, decision=decision)
             return {"created_object_id": decision.id, "terminal_decision": Decision.REJECT.value, "next_jobs": 0, "derivation_web": derivation}
+        integrity = check_integrity(_integrity_payload_from_submission(submission))
+        recommendation = str(integrity.get("recommendation") or "").strip().lower() if integrity else ""
+        if recommendation in {Decision.REJECT.value, Decision.REVISE.value}:
+            decision = repository.create_object(
+                ResearchObject(
+                    object_type=ObjectType.DECISION,
+                    parent_object_id=submission.id,
+                    title=f"Decision for {submission.title}",
+                    body_markdown=f"Integrity decision: {recommendation}",
+                    metadata=self._integrity_decision_metadata(submission, integrity or {}, recommendation),
+                )
+            )
+            derivation = emit_decision_to_derivation_web(submission=submission, decision=decision)
+            return {"created_object_id": decision.id, "terminal_decision": recommendation, "next_jobs": 0, "derivation_web": derivation}
         repository.enqueue_job(
             RuntimeJob(
                 target_object_id=submission.id,
@@ -599,4 +657,5 @@ class WorkflowEngine:
                 publication = repository.update_object_metadata(publication.id, {**publication.metadata, **dw_metadata}) or publication
         except Exception as exc:
             repository.update_object_metadata(publication.id, {**publication.metadata, "dw_status": "failed", "dw_error": str(exc)[:240]})
+        index_integrity(_integrity_payload_from_publication(publication, submission))
         return {"publication_id": publication.id, "deduped": False}

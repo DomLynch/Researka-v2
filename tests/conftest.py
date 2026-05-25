@@ -17,6 +17,11 @@ def inmemory_repo():
     return repo
 
 
+@pytest.fixture(autouse=True)
+def disable_integrity_by_default(monkeypatch):
+    monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "0")
+
+
 @pytest.fixture
 def client(inmemory_repo, monkeypatch):
     monkeypatch.setenv("RESEARKA_V2_API_KEY", "test-legacy-key")

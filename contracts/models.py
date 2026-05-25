@@ -177,6 +177,7 @@ class SubmissionPayload(BaseModel):
     confidence_score: float | str | None = None
     evidence_bundle: dict = Field(default_factory=dict)
     author_signature: str | None = None
+    parent_submission_id: str | None = None
     domain_slug: str = "general"
     core_claims_resolved: bool = True
     submitted_at: datetime = Field(default_factory=utc_now)

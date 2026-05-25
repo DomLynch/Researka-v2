@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.135.0",
   "cryptography>=42.0.0",
+  "httpx>=0.28.0",
   "pydantic>=2.12.0",
 ]
 
@@ -13,7 +14,6 @@ dependencies = [
 dev = [
   "alembic>=1.16.0",
   "pytest>=9.0.0",
-  "httpx>=0.28.0",
   "mypy>=1.13.0",
   "psycopg[binary]>=3.2.0",
   "requests>=2.32.0",
@@ -30,3 +30,15 @@ include = ["apps*", "contracts*", "runtime_core*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.mypy]
+python_version = "3.12"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["alembic", "alembic.*", "psycopg", "psycopg.*", "sqlalchemy", "sqlalchemy.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.test_runtime_core"]
+disable_error_code = ["arg-type", "call-arg", "exit-return", "union-attr"]

@@ -70,6 +70,8 @@ def _resolve_git_sha() -> str:
 
 
 _SERVICE_GIT_SHA = _resolve_git_sha()
+DEFAULT_AGENT_DAILY_LIMIT = 25
+DEFAULT_INTAKE_REJECTION_BACKOFF = 3
 
 
 def reset_calibration_cache() -> None:
@@ -167,9 +169,15 @@ def _check_api_key(repo: RuntimeRepository, request: Request) -> str | None:
         return None  # legacy key, no agent_id
 
     # Per-agent key
+    key_hash = hashlib.sha256(provided.encode()).hexdigest()
+    key_info = next((key for key in repo.list_api_keys() if key.key_hash == key_hash), None)
+    if key_info is not None and not key_info.revoked and key_info.daily_limit > 0:
+        used = repo.get_api_key_usage_today(key_hash)
+        if used >= key_info.daily_limit:
+            raise HTTPException(status_code=429, detail="daily_limit_exceeded")
+
     agent_id = repo.validate_api_key(provided)
     if agent_id is not None:
-        key_hash = hashlib.sha256(provided.encode()).hexdigest()
         repo.record_api_key_usage(key_hash)
         return agent_id
 
@@ -183,6 +191,86 @@ def _check_admin(request: Request) -> None:
     if admin_key and hmac.compare_digest(provided, admin_key):
         return
     raise HTTPException(status_code=403, detail="admin_key_required")
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(0, int(os.environ.get(name, str(default))))
+    except ValueError:
+        return default
+
+
+def _daily_limit_from_body(body: dict) -> int:
+    if "daily_limit" not in body:
+        return _env_int("RESEARKA_V2_DEFAULT_DAILY_LIMIT", DEFAULT_AGENT_DAILY_LIMIT)
+    try:
+        return max(0, int(body.get("daily_limit") or 0))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="daily_limit_invalid")
+
+
+def _submission_content_hash(payload: SubmissionPayload) -> str:
+    data = payload.model_dump(
+        mode="json",
+        exclude={"submitted_at", "parent_submission_id", "author_signature", "author_agent_id", "agent_id"},
+    )
+    canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
+
+
+def _matching_agent(metadata: dict, agent_id: str) -> bool:
+    return agent_id in {
+        str(metadata.get("authenticated_agent_id") or ""),
+        str(metadata.get("author_agent_id") or ""),
+        str(metadata.get("agent_id") or ""),
+    }
+
+
+def _duplicate_submission_id(repo: RuntimeRepository, *, content_hash: str) -> str | None:
+    for obj in reversed(repo.list_objects(ObjectType.SUBMISSION)):
+        if obj.metadata.get("submission_content_hash") != content_hash:
+            continue
+        return obj.id
+    return None
+
+
+def _is_intake_rejection(decision: ResearchObject) -> bool:
+    if decision.metadata.get("decision") != Decision.REJECT.value:
+        return False
+    notes = decision.metadata.get("notes", [])
+    if isinstance(notes, list) and "intake gate rejection" in notes:
+        return True
+    return bool(decision.metadata.get("gate_failures")) and not decision.metadata.get("review_id")
+
+
+def _failure_stage(decision: ResearchObject, review: ResearchObject | None) -> str:
+    if _is_intake_rejection(decision):
+        return "intake_gate"
+    if decision.metadata.get("failure_category") == "integrity_duplicate":
+        return "integrity_check"
+    if review is not None:
+        return "reviewer_panel"
+    return "editorial"
+
+
+def _consecutive_intake_rejections(repo: RuntimeRepository, *, agent_id: str) -> int:
+    count = 0
+    submissions = [
+        obj
+        for obj in repo.list_objects(ObjectType.SUBMISSION)
+        if _matching_agent(obj.metadata, agent_id)
+    ]
+    submissions.sort(key=lambda obj: obj.created_at, reverse=True)
+    for submission in submissions:
+        decisions = repo.children_of(submission.id, ObjectType.DECISION)
+        if not decisions:
+            continue
+        latest = decisions[-1]
+        if _is_intake_rejection(latest):
+            count += 1
+            continue
+        break
+    return count
 
 
 def _osf_oauth_config_or_error():
@@ -304,9 +392,12 @@ def _public_decision_record(
         "agent_id": agent_id,
         "author_agent_id": agent_id,
         "decision": decision_value,
-        "failure_category": next((item.get("name") for item in gate_failures if isinstance(item, dict) and item.get("name")), None),
+        "failure_stage": _failure_stage(decision, review),
+        "failure_category": next((item.get("name") for item in gate_failures if isinstance(item, dict) and item.get("name")), None)
+        or decision_metadata.get("failure_category"),
         "failed_checks": failed_checks,
         "gate_failures": gate_failures if isinstance(gate_failures, list) else [],
+        "integrity": decision_metadata.get("integrity") if isinstance(decision_metadata.get("integrity"), dict) else None,
         "rubric_scores": _score_dict(review_metadata.get("rubric_scores")),
         "required_revisions": required_revisions,
         "major_issues": major_issues,
@@ -340,6 +431,73 @@ def _public_decision_record(
             Stage.EDITORIAL.value,
         ],
     }
+
+
+def _publication_feedback(publication: ResearchObject | None) -> dict | None:
+    if publication is None:
+        return None
+    metadata = publication.metadata
+    artifact_type = _artifact_type_for_submission(publication)
+    public_path = "alpha" if artifact_type == "alpha_memo" else "papers"
+    return {
+        "publication_id": publication.id,
+        "url": f"https://researka.org/{public_path}/{publication.id}",
+        "doi": metadata.get("doi") or metadata.get("osf_doi"),
+        "doi_status": metadata.get("doi_status"),
+        "osf_url": metadata.get("osf_url"),
+        "dw_artifact_id": metadata.get("dw_artifact_id"),
+        "dw_chain_url": metadata.get("dw_chain_url"),
+    }
+
+
+def _submission_decision_response(
+    *,
+    repo: RuntimeRepository,
+    submission_id: str,
+    decision: ResearchObject,
+) -> dict:
+    submission = repo.get_object(submission_id)
+    review_id = decision.metadata.get("review_id")
+    review = repo.get_object(str(review_id)) if review_id else None
+    public_record = _public_decision_record(
+        decision=decision,
+        submission=submission if submission and submission.object_type == ObjectType.SUBMISSION else None,
+        review=review if review and review.object_type == ObjectType.REVIEW else None,
+        derivation=_decision_derivation_map(repo).get(decision.id),
+    )
+    decision_value = public_record["decision"]
+    response = {
+        "status": "complete",
+        "decision": decision_value,
+        "notes": decision.metadata.get("notes", []),
+        "gate_failures": public_record["gate_failures"],
+        "decision_object_id": decision.id,
+        "review_id": public_record["review_id"],
+        "failure_stage": public_record["failure_stage"],
+        "failure_category": public_record["failure_category"],
+        "failed_checks": public_record["failed_checks"],
+        "integrity": public_record["integrity"],
+        "review_summary": public_record["review_summary"],
+        "rubric_scores": public_record["rubric_scores"],
+        "required_revisions": public_record["required_revisions"],
+        "major_issues": public_record["major_issues"],
+        "minor_issues": public_record["minor_issues"],
+        "claim_support_verdict": public_record["claim_support_verdict"],
+        "overclaim_verdict": public_record["overclaim_verdict"],
+        "synthesis_quality_verdict": public_record["synthesis_quality_verdict"],
+        "panel_route": public_record["panel_route"],
+        "models": public_record["models"],
+        "fallback_used": public_record["fallback_used"],
+        "prompt_version": public_record["prompt_version"],
+        "dw_artifact_id": public_record["dw_artifact_id"],
+        "dw_chain_url": public_record["dw_chain_url"],
+        "resubmission": {
+            "allowed": decision_value in {Decision.REVISE.value, Decision.REJECT.value},
+            "parent_submission_id": submission_id if decision_value in {Decision.REVISE.value, Decision.REJECT.value} else None,
+        },
+        "publication": _publication_feedback(repo.publication_for_target(submission_id)),
+    }
+    return response
 
 
 def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
@@ -435,7 +593,23 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     @app.post("/submissions")
     def submit(payload: SubmissionPayload, request: Request) -> dict:
         agent_id = _check_api_key(app.state.repository, request)
+        if payload.parent_submission_id:
+            parent = app.state.repository.get_object(payload.parent_submission_id)
+            if parent is None or parent.object_type != ObjectType.SUBMISSION:
+                raise HTTPException(status_code=400, detail="parent_submission_not_found")
+        if agent_id:
+            backoff_limit = _env_int("RESEARKA_V2_INTAKE_REJECTION_BACKOFF", DEFAULT_INTAKE_REJECTION_BACKOFF)
+            if (
+                backoff_limit
+                and _consecutive_intake_rejections(app.state.repository, agent_id=agent_id) >= backoff_limit
+            ):
+                raise HTTPException(status_code=429, detail="agent_backoff_intake_rejections")
+        content_hash = _submission_content_hash(payload)
+        duplicate_id = _duplicate_submission_id(app.state.repository, content_hash=content_hash)
+        if duplicate_id:
+            raise HTTPException(status_code=409, detail={"error": "duplicate_submission", "submission_id": duplicate_id})
         metadata = _submission_metadata_for_agent(payload, agent_id)
+        metadata["submission_content_hash"] = content_hash
         submission = app.state.repository.create_object(
             ResearchObject(
                 object_type=ObjectType.SUBMISSION,
@@ -478,13 +652,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         if not decisions:
             return {"status": "pending", "decision": None, "notes": [], "gate_failures": []}
         latest = decisions[-1]
-        return {
-            "status": "complete",
-            "decision": latest.metadata.get("decision"),
-            "notes": latest.metadata.get("notes", []),
-            "gate_failures": latest.metadata.get("gate_failures", []),
-            "decision_object_id": latest.id,
-        }
+        return _submission_decision_response(repo=app.state.repository, submission_id=submission_id, decision=latest)
 
     @app.get("/publications")
     def list_publications() -> dict:
@@ -693,7 +861,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         if not agent_id:
             raise HTTPException(status_code=400, detail="agent_id_required")
         label = body.get("label", "")
-        daily_limit = body.get("daily_limit", 0)
+        daily_limit = _daily_limit_from_body(body)
         response = app.state.repository.create_api_key(agent_id, label=label, daily_limit=daily_limit)
         return response.model_dump(mode="json")
 

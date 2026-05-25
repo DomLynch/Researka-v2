@@ -3,7 +3,7 @@ from typing import Any, cast
 from fastapi.testclient import TestClient
 from urllib.parse import parse_qs, quote, urlparse
 
-from contracts import EventType, ObjectType, ResearchObject, RuntimeEvent
+from contracts import Decision, EventType, ObjectType, ResearchObject, RuntimeEvent
 from runtime_core.osf import sign_oauth_state
 
 
@@ -413,14 +413,6 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
             },
         )
     )
-    repo.create_object(
-        ResearchObject(
-            object_type=ObjectType.DECISION,
-            parent_object_id=submission.id,
-            title="Accepted decision should stay off /reviews",
-            metadata={"decision": "accept"},
-        )
-    )
     repo.record_event(
         RuntimeEvent(
             event_type=EventType.JOB_COMPLETED,
@@ -429,6 +421,31 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
                 "created_object_id": rejected.id,
                 "derivation_web": {"decision_artifact_id": "claim_failed_alpha"},
             },
+        )
+    )
+
+    decision_response = client.get(f"/submissions/{submission.id}/decision")
+    assert decision_response.status_code == 200
+    decision_payload = decision_response.json()
+    assert decision_payload["decision"] == "reject"
+    assert decision_payload["review_id"] == review.id
+    assert decision_payload["failure_stage"] == "reviewer_panel"
+    assert decision_payload["failure_category"] == "minimum_citations"
+    assert decision_payload["failed_checks"] == ["expected at least 12 sources"]
+    assert decision_payload["required_revisions"] == ["Clarify that all evidence comes from a single trial."]
+    assert decision_payload["rubric_scores"]["source_grounding"] == 5
+    assert decision_payload["claim_support_verdict"] == "supported"
+    assert decision_payload["panel_route"] == "fallback_tiebreak"
+    assert decision_payload["models"] == ["mimo-v2.5-pro", "google/gemma-4-31b-it", "mistralai/mistral-small-2603"]
+    assert decision_payload["resubmission"] == {"allowed": True, "parent_submission_id": submission.id}
+    assert decision_payload["publication"] is None
+
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=submission.id,
+            title="Accepted decision should stay off /reviews",
+            metadata={"decision": "accept"},
         )
     )
 
@@ -443,6 +460,7 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
     assert record["public_full_text"] is False
     assert record["full_text"] == ""
     assert record["failure_category"] == "minimum_citations"
+    assert record["failure_stage"] == "reviewer_panel"
     assert record["failed_checks"] == ["expected at least 12 sources"]
     assert record["rubric_scores"]["claim_evidence_alignment"] == 4
     assert record["required_revisions"] == ["Clarify that all evidence comes from a single trial."]
@@ -609,6 +627,18 @@ def test_ops_create_key(client: TestClient, monkeypatch) -> None:
     assert len(data["key_hash"]) == 64  # SHA-256 hex
 
 
+def test_ops_create_key_defaults_to_public_agent_daily_limit(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    monkeypatch.setenv("RESEARKA_V2_DEFAULT_DAILY_LIMIT", "25")
+    response = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={"agent_id": "agent-1", "label": "pilot-key"},
+    )
+    assert response.status_code == 200
+    assert response.json()["daily_limit"] == 25
+
+
 def test_ops_create_key_requires_admin(client: TestClient) -> None:
     response = client.post(
         "/ops/keys",
@@ -742,8 +772,111 @@ def test_per_agent_key_daily_limit_enforced(client: TestClient, monkeypatch) -> 
         headers={"x-api-key": raw_key},
         json=payload3,
     )
-    assert resp3.status_code == 403
-    assert resp3.json()["detail"] == "invalid_api_key"
+    assert resp3.status_code == 429
+    assert resp3.json()["detail"] == "daily_limit_exceeded"
+
+
+def test_duplicate_submission_rejected_for_same_agent(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    create_resp = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={"agent_id": "agent-1"},
+    )
+    raw_key = create_resp.json()["raw_key"]
+    first = client.post(
+        "/submissions",
+        headers={"x-api-key": raw_key},
+        json=_minimal_submission_payload(),
+    )
+    assert first.status_code == 200
+    duplicate = client.post(
+        "/submissions",
+        headers={"x-api-key": raw_key},
+        json=_minimal_submission_payload(),
+    )
+    assert duplicate.status_code == 409
+    detail = duplicate.json()["detail"]
+    assert detail["error"] == "duplicate_submission"
+    assert detail["submission_id"] == first.json()["submission"]["id"]
+
+
+def test_submission_parent_id_links_resubmission(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    create_resp = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={"agent_id": "agent-1"},
+    )
+    raw_key = create_resp.json()["raw_key"]
+    parent = client.post(
+        "/submissions",
+        headers={"x-api-key": raw_key},
+        json=_minimal_submission_payload(),
+    ).json()["submission"]
+    revised = _minimal_submission_payload()
+    revised["title"] = "Rapid Evidence Synthesis: revised topic"
+    revised["parent_submission_id"] = parent["id"]
+    response = client.post(
+        "/submissions",
+        headers={"x-api-key": raw_key},
+        json=revised,
+    )
+    assert response.status_code == 200
+    metadata = response.json()["submission"]["metadata"]
+    assert metadata["parent_submission_id"] == parent["id"]
+
+
+def test_submission_parent_id_rejects_missing_parent(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    create_resp = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={"agent_id": "agent-1"},
+    )
+    payload = _minimal_submission_payload()
+    payload["parent_submission_id"] = "missing-parent"
+    response = client.post(
+        "/submissions",
+        headers={"x-api-key": create_resp.json()["raw_key"]},
+        json=payload,
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "parent_submission_not_found"
+
+
+def test_agent_backoff_after_consecutive_intake_rejections(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    monkeypatch.setenv("RESEARKA_V2_INTAKE_REJECTION_BACKOFF", "3")
+    create_resp = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={"agent_id": "agent-1"},
+    )
+    repo = _repository(client)
+    for index in range(3):
+        submission = repo.create_object(
+            ResearchObject(
+                object_type=ObjectType.SUBMISSION,
+                title=f"bad submission {index}",
+                metadata={"authenticated_agent_id": "agent-1", "author_agent_id": "agent-1"},
+            )
+        )
+        repo.create_object(
+            ResearchObject(
+                object_type=ObjectType.DECISION,
+                parent_object_id=submission.id,
+                title="intake reject",
+                metadata={"decision": Decision.REJECT.value, "notes": ["intake gate rejection"]},
+            )
+        )
+    response = client.post(
+        "/submissions",
+        headers={"x-api-key": create_resp.json()["raw_key"]},
+        json=_minimal_submission_payload(),
+    )
+    assert response.status_code == 429
+    assert response.json()["detail"] == "agent_backoff_intake_rejections"
 
 
 def test_per_agent_key_usage_tracked_in_list(client: TestClient, monkeypatch) -> None:

@@ -72,6 +72,13 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     assert repository.publication_for_target(publication.parent_object_id).id == publication.id
     assert publication.parent_object_id == submission_id
     assert publication.metadata["prompt_version"] == EDITOR_PROMPT_VERSION
+    decision = client.get(f"/submissions/{submission_id}/decision")
+    assert decision.status_code == 200
+    decision_payload = decision.json()
+    assert decision_payload["decision"] == "accept"
+    assert decision_payload["resubmission"] == {"allowed": False, "parent_submission_id": None}
+    assert decision_payload["publication"]["publication_id"] == publication.id
+    assert decision_payload["publication"]["url"] == f"https://researka.org/papers/{publication.id}"
 
     repository.enqueue_job(RuntimeJob(target_object_id=publication.parent_object_id, stage=Stage.PUBLISH))
     duplicate_publish = client.post("/jobs/run-once", headers=_worker_headers())
@@ -112,7 +119,7 @@ def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
     seed2 = client.post(
         "/submissions",
         json=_submission_payload(
-            "Databases searched include PubMed and review corpora, with a documented date window, explicit inclusion logic, and a stated narrowing rule that explains why these retained receipts best match the scoped research question."
+            "Databases searched include PubMed, review corpora, and citation chaining, with the same title retained to verify the publish-stage title duplicate guard without submitting an exact content duplicate."
         ),
     )
     assert seed2.status_code == 200

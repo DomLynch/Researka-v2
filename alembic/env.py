@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
-from alembic import context
+from alembic import context  # type: ignore[attr-defined]
 from sqlalchemy import create_engine, pool
 
 logger = logging.getLogger("alembic")
@@ -15,6 +15,8 @@ def _database_url() -> str:
         or os.getenv("TEST_POSTGRES_DSN")
         or context.config.get_main_option("sqlalchemy.url")
     )
+    if not url:
+        raise RuntimeError("researka_v2_database_url_required")
     if url and url.startswith("postgresql://") and "+" not in url.split("://", 1)[0]:
         return url.replace("postgresql://", "postgresql+psycopg://", 1)
     return url
@@ -53,7 +55,7 @@ def auto_migrate(dsn: str | None = None) -> None:
     Safe to call even when no migrations are pending.
     """
     from alembic.config import Config
-    from alembic import command as alembic_command
+    from alembic import command as alembic_command  # type: ignore[attr-defined]
 
     config = Config(
         os.path.join(os.path.dirname(os.path.dirname(__file__)), "alembic.ini")
