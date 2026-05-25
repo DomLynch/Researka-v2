@@ -94,12 +94,42 @@ def _normalize_source_bundle(source_bundle: list[dict]) -> list[SourceBundleEntr
     return normalized
 
 
+def _int_value(value: object) -> int:
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _alpha_source_exception(article_type: str, citation_count: int, evidence_bundle: dict | None) -> bool:
+    if article_type != ArticleType.ALPHA_MEMO.value or not 2 <= citation_count <= 4:
+        return False
+    verdict = (evidence_bundle or {}).get("publish_verdict")
+    if not isinstance(verdict, dict):
+        return False
+    axes_raw = verdict.get("axes")
+    axes = axes_raw if isinstance(axes_raw, dict) else {}
+    if verdict.get("decision") != "ready_to_publish" or verdict.get("publish_tier") != "TIER_1":
+        return False
+    if verdict.get("maturity_level") != "L5" and verdict.get("confidence_label") != "evidence_backed_signal":
+        return False
+    if verdict.get("blockers") or axes.get("cross_domain_forced") or axes.get("feed_scope_mismatch"):
+        return False
+    bound = max(
+        _int_value(axes.get("bound_receipts")),
+        _int_value(axes.get("a_core_receipts")),
+        _int_value(axes.get("available_bound_receipts")),
+    )
+    return bound >= 2
+
+
 def run_submission_template_checks(
     *,
     sections: dict[str, str],
     source_bundle: list[dict],
     article_type: str = ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
     template: SubmissionTemplateV1 | None = None,
+    evidence_bundle: dict | None = None,
 ) -> list[GateResult]:
     active_template = template or submission_template_for(article_type)
     results: list[GateResult] = []
@@ -144,11 +174,15 @@ def run_submission_template_checks(
         return [GateResult(name="source_bundle_schema", passed=False, reason=str(exc))]
 
     citation_count = len(normalized_bundle)
+    citation_floor_exception = _alpha_source_exception(article_type, citation_count, evidence_bundle)
+    citation_reason = f"source bundle must contain at least {active_template.minimum_citations} citations"
+    if article_type == ArticleType.ALPHA_MEMO.value:
+        citation_reason += " or qualify for the 2-4 source alpha exception"
     results.append(
         GateResult(
             name="minimum_citations",
-            passed=citation_count >= active_template.minimum_citations,
-            reason=f"source bundle must contain at least {active_template.minimum_citations} citations",
+            passed=citation_count >= active_template.minimum_citations or citation_floor_exception,
+            reason=citation_reason,
         )
     )
 
