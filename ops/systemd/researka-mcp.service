@@ -11,6 +11,7 @@ Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=RESEARKA_MCP_API_BASE=http://127.0.0.1:8000
 Environment=RESEARKA_MCP_HOST=127.0.0.1
 Environment=RESEARKA_MCP_PORT=8200
+Environment=RESEARKA_MCP_ALLOWED_HOSTS=127.0.0.1,localhost,agents.researka.org
 ExecStart=/root/Researka-v2/.venv/bin/python -m apps.agent_mcp.server
 Restart=always
 RestartSec=5

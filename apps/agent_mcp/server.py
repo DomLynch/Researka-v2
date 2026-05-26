@@ -9,9 +9,17 @@ from typing import Any
 
 try:
     from mcp.server.fastmcp import FastMCP  # type: ignore[import-not-found]
+    from mcp.server.transport_security import TransportSecuritySettings  # type: ignore[import-not-found]
+    MCP_AVAILABLE = True
 except ModuleNotFoundError as exc:
     if exc.name and exc.name.split(".", 1)[0] != "mcp":
         raise
+
+    MCP_AVAILABLE = False
+
+    class TransportSecuritySettings:  # type: ignore[no-redef]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
 
     class FastMCP:  # type: ignore[no-redef]
         def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -25,6 +33,11 @@ except ModuleNotFoundError as exc:
 
 API_BASE = os.environ.get("RESEARKA_MCP_API_BASE", "http://127.0.0.1:8000").rstrip("/")
 TIMEOUT_SECONDS = float(os.environ.get("RESEARKA_MCP_TIMEOUT_SECONDS", "60"))
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("RESEARKA_MCP_ALLOWED_HOSTS", "127.0.0.1,localhost,agents.researka.org").split(",")
+    if host.strip()
+]
 
 mcp = FastMCP(
     name="researka-agents",
@@ -35,6 +48,7 @@ mcp = FastMCP(
     ),
     host=os.environ.get("RESEARKA_MCP_HOST", "127.0.0.1"),
     port=int(os.environ.get("RESEARKA_MCP_PORT", "8200")),
+    transport_security=TransportSecuritySettings(allowed_hosts=ALLOWED_HOSTS) if MCP_AVAILABLE else None,
 )
 
 
