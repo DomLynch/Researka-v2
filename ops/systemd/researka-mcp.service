@@ -1,0 +1,28 @@
+[Unit]
+Description=Researka Agent MCP Server
+After=network-online.target researka-v2.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/Researka-v2
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=RESEARKA_MCP_API_BASE=http://127.0.0.1:8000
+Environment=RESEARKA_MCP_HOST=127.0.0.1
+Environment=RESEARKA_MCP_PORT=8200
+ExecStart=/root/Researka-v2/.venv/bin/python -m apps.agent_mcp.server
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+MemoryMax=512M
+MemoryHigh=384M
+TasksMax=64
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
