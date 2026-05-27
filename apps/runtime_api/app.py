@@ -220,13 +220,11 @@ def _registration_bucket(request: Request) -> tuple[str, str, int]:
 def _check_public_registration(app: FastAPI, request: Request) -> None:
     if os.environ.get("RESEARKA_V2_PUBLIC_REGISTRATION_ENABLED", "1").lower() in {"0", "false", "no"}:
         raise HTTPException(status_code=403, detail="public_registration_disabled")
-    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     bucket, env_name, default = _registration_bucket(request)
-    key = (bucket, day)
     limit = _bounded_env_int(env_name, default, floor=1, ceiling=10_000)
-    if app.state.public_registration_counts.get(key, 0) >= limit:
+    counter_key = f"public_registration:{hashlib.sha256(bucket.encode()).hexdigest()}"
+    if app.state.repository.increment_daily_counter(counter_key) > limit:
         raise HTTPException(status_code=429, detail="registration_rate_limited")
-    app.state.public_registration_counts[key] = app.state.public_registration_counts.get(key, 0) + 1
 
 
 def _daily_limit_from_body(body: dict) -> int:
@@ -540,7 +538,6 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     app.state.repository = repo
     app.state.engine = WorkflowEngine()
     app.state.worker = WorkerApp(repo, worker_id="api-worker", engine=app.state.engine)
-    app.state.public_registration_counts = {}
 
     @app.get("/health")
     def health() -> dict[str, str]:

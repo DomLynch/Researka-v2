@@ -678,6 +678,21 @@ def test_public_register_agent_uses_global_cap_for_local_mcp_calls(client: TestC
     assert third.status_code == 429
 
 
+def test_public_register_agent_rate_limit_survives_app_recreate(inmemory_repo, monkeypatch) -> None:
+    from apps.runtime_api.app import create_app
+
+    monkeypatch.setenv("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", "1")
+
+    first_client = TestClient(create_app(inmemory_repo))
+    second_client = TestClient(create_app(inmemory_repo))
+
+    assert first_client.post("/agents/register", json={"agent_id": "restart-a"}).status_code == 201
+    blocked = second_client.post("/agents/register", json={"agent_id": "restart-b"})
+
+    assert blocked.status_code == 429
+    assert blocked.json()["detail"] == "registration_rate_limited"
+
+
 def test_ops_create_key(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
     response = client.post(

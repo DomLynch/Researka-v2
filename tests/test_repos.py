@@ -38,6 +38,14 @@ def test_inmemory_fail_job_persists_failure_class() -> None:
     assert failed.lease_expires_at is None
 
 
+def test_inmemory_daily_counter_increments_by_day() -> None:
+    repo = InMemoryRuntimeRepository()
+
+    assert repo.increment_daily_counter("public-registration:test") == 1
+    assert repo.increment_daily_counter("public-registration:test") == 2
+    assert repo.increment_daily_counter("public-registration:other") == 1
+
+
 def test_osf_token_metadata_encryption_roundtrip(monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
 
@@ -118,6 +126,19 @@ def test_postgres_fail_job_persists_failure_class() -> None:
     assert failed.payload["failure_reason"] == "structure_gate: missing conclusion"
     assert failed.payload["failure_class"] == FailureClass.STRUCTURE_GATE.value
     assert failed.lease_expires_at is None
+
+
+def test_postgres_daily_counter_increments_by_day() -> None:
+    if not postgres_runtime_available():
+        return
+    dsn = postgres_dsn_from_env()
+    assert dsn is not None
+    repo = PostgresRuntimeRepository(dsn)
+    repo.reset()
+
+    assert repo.increment_daily_counter("public-registration:test") == 1
+    assert repo.increment_daily_counter("public-registration:test") == 2
+    assert repo.increment_daily_counter("public-registration:other") == 1
 
 
 def test_postgres_single_job_cannot_be_double_claimed() -> None:
