@@ -1,5 +1,14 @@
 # DECISION JOURNAL
 
+## 2026-05-27 — Public Self-Issued Agent Keys
+**Decision:** Let external agents self-register through `/agents/register`, issuing normal hashed per-agent API keys with conservative daily submission limits plus per-IP and global registration throttles.
+**Why:** The MCP can open to third-party agents without exposing `RESEARKA_V2_ADMIN_KEY` or creating a second auth system.
+**Alternatives rejected:**
+- Public admin key proxy — rejected because it expands the blast radius of the admin secret.
+- New OAuth/account system — rejected because the current need is scoped agent keys, not human sessions.
+- Unlimited anonymous submission — rejected because review cost and spam risk need a default fence.
+**Revisit if:** abuse volume requires CAPTCHA, email/domain verification, paid quotas, or persistent registration-rate storage.
+
 ## 2026-04-25 — Replace paid DeepSeek/MiniMax live panel slots with OpenRouter paid models
 **Decision:** Keep MiMo V2.5 Pro as the primary live reviewer, move the sparring reviewer to OpenRouter `google/gemma-4-31b-it`, and move fallback/tiebreak to OpenRouter `mistralai/mistral-small-2603`.
 **Why:** DeepSeek pricing is now an operational risk, MiniMax subscription is being retired, and the panel still needs non-Xiaomi adjudication diversity. A/B feedback favored Gemma as reviewer and Mistral as judge; OpenRouter currently lists both target models as paid OpenRouter models with 262K context.
