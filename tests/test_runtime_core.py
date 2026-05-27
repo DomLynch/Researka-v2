@@ -742,7 +742,103 @@ def test_reviewer_panel_escalates_on_disagreement() -> None:
     assert result.response.metadata["escalated_to_fallback"] is True
     assert result.response.metadata["primary_recommendation"] == "accept"
     assert result.response.metadata["sparring_recommendation"] == "reject"
+    assert result.response.metadata["fallback_tiebreak_attempts"] == 1
     assert result.response.usage.cost_usd == 0.3
+
+
+def test_reviewer_panel_retries_malformed_tiebreaker_once() -> None:
+    class Provider:
+        def __init__(self, provider: str, model: str, payloads: list[dict[str, object]]) -> None:
+            self.provider = provider
+            self.model = model
+            self.payloads = payloads
+            self.calls = 0
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:  # noqa: ARG002
+            payload = self.payloads[min(self.calls, len(self.payloads) - 1)]
+            self.calls += 1
+            return ProviderResult(
+                ok=True,
+                response=ProviderResponse(
+                    text=json.dumps(payload),
+                    provider=self.provider,
+                    model=self.model,
+                    usage=ProviderUsage(input_tokens=10, output_tokens=5, cost_usd=0.1),
+                ),
+            )
+
+    fallback = Provider(
+        "openrouter",
+        "mistralai/mistral-small-2603",
+        [
+            _review_payload("revise", review_markdown=""),
+            _review_payload("revise", review_markdown="Fallback revises on retry."),
+        ],
+    )
+    panel = ReviewerPanel(
+        primary=Provider("mimo", "mimo-v2.5-pro", [_review_payload("accept")]),
+        sparring=Provider("openrouter", "google/gemma-4-31b-it", [_review_payload("reject")]),
+        fallback=fallback,
+    )
+    result = panel.complete(
+        ProviderRequest(
+            system_prompt="system",
+            user_prompt="user",
+            prompt_version="reviewer-v1",
+            response_format="json_object",
+        )
+    )
+    assert result.ok is True
+    assert result.response is not None
+    assert fallback.calls == 2
+    assert '"recommendation": "revise"' in result.response.text
+    assert result.response.metadata["route"] == "fallback_tiebreak"
+    assert result.response.metadata["fallback_tiebreak_attempts"] == 2
+
+
+def test_reviewer_panel_uses_conservative_valid_review_when_tiebreaker_stays_malformed() -> None:
+    class Provider:
+        def __init__(self, provider: str, model: str, payload: dict[str, object]) -> None:
+            self.provider = provider
+            self.model = model
+            self.payload = payload
+            self.calls = 0
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:  # noqa: ARG002
+            self.calls += 1
+            return ProviderResult(
+                ok=True,
+                response=ProviderResponse(
+                    text=json.dumps(self.payload),
+                    provider=self.provider,
+                    model=self.model,
+                    usage=ProviderUsage(input_tokens=10, output_tokens=5, cost_usd=0.1),
+                ),
+            )
+
+    fallback = Provider("openrouter", "mistralai/mistral-small-2603", _review_payload("accept", review_markdown=""))
+    panel = ReviewerPanel(
+        primary=Provider("mimo", "mimo-v2.5-pro", _review_payload("accept")),
+        sparring=Provider("openrouter", "google/gemma-4-31b-it", _review_payload("reject")),
+        fallback=fallback,
+    )
+    result = panel.complete(
+        ProviderRequest(
+            system_prompt="system",
+            user_prompt="user",
+            prompt_version="reviewer-v1",
+            response_format="json_object",
+        )
+    )
+    assert result.ok is True
+    assert result.response is not None
+    assert fallback.calls == 2
+    assert '"recommendation": "reject"' in result.response.text
+    assert result.response.metadata["route"] == "fallback_tiebreak_failed_conservative"
+    assert result.response.metadata["ops_flag"] == "fallback_tiebreak_failed_conservative"
+    assert result.response.metadata["fallback_tiebreak_attempts"] == 2
+    assert "missing_review_markdown" in str(result.response.metadata["fallback_error"])
+    assert result.response.usage.cost_usd == 0.2
 
 
 def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:

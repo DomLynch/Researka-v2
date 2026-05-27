@@ -65,9 +65,17 @@ class ReviewerPanel:
                         **slot_flags,
                     },
                 )
-            fallback = self._validated_result(self.fallback.complete(request))
+            fallback, fallback_attempts = self._validated_fallback(request)
             if not fallback.ok:
-                return self._combined_error("panel_disagreement_fallback_failed", primary, sparring, fallback)
+                return self._conservative_disagreement_response(
+                    primary=primary,
+                    primary_rec=primary_rec,
+                    sparring=sparring,
+                    sparring_rec=sparring_rec,
+                    fallback=fallback,
+                    fallback_attempts=fallback_attempts,
+                    slot_flags=slot_flags,
+                )
             return self._panel_response(
                 winner=fallback,
                 route="fallback_tiebreak",
@@ -77,6 +85,7 @@ class ReviewerPanel:
                     "sparring_recommendation": sparring_rec,
                     "consensus": False,
                     "escalated_to_fallback": True,
+                    "fallback_tiebreak_attempts": fallback_attempts,
                     **slot_flags,
                 },
             )
@@ -105,7 +114,7 @@ class ReviewerPanel:
                 },
             )
 
-        fallback = self._validated_result(self.fallback.complete(request))
+        fallback, fallback_attempts = self._validated_fallback(request)
         if not fallback.ok:
             return self._combined_error("panel_all_failed", primary, sparring, fallback)
         return self._panel_response(
@@ -117,6 +126,46 @@ class ReviewerPanel:
                 "primary_error": self._error_text(primary),
                 "sparring_error": self._error_text(sparring),
                 "escalated_to_fallback": True,
+                "fallback_tiebreak_attempts": fallback_attempts,
+                **slot_flags,
+            },
+        )
+
+    def _validated_fallback(self, request: ProviderRequest) -> tuple[ProviderResult, int]:
+        attempts = 0
+        last = self._validated_result(self.fallback.complete(request))
+        attempts += 1
+        if last.ok:
+            return last, attempts
+        last = self._validated_result(self.fallback.complete(request))
+        attempts += 1
+        return last, attempts
+
+    def _conservative_disagreement_response(
+        self,
+        *,
+        primary: ProviderResult,
+        primary_rec: str,
+        sparring: ProviderResult,
+        sparring_rec: str,
+        fallback: ProviderResult,
+        fallback_attempts: int,
+        slot_flags: dict[str, object],
+    ) -> ProviderResult:
+        severity = {"accept": 0, "revise": 1, "reject": 2}
+        winner = primary if severity[primary_rec] >= severity[sparring_rec] else sparring
+        return self._panel_response(
+            winner=winner,
+            route="fallback_tiebreak_failed_conservative",
+            used=[primary, sparring],
+            metadata={
+                "primary_recommendation": primary_rec,
+                "sparring_recommendation": sparring_rec,
+                "consensus": False,
+                "escalated_to_fallback": True,
+                "fallback_tiebreak_attempts": fallback_attempts,
+                "fallback_error": self._error_text(fallback),
+                "ops_flag": "fallback_tiebreak_failed_conservative",
                 **slot_flags,
             },
         )
