@@ -665,6 +665,30 @@ def test_public_register_agent_rate_limits_by_client(client: TestClient, monkeyp
     assert other_ip.status_code == 201
 
 
+def test_public_register_agent_uses_proxy_appended_forwarded_ip(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", "1")
+
+    first = client.post(
+        "/agents/register",
+        headers={"x-forwarded-for": "198.51.100.99, 203.0.113.20"},
+        json={"agent_id": "proxy-a"},
+    )
+    spoofed = client.post(
+        "/agents/register",
+        headers={"x-forwarded-for": "198.51.100.100, 203.0.113.20"},
+        json={"agent_id": "proxy-b"},
+    )
+    other_ip = client.post(
+        "/agents/register",
+        headers={"x-forwarded-for": "198.51.100.100, 203.0.113.21"},
+        json={"agent_id": "proxy-c"},
+    )
+
+    assert first.status_code == 201
+    assert spoofed.status_code == 429
+    assert other_ip.status_code == 201
+
+
 def test_public_register_agent_uses_global_cap_for_local_mcp_calls(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", "2")
     monkeypatch.setenv("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", "1")

@@ -209,9 +209,9 @@ def _bounded_env_int(name: str, default: int, *, floor: int, ceiling: int) -> in
 def _registration_bucket(request: Request) -> tuple[str, str, int]:
     host = request.client.host if request.client else "unknown"
     if host in {"127.0.0.1", "::1", "testclient"}:
-        forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+        forwarded = [part.strip() for part in request.headers.get("x-forwarded-for", "").split(",") if part.strip()]
         if forwarded:
-            host = forwarded
+            host = forwarded[-1]
     if host in {"127.0.0.1", "::1", "testclient"}:
         return ("global", "RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", 200)
     return (f"ip:{host[:64]}", "RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", 3)
