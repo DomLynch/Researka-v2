@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import hashlib
+import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException, Request
@@ -14,6 +16,7 @@ from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 
 _calibration_cache: dict | None = None
 _calibration_path: str | None = None
+_AGENT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,62}$")
 
 
 def reset_calibration_cache() -> None:
@@ -148,6 +151,37 @@ def _check_admin(request: Request) -> None:
     raise HTTPException(status_code=403, detail="admin_key_required")
 
 
+def _env_int(name: str, default: int, *, floor: int, ceiling: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except ValueError:
+        value = default
+    return max(floor, min(value, ceiling))
+
+
+def _registration_bucket(request: Request) -> tuple[str, str, int]:
+    host = request.client.host if request.client else "unknown"
+    if host in {"127.0.0.1", "::1", "testclient"}:
+        forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+        if forwarded:
+            host = forwarded
+    if host in {"127.0.0.1", "::1", "testclient"}:
+        return ("global", "RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", 200)
+    return (f"ip:{host[:64]}", "RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", 3)
+
+
+def _check_public_registration(app: FastAPI, request: Request) -> None:
+    if os.environ.get("RESEARKA_V2_PUBLIC_REGISTRATION_ENABLED", "1").lower() in {"0", "false", "no"}:
+        raise HTTPException(status_code=403, detail="public_registration_disabled")
+    day = datetime.now(UTC).strftime("%Y-%m-%d")
+    bucket, env_name, default = _registration_bucket(request)
+    key = (bucket, day)
+    limit = _env_int(env_name, default, floor=1, ceiling=10_000)
+    if app.state.public_registration_counts.get(key, 0) >= limit:
+        raise HTTPException(status_code=429, detail="registration_rate_limited")
+    app.state.public_registration_counts[key] = app.state.public_registration_counts.get(key, 0) + 1
+
+
 def _trusted_submission_metadata(payload: SubmissionPayload, identity: dict[str, str | None]) -> dict:
     metadata = payload.model_dump(mode="json")
     trusted_agent_id = identity.get("agent_id")
@@ -189,6 +223,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     app.state.repository = repo
     app.state.engine = WorkflowEngine()
     app.state.worker = WorkerApp(repo, worker_id="api-worker", engine=app.state.engine)
+    app.state.public_registration_counts = {}
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -221,6 +256,41 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             )
         )
         return {"submission": submission.model_dump(mode="json"), "job": job.model_dump(mode="json")}
+
+    @app.post("/agents/register", status_code=201)
+    def register_agent(request: Request, body: dict = Body(default_factory=dict)) -> dict:
+        agent_id = str(body.get("agent_id", "")).strip().lower()
+        if not _AGENT_ID_RE.fullmatch(agent_id):
+            raise HTTPException(status_code=400, detail="invalid_agent_id")
+        _check_public_registration(app, request)
+        active_keys = [key for key in app.state.repository.list_api_keys() if not key.revoked]
+        if any(key.agent_id == agent_id for key in active_keys):
+            raise HTTPException(status_code=409, detail="agent_already_registered")
+        active_limit = _env_int("RESEARKA_V2_PUBLIC_ACTIVE_KEY_LIMIT", 1000, floor=1, ceiling=1_000_000)
+        if len(active_keys) >= active_limit:
+            raise HTTPException(status_code=429, detail="public_key_capacity_reached")
+        owner_name = body.get("owner_name")
+        if isinstance(owner_name, str):
+            owner_name = owner_name.strip()[:120] or None
+        try:
+            owner_orcid = normalize_orcid(body.get("owner_orcid"))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"invalid_owner_orcid:{exc}") from exc
+        key = app.state.repository.create_api_key(
+            agent_id,
+            label="public:self-registered",
+            daily_limit=_env_int("RESEARKA_V2_PUBLIC_KEY_DAILY_LIMIT", 10, floor=1, ceiling=1000),
+            owner_name=owner_name,
+            owner_orcid=owner_orcid,
+        )
+        return {
+            "agent_id": key.agent_id,
+            "api_key": key.raw_key,
+            "daily_limit": key.daily_limit,
+            "owner_name": key.owner_name,
+            "owner_orcid": key.owner_orcid,
+            "created_at": key.created_at.isoformat(),
+        }
 
     @app.get("/submissions/{submission_id}")
     def get_submission(submission_id: str) -> dict:

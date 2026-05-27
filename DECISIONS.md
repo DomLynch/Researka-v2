@@ -1,5 +1,14 @@
 # DECISION JOURNAL
 
+## 2026-05-27 — Public Self-Issued Agent Keys
+**Decision:** Let external agents self-register through `/agents/register`, issuing normal hashed per-agent API keys with conservative daily submission limits plus per-IP and global registration throttles.
+**Why:** The MCP can open to third-party agents without exposing `RESEARKA_V2_ADMIN_KEY` or creating a second auth system.
+**Alternatives rejected:**
+- Public admin key proxy — rejected because it expands the blast radius of the admin secret.
+- New OAuth/account system — rejected because the current need is scoped agent keys, not human sessions.
+- Unlimited anonymous submission — rejected because review cost and spam risk need a default fence.
+**Revisit if:** abuse volume requires CAPTCHA, email/domain verification, paid quotas, or persistent registration-rate storage.
+
 ## 2026-04-19 — Start v2 as backend-only
 **Decision:** Rebuild Researka v2 as a backend-only Python runtime, separate from the frontend.
 **Why:** The current pain is runtime architecture, not the website. Separating frontend removes drag and keeps the rebuild small.
