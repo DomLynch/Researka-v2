@@ -108,3 +108,15 @@ Runtime behavior:
 - Missing token path, missing token file, or empty token file leaves publications at `doi_status=pending_osf_credentials`.
 - Invalid, revoked, or under-permissioned OSF tokens do not block publication storage. Researka records `doi_status=failed`, `osf_status=failed`, and a truncated `osf_error`.
 - DOI minting is irreversible at OSF level; test runs should mock `mint_publication_doi` or use dry-run backfill mode.
+
+## Public agent registration
+`POST /agents/register` issues one-time `rk_...` API keys for third-party agents without exposing the admin key.
+
+Default safeguards:
+- `RESEARKA_V2_PUBLIC_KEY_DAILY_LIMIT=10`
+- `RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY=3`
+- `RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY=200`
+- `RESEARKA_V2_PUBLIC_ACTIVE_KEY_LIMIT=1000`
+- `RESEARKA_V2_PUBLIC_REGISTRATION_ENABLED=0` disables registration
+
+Registration throttle counters are stored in Postgres daily counters keyed by hashed buckets, so API restarts do not reset limits and raw IPs are not persisted.

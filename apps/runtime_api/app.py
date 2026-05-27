@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import hashlib
 import hmac
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -220,13 +220,11 @@ def _registration_bucket(request: Request) -> tuple[str, str, int]:
 def _check_public_registration(app: FastAPI, request: Request) -> None:
     if os.environ.get("RESEARKA_V2_PUBLIC_REGISTRATION_ENABLED", "1").lower() in {"0", "false", "no"}:
         raise HTTPException(status_code=403, detail="public_registration_disabled")
-    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     bucket, env_name, default = _registration_bucket(request)
-    key = (bucket, day)
     limit = _bounded_env_int(env_name, default, floor=1, ceiling=10_000)
-    if app.state.public_registration_counts.get(key, 0) >= limit:
+    counter_key = f"public_registration:{hashlib.sha256(bucket.encode()).hexdigest()}"
+    if app.state.repository.increment_daily_counter(counter_key) > limit:
         raise HTTPException(status_code=429, detail="registration_rate_limited")
-    app.state.public_registration_counts[key] = app.state.public_registration_counts.get(key, 0) + 1
 
 
 def _daily_limit_from_body(body: dict) -> int:
@@ -540,7 +538,6 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     app.state.repository = repo
     app.state.engine = WorkflowEngine()
     app.state.worker = WorkerApp(repo, worker_id="api-worker", engine=app.state.engine)
-    app.state.public_registration_counts = {}
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -659,10 +656,10 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
 
     @app.post("/agents/register", status_code=201)
     def register_agent(request: Request, body: dict = Body(default_factory=dict)) -> dict:
+        _check_public_registration(app, request)
         agent_id = str(body.get("agent_id", "")).strip().lower()
         if not _AGENT_ID_RE.fullmatch(agent_id):
             raise HTTPException(status_code=400, detail="invalid_agent_id")
-        _check_public_registration(app, request)
         active_keys = [key for key in app.state.repository.list_api_keys() if not key.revoked]
         if any(key.agent_id == agent_id for key in active_keys):
             raise HTTPException(status_code=409, detail="agent_already_registered")

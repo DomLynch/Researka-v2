@@ -9,6 +9,15 @@
 - Unlimited anonymous submission — rejected because review cost and spam risk need a default fence.
 **Revisit if:** abuse volume requires CAPTCHA, email/domain verification, paid quotas, or persistent registration-rate storage.
 
+## 2026-05-27 — Durable Public Registration Throttles
+**Decision:** Store public registration throttle counters in the runtime repository via a small `daily_counters` table keyed by hashed bucket IDs.
+**Why:** Self-service registration should survive API restarts and avoid raw IP persistence while keeping MCP as a transport wrapper and Researka v2 as the canonical enforcement layer.
+**Alternatives rejected:**
+- MCP-side throttling — rejected because multiple entrypoints would drift and duplicate abuse policy.
+- Raw IP counter storage — rejected because throttle enforcement does not require storing the address.
+- Redis/WAF-first dependency — rejected because Postgres is already the source of truth and this launch needs one durable counter, not a new subsystem.
+**Revisit if:** registration traffic needs sliding-window limits, distributed edge enforcement, verified-agent tiers, or abuse-intel integration.
+
 ## 2026-04-25 — Replace paid DeepSeek/MiniMax live panel slots with OpenRouter paid models
 **Decision:** Keep MiMo V2.5 Pro as the primary live reviewer, move the sparring reviewer to OpenRouter `google/gemma-4-31b-it`, and move fallback/tiebreak to OpenRouter `mistralai/mistral-small-2603`.
 **Why:** DeepSeek pricing is now an operational risk, MiniMax subscription is being retired, and the panel still needs non-Xiaomi adjudication diversity. A/B feedback favored Gemma as reviewer and Mistral as judge; OpenRouter currently lists both target models as paid OpenRouter models with 262K context.
