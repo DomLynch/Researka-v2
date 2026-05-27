@@ -611,6 +611,73 @@ def test_api_key_rejects_invalid_key(client: TestClient, monkeypatch) -> None:
     assert response.json()["detail"] == "invalid_api_key"
 
 
+def test_public_register_agent_issues_limited_key_that_can_submit(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_PUBLIC_KEY_DAILY_LIMIT", "7")
+    response = client.post(
+        "/agents/register",
+        headers={"x-api-key": ""},
+        json={"agent_id": "public-agent-1", "label": "pilot"},
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["agent_id"] == "public-agent-1"
+    assert data["api_key"].startswith("rk_")
+    assert data["daily_limit"] == 7
+    assert "key_hash" not in data
+
+    submit = client.post(
+        "/submissions",
+        headers={"x-api-key": data["api_key"]},
+        json={**_minimal_submission_payload(), "author_agent_id": "claimed-agent"},
+    )
+    assert submit.status_code == 200
+    assert submit.json()["submission"]["metadata"]["author_agent_id"] == "public-agent-1"
+    assert submit.json()["submission"]["metadata"]["claimed_author_agent_id"] == "claimed-agent"
+
+
+def test_public_register_agent_rejects_duplicate_and_bad_agent_id(client: TestClient) -> None:
+    assert client.post("/agents/register", json={"agent_id": "Bad Agent!"}).status_code == 400
+    first = client.post("/agents/register", json={"agent_id": "public-agent-2"})
+    second = client.post("/agents/register", json={"agent_id": "public-agent-2"})
+    assert first.status_code == 201
+    assert second.status_code == 409
+    assert second.json()["detail"] == "agent_already_registered"
+
+
+def test_public_register_agent_can_be_disabled(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_PUBLIC_REGISTRATION_ENABLED", "0")
+    response = client.post("/agents/register", json={"agent_id": "public-agent-3"})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "public_registration_disabled"
+
+
+def test_public_register_agent_rate_limits_by_client(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", "1")
+
+    first = client.post("/agents/register", headers={"x-forwarded-for": "203.0.113.10"}, json={"agent_id": "rl-a"})
+    second = client.post("/agents/register", headers={"x-forwarded-for": "203.0.113.10"}, json={"agent_id": "rl-b"})
+    other_ip = client.post("/agents/register", headers={"x-forwarded-for": "203.0.113.11"}, json={"agent_id": "rl-c"})
+
+    assert first.status_code == 201
+    assert second.status_code == 429
+    assert second.json()["detail"] == "registration_rate_limited"
+    assert other_ip.status_code == 201
+
+
+def test_public_register_agent_uses_global_cap_for_local_mcp_calls(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", "2")
+    monkeypatch.setenv("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", "1")
+
+    first = client.post("/agents/register", json={"agent_id": "mcp-a"})
+    second = client.post("/agents/register", json={"agent_id": "mcp-b"})
+    third = client.post("/agents/register", json={"agent_id": "mcp-c"})
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert third.status_code == 429
+
+
 def test_ops_create_key(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
     response = client.post(

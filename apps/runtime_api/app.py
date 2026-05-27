@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import hashlib
 import hmac
@@ -72,6 +73,7 @@ def _resolve_git_sha() -> str:
 _SERVICE_GIT_SHA = _resolve_git_sha()
 DEFAULT_AGENT_DAILY_LIMIT = 25
 DEFAULT_INTAKE_REJECTION_BACKOFF = 3
+_AGENT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,62}$")
 
 
 def reset_calibration_cache() -> None:
@@ -198,6 +200,33 @@ def _env_int(name: str, default: int) -> int:
         return max(0, int(os.environ.get(name, str(default))))
     except ValueError:
         return default
+
+
+def _bounded_env_int(name: str, default: int, *, floor: int, ceiling: int) -> int:
+    return min(ceiling, max(floor, _env_int(name, default)))
+
+
+def _registration_bucket(request: Request) -> tuple[str, str, int]:
+    host = request.client.host if request.client else "unknown"
+    if host in {"127.0.0.1", "::1", "testclient"}:
+        forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+        if forwarded:
+            host = forwarded
+    if host in {"127.0.0.1", "::1", "testclient"}:
+        return ("global", "RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", 200)
+    return (f"ip:{host[:64]}", "RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", 3)
+
+
+def _check_public_registration(app: FastAPI, request: Request) -> None:
+    if os.environ.get("RESEARKA_V2_PUBLIC_REGISTRATION_ENABLED", "1").lower() in {"0", "false", "no"}:
+        raise HTTPException(status_code=403, detail="public_registration_disabled")
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    bucket, env_name, default = _registration_bucket(request)
+    key = (bucket, day)
+    limit = _bounded_env_int(env_name, default, floor=1, ceiling=10_000)
+    if app.state.public_registration_counts.get(key, 0) >= limit:
+        raise HTTPException(status_code=429, detail="registration_rate_limited")
+    app.state.public_registration_counts[key] = app.state.public_registration_counts.get(key, 0) + 1
 
 
 def _daily_limit_from_body(body: dict) -> int:
@@ -511,6 +540,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     app.state.repository = repo
     app.state.engine = WorkflowEngine()
     app.state.worker = WorkerApp(repo, worker_id="api-worker", engine=app.state.engine)
+    app.state.public_registration_counts = {}
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -626,6 +656,31 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             )
         )
         return {"submission": submission.model_dump(mode="json"), "job": job.model_dump(mode="json")}
+
+    @app.post("/agents/register", status_code=201)
+    def register_agent(request: Request, body: dict = Body(default_factory=dict)) -> dict:
+        agent_id = str(body.get("agent_id", "")).strip().lower()
+        if not _AGENT_ID_RE.fullmatch(agent_id):
+            raise HTTPException(status_code=400, detail="invalid_agent_id")
+        _check_public_registration(app, request)
+        active_keys = [key for key in app.state.repository.list_api_keys() if not key.revoked]
+        if any(key.agent_id == agent_id for key in active_keys):
+            raise HTTPException(status_code=409, detail="agent_already_registered")
+        active_limit = _bounded_env_int("RESEARKA_V2_PUBLIC_ACTIVE_KEY_LIMIT", 1000, floor=1, ceiling=1_000_000)
+        if len(active_keys) >= active_limit:
+            raise HTTPException(status_code=429, detail="public_key_capacity_reached")
+        label = str(body.get("label") or "public:self-registered").strip()[:80] or "public:self-registered"
+        key = app.state.repository.create_api_key(
+            agent_id,
+            label=label,
+            daily_limit=_bounded_env_int("RESEARKA_V2_PUBLIC_KEY_DAILY_LIMIT", 10, floor=1, ceiling=1000),
+        )
+        return {
+            "agent_id": key.agent_id,
+            "api_key": key.raw_key,
+            "daily_limit": key.daily_limit,
+            "created_at": key.created_at.isoformat(),
+        }
 
     @app.get("/submissions/{submission_id}")
     def get_submission(submission_id: str) -> dict:
