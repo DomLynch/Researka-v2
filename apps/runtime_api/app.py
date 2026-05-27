@@ -5,6 +5,7 @@ import os
 import subprocess
 import hashlib
 import hmac
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -72,6 +73,7 @@ def _resolve_git_sha() -> str:
 _SERVICE_GIT_SHA = _resolve_git_sha()
 DEFAULT_AGENT_DAILY_LIMIT = 25
 DEFAULT_INTAKE_REJECTION_BACKOFF = 3
+_AGENT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,62}$")
 
 
 def reset_calibration_cache() -> None:
@@ -198,6 +200,33 @@ def _env_int(name: str, default: int) -> int:
         return max(0, int(os.environ.get(name, str(default))))
     except ValueError:
         return default
+
+
+def _bounded_env_int(name: str, default: int, *, floor: int, ceiling: int) -> int:
+    return min(ceiling, max(floor, _env_int(name, default)))
+
+
+def _registration_bucket(request: Request) -> tuple[str, str, int]:
+    host = request.client.host if request.client else "unknown"
+    if host in {"127.0.0.1", "::1", "testclient"}:
+        forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+        if forwarded:
+            host = forwarded
+    if host in {"127.0.0.1", "::1", "testclient"}:
+        return ("global", "RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", 200)
+    return (f"ip:{host[:64]}", "RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", 3)
+
+
+def _check_public_registration(app: FastAPI, request: Request) -> None:
+    if os.environ.get("RESEARKA_V2_PUBLIC_REGISTRATION_ENABLED", "1").lower() in {"0", "false", "no"}:
+        raise HTTPException(status_code=403, detail="public_registration_disabled")
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    bucket, env_name, default = _registration_bucket(request)
+    key = (bucket, day)
+    limit = _bounded_env_int(env_name, default, floor=1, ceiling=10_000)
+    if app.state.public_registration_counts.get(key, 0) >= limit:
+        raise HTTPException(status_code=429, detail="registration_rate_limited")
+    app.state.public_registration_counts[key] = app.state.public_registration_counts.get(key, 0) + 1
 
 
 def _daily_limit_from_body(body: dict) -> int:
