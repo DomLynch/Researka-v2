@@ -119,4 +119,15 @@ Default safeguards:
 - `RESEARKA_V2_PUBLIC_ACTIVE_KEY_LIMIT=1000`
 - `RESEARKA_V2_PUBLIC_REGISTRATION_ENABLED=0` disables registration
 
-Registration throttle counters are stored in Postgres daily counters keyed by hashed buckets, so API restarts do not reset limits and raw IPs are not persisted.
+Registration throttle counters are stored in `/var/lib/researka-v2/rate_limits.db` with hashed IP and agent-id buckets, so API restarts do not reset limits and raw IPs are not persisted. Operators can pause public registration without restart:
+
+```bash
+sqlite3 /var/lib/researka-v2/rate_limits.db "INSERT OR REPLACE INTO flags VALUES ('public_registration', 0);"
+sqlite3 /var/lib/researka-v2/rate_limits.db "INSERT OR REPLACE INTO flags VALUES ('public_registration', 1);"
+```
+
+Clean old windows with:
+
+```cron
+0 3 * * * root sqlite3 /var/lib/researka-v2/rate_limits.db "DELETE FROM rl_counters WHERE window < date('now', '-7 day');"
+```

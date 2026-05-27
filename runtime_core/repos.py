@@ -88,7 +88,6 @@ class RuntimeRepository(Protocol):
     def list_api_keys(self) -> list[ApiKeyInfo]: ...
     def record_api_key_usage(self, key_hash: str) -> None: ...
     def get_api_key_usage_today(self, key_hash: str) -> int: ...
-    def increment_daily_counter(self, counter_key: str) -> int: ...
     def store_osf_oauth_token(self, agent_id: str, token_metadata: dict) -> None: ...
     def get_osf_oauth_token(self, agent_id: str) -> dict | None: ...
 
@@ -108,7 +107,6 @@ class InMemoryRuntimeRepository:
         self.publication_by_target: dict[str, str] = {}
         self.api_keys: dict[str, ApiKeyInfo] = {}
         self.api_key_usage: dict[tuple[str, str], int] = {}
-        self.daily_counters: dict[tuple[str, str], int] = {}
         self.osf_oauth_tokens: dict[str, dict] = {}
         self.audit_reviews: list[AuditReview] = []
         self.lease_ttl_seconds = lease_ttl_seconds
@@ -122,7 +120,6 @@ class InMemoryRuntimeRepository:
         self.publication_by_target.clear()
         self.api_keys.clear()
         self.api_key_usage.clear()
-        self.daily_counters.clear()
         self.osf_oauth_tokens.clear()
         self.audit_reviews.clear()
 
@@ -284,12 +281,6 @@ class InMemoryRuntimeRepository:
     def get_api_key_usage_today(self, key_hash: str) -> int:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         return self.api_key_usage.get((key_hash, today), 0)
-
-    def increment_daily_counter(self, counter_key: str) -> int:
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        key = (counter_key, today)
-        self.daily_counters[key] = self.daily_counters.get(key, 0) + 1
-        return self.daily_counters[key]
 
     def store_osf_oauth_token(self, agent_id: str, token_metadata: dict) -> None:
         self.osf_oauth_tokens[agent_id] = dict(token_metadata)
@@ -463,16 +454,6 @@ class PostgresRuntimeRepository:
             )
             cur.execute(
                 """
-                CREATE TABLE IF NOT EXISTS daily_counters (
-                    counter_key TEXT NOT NULL,
-                    day TEXT NOT NULL,
-                    count INTEGER NOT NULL DEFAULT 0,
-                    PRIMARY KEY (counter_key, day)
-                )
-                """
-            )
-            cur.execute(
-                """
                 CREATE TABLE IF NOT EXISTS osf_oauth_tokens (
                     agent_id TEXT PRIMARY KEY,
                     token_metadata TEXT NOT NULL,
@@ -500,7 +481,7 @@ class PostgresRuntimeRepository:
     def reset(self) -> None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
-                "TRUNCATE audit_reviews, osf_oauth_tokens, daily_counters, api_key_usage, "
+                "TRUNCATE audit_reviews, osf_oauth_tokens, api_key_usage, "
                 "api_keys, runtime_events, runtime_jobs, research_objects;"
             )
             conn.commit()
@@ -880,23 +861,6 @@ class PostgresRuntimeRepository:
             )
             row = cur.fetchone()
             return row["count"] if row else 0
-
-    def increment_daily_counter(self, counter_key: str) -> int:
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO daily_counters (counter_key, day, count)
-                VALUES (%s, %s, 1)
-                ON CONFLICT (counter_key, day)
-                DO UPDATE SET count = daily_counters.count + 1
-                RETURNING count
-                """,
-                (counter_key, today),
-            )
-            row = cur.fetchone()
-            conn.commit()
-            return row["count"]
 
     def store_osf_oauth_token(self, agent_id: str, token_metadata: dict) -> None:
         with self._connect() as conn, conn.cursor() as cur:

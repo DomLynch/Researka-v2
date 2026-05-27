@@ -22,6 +22,11 @@ def disable_integrity_by_default(monkeypatch):
     monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "0")
 
 
+@pytest.fixture(autouse=True)
+def isolate_rate_limit_db(monkeypatch, tmp_path):
+    monkeypatch.setenv("RESEARKA_V2_RATE_LIMIT_DB_PATH", str(tmp_path / "rate_limits.db"))
+
+
 @pytest.fixture
 def client(inmemory_repo, monkeypatch):
     monkeypatch.setenv("RESEARKA_V2_API_KEY", "test-legacy-key")

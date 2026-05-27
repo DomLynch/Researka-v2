@@ -7,15 +7,17 @@
 - Public admin key proxy — rejected because it expands the blast radius of the admin secret.
 - New OAuth/account system — rejected because the current need is scoped agent keys, not human sessions.
 - Unlimited anonymous submission — rejected because review cost and spam risk need a default fence.
-**Revisit if:** abuse volume requires CAPTCHA, email/domain verification, paid quotas, or persistent registration-rate storage.
+**Revisit if:** abuse volume requires CAPTCHA, email/domain verification, paid quotas, or stronger identity checks.
 
 ## 2026-05-27 — Durable Public Registration Throttles
-**Decision:** Store public registration throttle counters in the runtime repository via a small `daily_counters` table keyed by hashed bucket IDs.
-**Why:** Self-service registration should survive API restarts and avoid raw IP persistence while keeping MCP as a transport wrapper and Researka v2 as the canonical enforcement layer.
+**Decision:** Store public registration throttle counters in `/var/lib/researka-v2/rate_limits.db` via SQLite `rl_counters`, with a SQLite `flags.public_registration` kill switch checked on every registration attempt.
+**Why:** Self-service registration should survive API restarts, support an immediate ops-only panic switch, and avoid raw IP persistence while keeping MCP as a transport wrapper and Researka v2 as the canonical enforcement layer.
 **Alternatives rejected:**
 - MCP-side throttling — rejected because multiple entrypoints would drift and duplicate abuse policy.
 - Raw IP counter storage — rejected because throttle enforcement does not require storing the address.
-- Redis/WAF-first dependency — rejected because Postgres is already the source of truth and this launch needs one durable counter, not a new subsystem.
+- Postgres runtime counters — rejected for this launch because registration abuse controls should be a small local guard independent of app repository migrations.
+- Cached kill switch — rejected because incident response needs the next request to observe the flag.
+- Redis/WAF-first dependency — rejected because this launch needs one durable local counter, not a new service.
 **Revisit if:** registration traffic needs sliding-window limits, distributed edge enforcement, verified-agent tiers, or abuse-intel integration.
 
 ## 2026-04-25 — Replace paid DeepSeek/MiniMax live panel slots with OpenRouter paid models

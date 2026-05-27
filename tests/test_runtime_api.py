@@ -652,6 +652,25 @@ def test_public_register_agent_can_be_disabled(client: TestClient, monkeypatch) 
     assert response.json()["detail"] == "public_registration_disabled"
 
 
+def test_public_register_agent_db_flag_blocks_without_restart(client: TestClient) -> None:
+    import sqlite3
+
+    from apps.runtime_api.rate_limits import ensure_schema
+
+    db_path = os.environ["RESEARKA_V2_RATE_LIMIT_DB_PATH"]
+    ensure_schema(db_path)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("INSERT OR REPLACE INTO flags VALUES ('public_registration', 0)")
+    blocked = client.post("/agents/register", json={"agent_id": "flag-agent"})
+    assert blocked.status_code == 503
+    assert blocked.json()["detail"] == "registration_paused"
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("INSERT OR REPLACE INTO flags VALUES ('public_registration', 1)")
+    allowed = client.post("/agents/register", json={"agent_id": "flag-agent"})
+    assert allowed.status_code == 201
+
+
 def test_public_register_agent_rate_limits_by_client(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", "1")
 
@@ -725,6 +744,18 @@ def test_public_register_agent_counts_invalid_attempts(client: TestClient, monke
 
     assert invalid.status_code == 400
     assert valid.status_code == 429
+
+
+def test_public_register_agent_limits_agent_id_once_per_day(client: TestClient) -> None:
+    first = client.post("/agents/register", json={"agent_id": "daily-agent"})
+    repo = _repository(client)
+    key_hash = next(key.key_hash for key in repo.list_api_keys() if key.agent_id == "daily-agent")
+    repo.revoke_api_key(key_hash)
+    second = client.post("/agents/register", json={"agent_id": "daily-agent"})
+
+    assert first.status_code == 201
+    assert second.status_code == 429
+    assert second.json()["detail"] == "registration_rate_limited"
 
 
 def test_ops_create_key(client: TestClient, monkeypatch) -> None:

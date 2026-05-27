@@ -1,0 +1,1 @@
+0 3 * * * root sqlite3 /var/lib/researka-v2/rate_limits.db "DELETE FROM rl_counters WHERE window < date('now', '-7 day');"

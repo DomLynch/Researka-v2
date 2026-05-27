@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 
+from apps.runtime_api import rate_limits
 from apps.worker.main import WorkerApp
 from contracts import AuditReview, AuditVerdict, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
@@ -206,24 +207,41 @@ def _bounded_env_int(name: str, default: int, *, floor: int, ceiling: int) -> in
     return min(ceiling, max(floor, _env_int(name, default)))
 
 
-def _registration_bucket(request: Request) -> tuple[str, str, int]:
+def _registration_client_key(request: Request) -> str | None:
     host = request.client.host if request.client else "unknown"
     if host in {"127.0.0.1", "::1", "testclient"}:
         forwarded = [part.strip() for part in request.headers.get("x-forwarded-for", "").split(",") if part.strip()]
         if forwarded:
             host = forwarded[-1]
     if host in {"127.0.0.1", "::1", "testclient"}:
-        return ("global", "RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", 200)
-    return (f"ip:{host[:64]}", "RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", 3)
+        return None
+    return hashlib.sha256(host[:128].encode()).hexdigest()
 
 
-def _check_public_registration(app: FastAPI, request: Request) -> None:
+def _registration_window() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _check_public_registration(request: Request) -> None:
     if os.environ.get("RESEARKA_V2_PUBLIC_REGISTRATION_ENABLED", "1").lower() in {"0", "false", "no"}:
         raise HTTPException(status_code=403, detail="public_registration_disabled")
-    bucket, env_name, default = _registration_bucket(request)
-    limit = _bounded_env_int(env_name, default, floor=1, ceiling=10_000)
-    counter_key = f"public_registration:{hashlib.sha256(bucket.encode()).hexdigest()}"
-    if app.state.repository.increment_daily_counter(counter_key) > limit:
+    if not rate_limits.public_registration_enabled():
+        raise HTTPException(status_code=503, detail="registration_paused")
+
+    window = _registration_window()
+    client_key = _registration_client_key(request)
+    if client_key is not None:
+        ip_limit = _bounded_env_int("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", 3, floor=1, ceiling=10_000)
+        if not rate_limits.check_and_incr("ip", client_key, limit=ip_limit, window=window):
+            raise HTTPException(status_code=429, detail="registration_rate_limited")
+    global_limit = _bounded_env_int("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", 200, floor=1, ceiling=10_000)
+    if not rate_limits.check_and_incr("global", "registration", limit=global_limit, window=window):
+        raise HTTPException(status_code=429, detail="registration_rate_limited")
+
+
+def _check_agent_registration(agent_id: str) -> None:
+    agent_key = hashlib.sha256(agent_id.encode()).hexdigest()
+    if not rate_limits.check_and_incr("agent_id", agent_key, limit=1, window=_registration_window()):
         raise HTTPException(status_code=429, detail="registration_rate_limited")
 
 
@@ -656,13 +674,14 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
 
     @app.post("/agents/register", status_code=201)
     def register_agent(request: Request, body: dict = Body(default_factory=dict)) -> dict:
-        _check_public_registration(app, request)
+        _check_public_registration(request)
         agent_id = str(body.get("agent_id", "")).strip().lower()
         if not _AGENT_ID_RE.fullmatch(agent_id):
             raise HTTPException(status_code=400, detail="invalid_agent_id")
         active_keys = [key for key in app.state.repository.list_api_keys() if not key.revoked]
         if any(key.agent_id == agent_id for key in active_keys):
             raise HTTPException(status_code=409, detail="agent_already_registered")
+        _check_agent_registration(agent_id)
         active_limit = _bounded_env_int("RESEARKA_V2_PUBLIC_ACTIVE_KEY_LIMIT", 1000, floor=1, ceiling=1_000_000)
         if len(active_keys) >= active_limit:
             raise HTTPException(status_code=429, detail="public_key_capacity_reached")
