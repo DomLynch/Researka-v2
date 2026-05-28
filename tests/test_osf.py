@@ -16,9 +16,20 @@ from runtime_core.osf import (
 
 
 class FakeOSFClient:
-    def __init__(self, *, existing_node: dict[str, Any] | None = None, existing_doi: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        existing_node: dict[str, Any] | None = None,
+        existing_doi: str | None = None,
+        identifier_failures: int = 0,
+        mint_failures: int = 0,
+        doi_after_mint_failure: str | None = None,
+    ) -> None:
         self.existing_node = existing_node
         self.existing_doi = existing_doi
+        self.identifier_failures = identifier_failures
+        self.mint_failures = mint_failures
+        self.doi_after_mint_failure = doi_after_mint_failure
         self.created = 0
         self.updated: list[tuple[str, bool]] = []
         self.minted = 0
@@ -44,12 +55,19 @@ class FakeOSFClient:
         self.updated.append((node_id, public))
 
     def list_identifiers(self, node_id: str) -> list[dict[str, Any]]:
+        if self.identifier_failures:
+            self.identifier_failures -= 1
+            raise RuntimeError(f"osf_request_failed:GET:/nodes/{node_id}/identifiers/:404:not ready")
         if not self.existing_doi:
             return []
         return [{"attributes": {"category": "doi", "value": self.existing_doi}}]
 
     def mint_doi(self, node_id: str) -> dict[str, Any]:
         self.minted += 1
+        if self.mint_failures:
+            self.mint_failures -= 1
+            self.existing_doi = self.doi_after_mint_failure
+            raise RuntimeError(f"osf_request_failed:POST:/nodes/{node_id}/identifiers/:503:try later")
         return {"attributes": {"category": "doi", "value": "10.17605/OSF.IO/NODE1"}}
 
 
@@ -104,6 +122,48 @@ def test_mint_publication_doi_reuses_existing_publication_node() -> None:
 
     assert client.created == 0
     assert client.minted == 0
+    assert metadata["doi"] == "10.17605/OSF.IO/EXIST"
+
+
+def test_mint_publication_doi_retries_transient_identifier_404(monkeypatch) -> None:
+    monkeypatch.setattr("runtime_core.osf.time.sleep", lambda _: None)
+    publication = ResearchObject(
+        id="pub-1",
+        object_type=ObjectType.PUBLICATION,
+        parent_object_id="sub-1",
+        title="Accepted paper",
+        body_markdown="Body",
+    )
+    client = FakeOSFClient(identifier_failures=1)
+
+    metadata = mint_publication_doi(
+        publication,
+        config=OSFConfig(api_base_url="https://api.osf.io/v2", token="test-token", root_project_id="root-node"),
+        client=client,  # type: ignore[arg-type]
+    )
+
+    assert client.minted == 1
+    assert metadata["doi"] == "10.17605/OSF.IO/NODE1"
+
+
+def test_mint_publication_doi_rechecks_identifiers_after_transient_mint_failure(monkeypatch) -> None:
+    monkeypatch.setattr("runtime_core.osf.time.sleep", lambda _: None)
+    publication = ResearchObject(
+        id="pub-1",
+        object_type=ObjectType.PUBLICATION,
+        parent_object_id="sub-1",
+        title="Accepted paper",
+        body_markdown="Body",
+    )
+    client = FakeOSFClient(mint_failures=1, doi_after_mint_failure="10.17605/OSF.IO/EXIST")
+
+    metadata = mint_publication_doi(
+        publication,
+        config=OSFConfig(api_base_url="https://api.osf.io/v2", token="test-token", root_project_id="root-node"),
+        client=client,  # type: ignore[arg-type]
+    )
+
+    assert client.minted == 1
     assert metadata["doi"] == "10.17605/OSF.IO/EXIST"
 
 

@@ -16,6 +16,8 @@ from contracts import ObjectType, ResearchObject
 
 DOI_CATEGORY = "doi"
 PUBLICATION_TAG_PREFIX = "researka-publication:"
+OSF_TRANSIENT_ERROR_MARKERS = (":404:", ":409:", ":429:", ":500:", ":502:", ":503:", ":504:")
+OSF_RETRY_DELAYS_SECONDS = (0.5, 1.0, 2.0)
 
 
 @dataclass(frozen=True)
@@ -366,6 +368,47 @@ def _find_publication_node(client: OSFClient, root_project_id: str, publication_
     return None
 
 
+def _is_transient_osf_error(exc: RuntimeError, *, method: str, path: str) -> bool:
+    message = str(exc)
+    if message.startswith(f"osf_request_failed:{method}:{path}:"):
+        return any(marker in message for marker in OSF_TRANSIENT_ERROR_MARKERS)
+    return message.startswith(f"osf_unreachable:{path}:")
+
+
+def _sleep_before_retry(attempt: int) -> None:
+    time.sleep(OSF_RETRY_DELAYS_SECONDS[min(attempt, len(OSF_RETRY_DELAYS_SECONDS) - 1)])
+
+
+def _list_identifiers_with_retry(client: OSFClient, node_id: str) -> list[dict[str, Any]]:
+    path = f"/nodes/{node_id}/identifiers/"
+    for attempt in range(len(OSF_RETRY_DELAYS_SECONDS) + 1):
+        try:
+            return client.list_identifiers(node_id)
+        except RuntimeError as exc:
+            if attempt == len(OSF_RETRY_DELAYS_SECONDS) or not _is_transient_osf_error(exc, method="GET", path=path):
+                raise
+            _sleep_before_retry(attempt)
+    return []
+
+
+def _mint_doi_with_retry(client: OSFClient, node_id: str) -> dict[str, Any]:
+    path = f"/nodes/{node_id}/identifiers/"
+    for attempt in range(len(OSF_RETRY_DELAYS_SECONDS) + 1):
+        try:
+            return client.mint_doi(node_id)
+        except RuntimeError as exc:
+            if attempt == len(OSF_RETRY_DELAYS_SECONDS) or not _is_transient_osf_error(exc, method="POST", path=path):
+                raise
+            _sleep_before_retry(attempt)
+            doi = next(
+                (value for value in (_doi_from_identifier(item) for item in _list_identifiers_with_retry(client, node_id)) if value),
+                None,
+            )
+            if doi:
+                return {"attributes": {"category": DOI_CATEGORY, "value": doi}}
+    raise RuntimeError("osf_doi_missing_after_mint")
+
+
 def _publication_description(publication: ResearchObject) -> str:
     abstract = str(publication.metadata.get("abstract") or "").strip()
     return "\n\n".join(
@@ -399,10 +442,10 @@ def mint_publication_doi(
         )
     node_id = str(node["id"])
     resolved_client.update_node(node_id, public=True)
-    identifiers = resolved_client.list_identifiers(node_id)
+    identifiers = _list_identifiers_with_retry(resolved_client, node_id)
     doi = next((value for value in (_doi_from_identifier(item) for item in identifiers) if value), None)
     if doi is None:
-        doi = _doi_from_identifier(resolved_client.mint_doi(node_id))
+        doi = _doi_from_identifier(_mint_doi_with_retry(resolved_client, node_id))
     if not doi:
         raise RuntimeError("osf_doi_missing_after_mint")
     osf_url = _node_html_url(node)
