@@ -566,7 +566,9 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
     assert client.get("/badges").json()["badges"][0]["id"] == "exploratory"
     assert client.get("/leaderboard/agents").json()["agents"][0]["agent_id"] == "agent-one"
     assert client.post("/verify", json={"content_hash": "sha256:" + "b" * 64}).json()["publication_id"] == publication.id
-    assert client.get("/evidence-index/latest").json()["publication_count"] == 1
+    evidence_index = client.get("/evidence-index/latest").json()
+    assert evidence_index["publication_count"] == 1
+    assert evidence_index["decision_counts"]["revise"] == 0
     passport = client.get(f"/publications/{publication.id}/passport").json()
     assert passport["persistent_identifiers"]["ror_id"] == "https://ror.org/123456789"
     assert passport["persistent_identifiers"]["raid_id"] == "https://raid.org/example"
@@ -589,6 +591,65 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
     assert bare_passport["persistent_identifier_status"]["ror_id"] == "not_supplied"
     assert bare_passport["persistent_identifier_status"]["raid_id"] == "not_supplied"
     assert bare_passport["institution"]["status"] == "not_supplied"
+
+
+def test_hidden_records_stay_off_public_trust_surfaces(client: TestClient) -> None:
+    repo = _repository(client)
+    visible_submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Visible submission",
+            metadata={"author_agent_id": "launch-agent", "source_bundle": _valid_source_bundle()},
+        )
+    )
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=visible_submission.id,
+            title="Visible evidence brief",
+            body_markdown="- Exercise evidence suggests endpoint-specific effects and supports narrow public claims.",
+            metadata={"content_hash": "sha256:" + "c" * 64},
+        )
+    )
+    hidden_submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Benchmark submission",
+            metadata={"author_agent_id": "benchmark-agent", "public_visibility": "hidden"},
+        )
+    )
+    hidden_publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=hidden_submission.id,
+            title="Benchmark paper",
+            body_markdown="- Benchmark content should not seed public trust surfaces.",
+            metadata={"content_hash": "sha256:" + "d" * 64, "public_visibility": "hidden"},
+        )
+    )
+    hidden_decision = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=hidden_submission.id,
+            title="Hidden benchmark decision",
+            metadata={"decision": Decision.REVISE.value, "public_visibility": "hidden"},
+        )
+    )
+
+    visible_publications = client.get("/publications").json()["publications"]
+    assert hidden_publication.id not in [item["id"] for item in visible_publications]
+    assert {claim["publication_id"] for claim in client.get("/claims").json()["claims"]} == {visible_publications[0]["id"]}
+    assert [agent["agent_id"] for agent in client.get("/leaderboard/agents").json()["agents"]] == ["launch-agent"]
+    assert client.get("/agents/benchmark-agent").status_code == 404
+    hidden_index = client.get("/evidence-index/latest").json()
+    assert hidden_index["publication_count"] == 1
+    assert hidden_index["decision_counts"]["revise"] == 0
+    assert client.post("/verify", json={"content_hash": "sha256:" + "d" * 64}).json()["matched"] is False
+    assert client.get(f"/publications/{hidden_publication.id}").status_code == 404
+    assert client.get(f"/publications/{hidden_publication.id}/claims").status_code == 404
+    assert client.get(f"/publications/{hidden_publication.id}/passport").status_code == 404
+    assert client.get("/reviews").json()["reviews"] == []
+    assert client.get(f"/reviews/{hidden_decision.id}").status_code == 404
 
 
 def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: TestClient) -> None:

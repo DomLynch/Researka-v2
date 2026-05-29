@@ -72,7 +72,7 @@ def _resolve_git_sha() -> str:
 
 
 _SERVICE_GIT_SHA = _resolve_git_sha()
-DEFAULT_AGENT_DAILY_LIMIT = 25
+DEFAULT_AGENT_DAILY_LIMIT = 10
 DEFAULT_INTAKE_REJECTION_BACKOFF = 3
 _AGENT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,62}$")
 
@@ -338,11 +338,16 @@ def _submission_metadata_for_agent(payload: SubmissionPayload, agent_id: str | N
     return metadata
 
 
-def _is_publicly_listed(publication: ResearchObject) -> bool:
-    metadata = publication.metadata
-    if metadata.get("superseded_by"):
+def _is_hidden_public_record(obj: ResearchObject | None) -> bool:
+    if obj is None:
         return False
-    return str(metadata.get("public_visibility") or "listed").strip().lower() != "hidden"
+    return str(obj.metadata.get("public_visibility") or "listed").strip().lower() == "hidden"
+
+
+def _is_publicly_listed(publication: ResearchObject) -> bool:
+    if _is_hidden_public_record(publication) or publication.metadata.get("superseded_by"):
+        return False
+    return True
 
 
 def _publication_submission(repo: RuntimeRepository, publication: ResearchObject) -> ResearchObject | None:
@@ -462,14 +467,16 @@ def _agent_rows(repo: RuntimeRepository) -> list[dict[str, int | str | float]]:
     stats: dict[str, dict[str, int | str | float]] = {}
     decisions_by_parent: dict[str, list[ResearchObject]] = {}
     for decision in repo.list_objects(ObjectType.DECISION):
-        if decision.parent_object_id:
+        if decision.parent_object_id and not _is_hidden_public_record(decision):
             decisions_by_parent.setdefault(decision.parent_object_id, []).append(decision)
     published_targets = {
         publication.parent_object_id
         for publication in repo.list_objects(ObjectType.PUBLICATION)
-        if publication.parent_object_id
+        if publication.parent_object_id and _is_publicly_listed(publication)
     }
     for submission in repo.list_objects(ObjectType.SUBMISSION):
+        if _is_hidden_public_record(submission):
+            continue
         agent_id = str(submission.metadata.get("author_agent_id") or submission.metadata.get("agent_id") or "unknown")
         row = stats.setdefault(agent_id, {"agent_id": agent_id, "submissions": 0, "accept": 0, "revise": 0, "reject": 0})
         row["submissions"] = int(row["submissions"]) + 1
@@ -878,7 +885,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     @app.get("/publications/{publication_id}")
     def get_publication(publication_id: str) -> dict:
         publication = app.state.repository.get_object(publication_id)
-        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+        if publication is None or publication.object_type != ObjectType.PUBLICATION or _is_hidden_public_record(publication):
             raise HTTPException(status_code=404, detail="publication_not_found")
         payload = publication.model_dump(mode="json")
         payload["sidecars"] = sidecar_manifest(publication.id)
@@ -888,14 +895,14 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     @app.get("/publications/{publication_id}/passport")
     def get_publication_passport(publication_id: str) -> dict:
         publication = app.state.repository.get_object(publication_id)
-        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+        if publication is None or publication.object_type != ObjectType.PUBLICATION or _is_hidden_public_record(publication):
             raise HTTPException(status_code=404, detail="publication_not_found")
         return _publication_passport(app.state.repository, publication)
 
     @app.get("/publications/{publication_id}/claims")
     def list_publication_claims(publication_id: str) -> dict:
         publication = app.state.repository.get_object(publication_id)
-        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+        if publication is None or publication.object_type != ObjectType.PUBLICATION or _is_hidden_public_record(publication):
             raise HTTPException(status_code=404, detail="publication_not_found")
         claims = _publication_claim_cards(app.state.repository, publication)
         return {"claims": [c.model_dump(mode="json") for c in claims]}
@@ -966,6 +973,9 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         decisions = app.state.repository.list_objects(ObjectType.DECISION)
         decision_counts = {value: 0 for value in ("accept", "revise", "reject")}
         for decision in decisions:
+            submission = app.state.repository.get_object(decision.parent_object_id) if decision.parent_object_id else None
+            if _is_hidden_public_record(decision) or _is_hidden_public_record(submission):
+                continue
             value = str(decision.metadata.get("decision") or "")
             if value in decision_counts:
                 decision_counts[value] += 1
@@ -985,7 +995,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     @app.get("/publications/{publication_id}/ro-crate")
     def get_publication_ro_crate(publication_id: str) -> dict:
         publication = app.state.repository.get_object(publication_id)
-        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+        if publication is None or publication.object_type != ObjectType.PUBLICATION or _is_hidden_public_record(publication):
             raise HTTPException(status_code=404, detail="publication_not_found")
         submission = _publication_submission(app.state.repository, publication)
         sidecars = []
@@ -1010,7 +1020,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     @app.get("/publications/{publication_id}/sidecars/{sidecar_name}")
     def get_publication_sidecar(publication_id: str, sidecar_name: str):
         publication = app.state.repository.get_object(publication_id)
-        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+        if publication is None or publication.object_type != ObjectType.PUBLICATION or _is_hidden_public_record(publication):
             raise HTTPException(status_code=404, detail="publication_not_found")
         submission = app.state.repository.get_object(publication.parent_object_id) if publication.parent_object_id else None
         if submission is not None and submission.object_type != ObjectType.SUBMISSION:
@@ -1031,11 +1041,14 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         decisions = [
             decision
             for decision in app.state.repository.list_objects(ObjectType.DECISION)
-            if str(decision.metadata.get("decision") or "").strip().lower() in {Decision.REVISE.value, Decision.REJECT.value}
+            if not _is_hidden_public_record(decision)
+            and str(decision.metadata.get("decision") or "").strip().lower() in {Decision.REVISE.value, Decision.REJECT.value}
         ]
         decisions.sort(key=lambda item: item.created_at, reverse=True)
         for decision in decisions[: max(1, min(limit, 250))]:
             submission = app.state.repository.get_object(decision.parent_object_id) if decision.parent_object_id else None
+            if _is_hidden_public_record(submission):
+                continue
             review_id = decision.metadata.get("review_id")
             review = app.state.repository.get_object(str(review_id)) if review_id else None
             records.append(
@@ -1051,12 +1064,14 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     @app.get("/reviews/{decision_id}")
     def get_review(decision_id: str) -> dict:
         decision = app.state.repository.get_object(decision_id)
-        if decision is None or decision.object_type != ObjectType.DECISION:
+        if decision is None or decision.object_type != ObjectType.DECISION or _is_hidden_public_record(decision):
             raise HTTPException(status_code=404, detail="review_record_not_found")
         decision_value = str(decision.metadata.get("decision") or "").strip().lower()
         if decision_value not in {Decision.REVISE.value, Decision.REJECT.value}:
             raise HTTPException(status_code=404, detail="review_record_not_found")
         submission = app.state.repository.get_object(decision.parent_object_id) if decision.parent_object_id else None
+        if _is_hidden_public_record(submission):
+            raise HTTPException(status_code=404, detail="review_record_not_found")
         review_id = decision.metadata.get("review_id")
         review = app.state.repository.get_object(str(review_id)) if review_id else None
         return _public_decision_record(
