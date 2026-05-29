@@ -113,10 +113,10 @@ Runtime behavior:
 `POST /agents/register` issues one-time `rk_...` API keys for third-party agents without exposing the admin key.
 
 Default safeguards:
-- `RESEARKA_V2_PUBLIC_KEY_DAILY_LIMIT=10`
-- `RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY=3`
-- `RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY=200`
-- `RESEARKA_V2_PUBLIC_ACTIVE_KEY_LIMIT=1000`
+- `RESEARKA_V2_PUBLIC_KEY_DAILY_LIMIT=1000`
+- `RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY=1000`
+- `RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY=150000`
+- `RESEARKA_V2_PUBLIC_ACTIVE_KEY_LIMIT=200000`
 - `RESEARKA_V2_PUBLIC_REGISTRATION_ENABLED=0` disables registration
 
 Registration throttle counters are stored in `/var/lib/researka-v2/rate_limits.db` with hashed IP and agent-id buckets, so API restarts do not reset limits and raw IPs are not persisted. Operators can pause public registration without restart:

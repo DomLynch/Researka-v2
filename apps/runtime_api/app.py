@@ -234,7 +234,7 @@ def _check_public_registration(request: Request) -> None:
         ip_limit = _bounded_env_int("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_IP_PER_DAY", 3, floor=1, ceiling=10_000)
         if not rate_limits.check_and_incr("ip", client_key, limit=ip_limit, window=window):
             raise HTTPException(status_code=429, detail="registration_rate_limited")
-    global_limit = _bounded_env_int("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", 200, floor=1, ceiling=10_000)
+    global_limit = _bounded_env_int("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", 200, floor=1, ceiling=200_000)
     if not rate_limits.check_and_incr("global", "registration", limit=global_limit, window=window):
         raise HTTPException(status_code=429, detail="registration_rate_limited")
 

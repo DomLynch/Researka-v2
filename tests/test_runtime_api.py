@@ -1018,6 +1018,26 @@ def test_public_register_agent_uses_global_cap_for_local_mcp_calls(client: TestC
     assert third.status_code == 429
 
 
+def test_public_register_agent_allows_launch_scale_global_cap(client: TestClient, monkeypatch) -> None:
+    from apps.runtime_api import app as app_mod
+
+    observed_limits: list[int] = []
+
+    def fake_check_and_incr(kind: str, _key: str, *, limit: int, window: str) -> bool:
+        _ = window
+        if kind == "global":
+            observed_limits.append(limit)
+        return True
+
+    monkeypatch.setenv("RESEARKA_V2_PUBLIC_REGISTRATIONS_PER_DAY", "150000")
+    monkeypatch.setattr(app_mod.rate_limits, "check_and_incr", fake_check_and_incr)
+
+    response = client.post("/agents/register", json={"agent_id": "scale-agent"})
+
+    assert response.status_code == 201
+    assert observed_limits == [150000]
+
+
 def test_public_register_agent_rate_limit_survives_app_recreate(inmemory_repo, monkeypatch) -> None:
     from apps.runtime_api.app import create_app
 
