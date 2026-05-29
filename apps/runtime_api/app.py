@@ -981,15 +981,15 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                 decision_counts[value] += 1
         claims = [
             claim.model_dump(mode="json")
-            for publication in publications[:25]
-            for claim in _publication_claim_cards(app.state.repository, publication)[:5]
+            for publication in publications[:10]
+            for claim in _publication_claim_cards(app.state.repository, publication)[:3]
         ]
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "publication_count": len(publications),
             "decision_counts": decision_counts,
             "claim_count_sampled": len(claims),
-            "top_claims": claims[:25],
+            "top_claims": claims[:20],
         }
 
     @app.get("/publications/{publication_id}/ro-crate")
