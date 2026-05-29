@@ -415,6 +415,38 @@ def _normalise_sha(value: str) -> str:
     return text
 
 
+def _agent_rows(repo: RuntimeRepository) -> list[dict[str, int | str | float]]:
+    stats: dict[str, dict[str, int | str | float]] = {}
+    decisions_by_parent: dict[str, list[ResearchObject]] = {}
+    for decision in repo.list_objects(ObjectType.DECISION):
+        if decision.parent_object_id:
+            decisions_by_parent.setdefault(decision.parent_object_id, []).append(decision)
+    published_targets = {
+        publication.parent_object_id
+        for publication in repo.list_objects(ObjectType.PUBLICATION)
+        if publication.parent_object_id
+    }
+    for submission in repo.list_objects(ObjectType.SUBMISSION):
+        agent_id = str(submission.metadata.get("author_agent_id") or submission.metadata.get("agent_id") or "unknown")
+        row = stats.setdefault(agent_id, {"agent_id": agent_id, "submissions": 0, "accept": 0, "revise": 0, "reject": 0})
+        row["submissions"] = int(row["submissions"]) + 1
+        decisions = decisions_by_parent.get(submission.id, [])
+        if decisions:
+            decision_value = str(decisions[-1].metadata.get("decision") or "")
+        elif submission.id in published_targets:
+            decision_value = Decision.ACCEPT.value
+        else:
+            decision_value = ""
+        if decision_value in {Decision.ACCEPT.value, Decision.REVISE.value, Decision.REJECT.value}:
+            row[decision_value] = int(row[decision_value]) + 1
+    rows = []
+    for row in stats.values():
+        decided = int(row["accept"]) + int(row["revise"]) + int(row["reject"])
+        row["accept_rate"] = round(int(row["accept"]) / decided, 4) if decided else 0.0
+        rows.append(row)
+    return sorted(rows, key=lambda item: (int(item["accept"]), float(item["accept_rate"]), str(item["agent_id"])), reverse=True)
+
+
 def _string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -817,6 +849,17 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         claims = _publication_claim_cards(app.state.repository, publication)
         return {"claims": [c.model_dump(mode="json") for c in claims]}
 
+    @app.get("/claims")
+    def list_claims(limit: int = 100) -> dict:
+        limit = max(1, min(limit, 250))
+        claims = [
+            claim.model_dump(mode="json")
+            for publication in app.state.repository.list_objects(ObjectType.PUBLICATION)
+            if _is_publicly_listed(publication)
+            for claim in _publication_claim_cards(app.state.repository, publication)
+        ]
+        return {"claims": claims[:limit]}
+
     @app.get("/claims/{claim_id}")
     def get_claim(claim_id: str) -> dict:
         publications = [
@@ -837,36 +880,14 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     @app.get("/leaderboard/agents")
     def agent_leaderboard(limit: int = 100) -> dict:
         limit = max(1, min(limit, 250))
-        stats: dict[str, dict[str, int | str | float]] = {}
-        decisions_by_parent: dict[str, list[ResearchObject]] = {}
-        for decision in app.state.repository.list_objects(ObjectType.DECISION):
-            if decision.parent_object_id:
-                decisions_by_parent.setdefault(decision.parent_object_id, []).append(decision)
-        published_targets = {
-            publication.parent_object_id
-            for publication in app.state.repository.list_objects(ObjectType.PUBLICATION)
-            if publication.parent_object_id
-        }
-        for submission in app.state.repository.list_objects(ObjectType.SUBMISSION):
-            agent_id = str(submission.metadata.get("author_agent_id") or submission.metadata.get("agent_id") or "unknown")
-            row = stats.setdefault(agent_id, {"agent_id": agent_id, "submissions": 0, "accept": 0, "revise": 0, "reject": 0})
-            row["submissions"] = int(row["submissions"]) + 1
-            decisions = decisions_by_parent.get(submission.id, [])
-            if decisions:
-                decision = str(decisions[-1].metadata.get("decision") or "")
-            elif submission.id in published_targets:
-                decision = Decision.ACCEPT.value
-            else:
-                decision = ""
-            if decision in {Decision.ACCEPT.value, Decision.REVISE.value, Decision.REJECT.value}:
-                row[decision] = int(row[decision]) + 1
-        rows = []
-        for row in stats.values():
-            decided = int(row["accept"]) + int(row["revise"]) + int(row["reject"])
-            row["accept_rate"] = round(int(row["accept"]) / decided, 4) if decided else 0.0
-            rows.append(row)
-        rows.sort(key=lambda item: (int(item["accept"]), float(item["accept_rate"]), str(item["agent_id"])), reverse=True)
-        return {"agents": rows[:limit]}
+        return {"agents": _agent_rows(app.state.repository)[:limit]}
+
+    @app.get("/agents/{agent_id}")
+    def get_agent(agent_id: str) -> dict:
+        for row in _agent_rows(app.state.repository):
+            if row["agent_id"] == agent_id:
+                return row
+        raise HTTPException(status_code=404, detail="agent_not_found")
 
     @app.post("/verify")
     def verify_artifact(body: dict = Body(...)) -> dict:

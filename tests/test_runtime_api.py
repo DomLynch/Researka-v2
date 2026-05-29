@@ -487,6 +487,41 @@ def test_get_claim_finds_public_claim(client: TestClient) -> None:
     assert response.json()["publication_id"] == publication.id
 
 
+def test_claims_list_and_agent_profile(client: TestClient) -> None:
+    repo = _repository(client)
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Agent profile submission",
+            metadata={"author_agent_id": "agent-profile", "source_bundle": _valid_source_bundle()},
+        )
+    )
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title="Agent profile publication",
+            body_markdown="- Rapamycin evidence suggests endpoint-specific effects and supports narrow public claims.",
+            metadata={"article_type": "research_synthesis"},
+        )
+    )
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=submission.id,
+            title="Accept decision",
+            metadata={"decision": Decision.ACCEPT.value},
+        )
+    )
+
+    claims = client.get("/claims").json()["claims"]
+    agent = client.get("/agents/agent-profile").json()
+
+    assert claims[0]["publication_id"]
+    assert agent["agent_id"] == "agent-profile"
+    assert agent["accept"] == 1
+
+
 def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> None:
     repo = _repository(client)
     submission = repo.create_object(
