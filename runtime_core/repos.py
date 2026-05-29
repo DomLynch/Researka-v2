@@ -9,9 +9,51 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
 
-from contracts import ApiKeyCreateResponse, ApiKeyInfo, AuditReview, AuditVerdict, FailureClass, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob
+from contracts import (
+    ApiKeyCreateResponse,
+    ApiKeyInfo,
+    AuditReview,
+    AuditVerdict,
+    ClaimCard,
+    FailureClass,
+    JobStatus,
+    ObjectType,
+    ResearchObject,
+    RuntimeEvent,
+    RuntimeJob,
+)
 
 OSF_TOKEN_METADATA_ENCRYPTION_PREFIX = "fernet:v1:"
+
+
+def _claim_card_to_row(card: ClaimCard) -> tuple:
+    return (
+        card.id,
+        card.publication_id,
+        card.claim_text,
+        card.evidence_grade.value,
+        json.dumps(card.citation_support),
+        card.contradiction_status.value,
+        json.dumps(card.source_ids),
+        card.dw_chain_url,
+        card.created_at,
+    )
+
+
+def _claim_card_from_row(row: dict | None) -> ClaimCard | None:
+    if row is None:
+        return None
+    return ClaimCard(
+        id=row["id"],
+        publication_id=row["publication_id"],
+        claim_text=row["claim_text"],
+        evidence_grade=row["evidence_grade"],
+        citation_support=json.loads(row["citation_support"]),
+        contradiction_status=row["contradiction_status"],
+        source_ids=json.loads(row["source_ids"]),
+        dw_chain_url=row["dw_chain_url"],
+        created_at=row["created_at"],
+    )
 
 
 def _read_secret_value(*, direct_env: str, path_env: str) -> str | None:
@@ -96,6 +138,10 @@ class RuntimeRepository(Protocol):
     def list_audit_reviews(self, submission_id: str | None = None) -> list[AuditReview]: ...
     def audit_summary(self, submission_id: str | None = None) -> dict: ...
 
+    # Claim cards (per-publication atomic claims)
+    def save_claim_card(self, card: ClaimCard) -> ClaimCard: ...
+    def list_claim_cards(self, publication_id: str) -> list[ClaimCard]: ...
+
 
 class InMemoryRuntimeRepository:
     def __init__(self, *, lease_ttl_seconds: int = 300) -> None:
@@ -109,6 +155,7 @@ class InMemoryRuntimeRepository:
         self.api_key_usage: dict[tuple[str, str], int] = {}
         self.osf_oauth_tokens: dict[str, dict] = {}
         self.audit_reviews: list[AuditReview] = []
+        self.claim_cards: list[ClaimCard] = []
         self.lease_ttl_seconds = lease_ttl_seconds
 
     def reset(self) -> None:
@@ -122,6 +169,7 @@ class InMemoryRuntimeRepository:
         self.api_key_usage.clear()
         self.osf_oauth_tokens.clear()
         self.audit_reviews.clear()
+        self.claim_cards.clear()
 
     def create_object(self, obj: ResearchObject) -> ResearchObject:
         self.objects[obj.id] = obj
