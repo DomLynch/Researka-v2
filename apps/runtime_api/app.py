@@ -971,10 +971,14 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     def evidence_index_latest() -> dict:
         publications = [p for p in app.state.repository.list_objects(ObjectType.PUBLICATION) if _is_publicly_listed(p)]
         decisions = app.state.repository.list_objects(ObjectType.DECISION)
+        hidden_submission_ids = {
+            submission.id
+            for submission in app.state.repository.list_objects(ObjectType.SUBMISSION)
+            if _is_hidden_public_record(submission)
+        }
         decision_counts = {value: 0 for value in ("accept", "revise", "reject")}
         for decision in decisions:
-            submission = app.state.repository.get_object(decision.parent_object_id) if decision.parent_object_id else None
-            if _is_hidden_public_record(decision) or _is_hidden_public_record(submission):
+            if _is_hidden_public_record(decision) or decision.parent_object_id in hidden_submission_ids:
                 continue
             value = str(decision.metadata.get("decision") or "")
             if value in decision_counts:
