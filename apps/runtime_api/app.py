@@ -396,6 +396,45 @@ def _publication_claim_cards(repo: RuntimeRepository, publication: ResearchObjec
     return _derived_claim_cards(publication, _publication_submission(repo, publication))
 
 
+def _publication_passport(repo: RuntimeRepository, publication: ResearchObject) -> dict:
+    metadata = publication.metadata
+    submission = _publication_submission(repo, publication)
+    submission_metadata = submission.metadata if submission else {}
+    decisions = repo.children_of(submission.id, ObjectType.DECISION) if submission else []
+    latest_decision = decisions[-1] if decisions else None
+    content_hash = metadata.get("content_hash") or metadata.get("sha256") or f"sha256:{hashlib.sha256((publication.body_markdown or '').encode('utf-8')).hexdigest()}"
+    ror_id = metadata.get("institution_ror") or metadata.get("ror_id") or submission_metadata.get("institution_ror") or submission_metadata.get("ror_id")
+    return {
+        "publication_id": publication.id,
+        "submission_id": publication.parent_object_id,
+        "artifact_type": _artifact_type_for_submission(submission),
+        "decision": (latest_decision.metadata.get("decision") if latest_decision else Decision.ACCEPT.value),
+        "content_hash": content_hash,
+        "persistent_identifiers": {
+            "doi": metadata.get("doi") or metadata.get("osf_doi"),
+            "osf_url": metadata.get("osf_url"),
+            "orcid": metadata.get("orcid") or metadata.get("submitter_orcid") or metadata.get("author_orcid"),
+            "ror_id": ror_id,
+            "raid_id": metadata.get("raid_id") or submission_metadata.get("raid_id"),
+        },
+        "institution": {
+            "name": metadata.get("institution_name") or submission_metadata.get("institution_name"),
+            "ror_id": ror_id,
+        },
+        "integrity": metadata.get("integrity") if isinstance(metadata.get("integrity"), dict) else None,
+        "provenance": {
+            "dw_artifact_id": metadata.get("dw_artifact_id"),
+            "dw_chain_url": metadata.get("dw_chain_url"),
+        },
+        "timeline": [
+            Stage.INTAKE.value,
+            Stage.REVIEW.value,
+            Stage.EDITORIAL.value,
+            Stage.PUBLISH.value,
+        ],
+    }
+
+
 def _badge_definitions() -> list[dict[str, str]]:
     return [
         {"id": "exploratory", "label": "Exploratory", "meaning": "Claim is public but still early or indirectly supported."},
@@ -839,7 +878,15 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="publication_not_found")
         payload = publication.model_dump(mode="json")
         payload["sidecars"] = sidecar_manifest(publication.id)
+        payload["provenance_passport"] = _publication_passport(app.state.repository, publication)
         return payload
+
+    @app.get("/publications/{publication_id}/passport")
+    def get_publication_passport(publication_id: str) -> dict:
+        publication = app.state.repository.get_object(publication_id)
+        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+            raise HTTPException(status_code=404, detail="publication_not_found")
+        return _publication_passport(app.state.repository, publication)
 
     @app.get("/publications/{publication_id}/claims")
     def list_publication_claims(publication_id: str) -> dict:
@@ -951,6 +998,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             "osf_url": publication.metadata.get("osf_url"),
             "dw_chain_url": publication.metadata.get("dw_chain_url"),
             "content_hash": publication.metadata.get("content_hash") or publication.metadata.get("sha256"),
+            "provenance_passport": _publication_passport(app.state.repository, publication),
             "publication": publication.model_dump(mode="json"),
             "sidecars": sidecars,
         }

@@ -179,6 +179,10 @@ class SubmissionPayload(BaseModel):
     author_signature: str | None = None
     parent_submission_id: str | None = None
     domain_slug: str = "general"
+    institution_name: str | None = None
+    institution_ror: str | None = None
+    ror_id: str | None = None
+    raid_id: str | None = None
     core_claims_resolved: bool = True
     submitted_at: datetime = Field(default_factory=utc_now)
 

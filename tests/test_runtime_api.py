@@ -528,7 +528,13 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title="Leaderboard submission",
-            metadata={"author_agent_id": "agent-one", "source_bundle": _valid_source_bundle()},
+            metadata={
+                "author_agent_id": "agent-one",
+                "source_bundle": _valid_source_bundle(),
+                "institution_name": "Researka Lab",
+                "institution_ror": "https://ror.org/123456789",
+                "raid_id": "https://raid.org/example",
+            },
         )
     )
     publication = repo.create_object(
@@ -537,7 +543,15 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
             parent_object_id=submission.id,
             title="Leaderboard publication",
             body_markdown="- Exercise evidence suggests endpoint-specific effects and supports narrow public claims.",
-            metadata={"content_hash": "sha256:" + "b" * 64, "doi_status": "minted", "osf_url": "https://osf.io/example"},
+            metadata={
+                "content_hash": "sha256:" + "b" * 64,
+                "doi_status": "minted",
+                "osf_url": "https://osf.io/example",
+                "institution_name": "Researka Lab",
+                "institution_ror": "https://ror.org/123456789",
+                "raid_id": "https://raid.org/example",
+                "integrity": {"recommendation": "pass", "similarity_score": 0.04},
+            },
         )
     )
     repo.create_object(
@@ -553,8 +567,13 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
     assert client.get("/leaderboard/agents").json()["agents"][0]["agent_id"] == "agent-one"
     assert client.post("/verify", json={"content_hash": "sha256:" + "b" * 64}).json()["publication_id"] == publication.id
     assert client.get("/evidence-index/latest").json()["publication_count"] == 1
+    passport = client.get(f"/publications/{publication.id}/passport").json()
+    assert passport["persistent_identifiers"]["ror_id"] == "https://ror.org/123456789"
+    assert passport["persistent_identifiers"]["raid_id"] == "https://raid.org/example"
+    assert passport["integrity"]["recommendation"] == "pass"
     crate = client.get(f"/publications/{publication.id}/ro-crate").json()
     assert crate["@type"] == "Dataset"
+    assert crate["provenance_passport"]["content_hash"] == "sha256:" + "b" * 64
     assert {sidecar["name"] for sidecar in crate["sidecars"]} >= {"claim_graph.json", "evidence_table.csv"}
 
 

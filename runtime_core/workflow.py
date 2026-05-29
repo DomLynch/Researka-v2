@@ -43,11 +43,35 @@ def _publication_identity_metadata(submission_metadata: dict) -> dict:
         "submitter_name",
         "submitter_orcid",
         "authors",
+        "institution_name",
+        "institution_ror",
+        "ror_id",
+        "raid_id",
     )
     metadata = {key: submission_metadata[key] for key in keys if submission_metadata.get(key)}
+    if metadata.get("ror_id") and not metadata.get("institution_ror"):
+        metadata["institution_ror"] = metadata["ror_id"]
     if metadata.get("orcid"):
         metadata["orcid_at_publication"] = metadata["orcid"]
     return metadata
+
+
+def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -> dict[str, object]:
+    duplication_score = integrity.get("duplication_score")
+    similarity_score = integrity.get("similarity_score", duplication_score)
+    matched_sources = integrity.get("matched_sources")
+    if not isinstance(matched_sources, list):
+        matched_sources = []
+    return {
+        "recommendation": recommendation or integrity.get("recommendation") or "pass",
+        "matched_publication_id": integrity.get("matched_publication_id"),
+        "duplication_score": duplication_score,
+        "similarity_score": similarity_score,
+        "plagiarism_flag": bool(integrity.get("plagiarism_flag") or recommendation in {Decision.REJECT.value, Decision.REVISE.value}),
+        "matched_sources": matched_sources[:5],
+        "breakdown": integrity.get("breakdown") or {},
+        "feedback_for_agent": str(integrity.get("feedback_for_agent") or "").strip() or None,
+    }
 
 
 def _mint_publication_doi(repository: RuntimeRepository, publication: ResearchObject) -> dict:
@@ -308,12 +332,7 @@ class WorkflowEngine:
             "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
             "failure_category": "integrity_duplicate",
             "failed_checks": [feedback or reason],
-            "integrity": {
-                "matched_publication_id": integrity.get("matched_publication_id"),
-                "duplication_score": integrity.get("duplication_score"),
-                "breakdown": integrity.get("breakdown") or {},
-                "feedback_for_agent": feedback or None,
-            },
+            "integrity": _integrity_signal_metadata(integrity, recommendation),
             **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
         }
 
@@ -491,6 +510,11 @@ class WorkflowEngine:
             return {"created_object_id": decision.id, "terminal_decision": Decision.REJECT.value, "next_jobs": 0, "derivation_web": derivation}
         integrity = check_integrity(_integrity_payload_from_submission(submission))
         recommendation = str(integrity.get("recommendation") or "").strip().lower() if integrity else ""
+        if integrity:
+            submission = repository.update_object_metadata(
+                submission.id,
+                {**submission.metadata, "integrity": _integrity_signal_metadata(integrity, recommendation or "pass")},
+            ) or submission
         if recommendation in {Decision.REJECT.value, Decision.REVISE.value}:
             decision = repository.create_object(
                 ResearchObject(
@@ -623,6 +647,7 @@ class WorkflowEngine:
                 "counts": artifact.counts.model_dump(mode="json"),
                 "gates": [gate.model_dump(mode="json") for gate in artifact.gates],
                 "author_agent_id": submission.metadata.get("author_agent_id"),
+                "integrity": submission.metadata.get("integrity"),
                 **_publication_identity_metadata(submission.metadata),
                 **osf_publication_metadata_from_env(),
                 **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),

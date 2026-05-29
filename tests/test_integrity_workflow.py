@@ -144,9 +144,13 @@ def test_integrity_missing_recommendation_continues_to_review(monkeypatch: pytes
     monkeypatch.setattr("runtime_core.workflow.check_integrity", lambda payload: {"duplication_score": 0.91})
 
     result = WorkflowEngine(provider=AcceptProvider()).handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
+    updated = repo.get_object(submission.id)
 
     assert result["next_stage"] == Stage.REVIEW.value
     assert [job.stage for job in repo.queued_jobs()] == [Stage.REVIEW]
+    assert updated is not None
+    assert updated.metadata["integrity"]["recommendation"] == "pass"
+    assert updated.metadata["integrity"]["duplication_score"] == 0.91
 
 
 @pytest.mark.parametrize("recommendation", [Decision.REJECT.value, Decision.REVISE.value])
@@ -182,7 +186,7 @@ def test_integrity_indexes_once_after_accept(monkeypatch: pytest.MonkeyPatch) ->
     submission = _submission(repo)
     indexed: list[dict[str, Any]] = []
     monkeypatch.setenv("RESEARKA_V2_OSF_ENABLED", "0")
-    monkeypatch.setattr("runtime_core.workflow.check_integrity", lambda payload: None)
+    monkeypatch.setattr("runtime_core.workflow.check_integrity", lambda payload: {"recommendation": "pass", "similarity_score": 0.08})
     monkeypatch.setattr("runtime_core.workflow.index_integrity", lambda payload: indexed.append(payload))
 
     engine = WorkflowEngine(provider=AcceptProvider())
@@ -202,6 +206,10 @@ def test_integrity_indexes_once_after_accept(monkeypatch: pytest.MonkeyPatch) ->
     assert indexed[0]["publication_id"] == publish_result["publication_id"]
     assert indexed[0]["submission_id"] == submission.id
     assert indexed[0]["domain"] == "longevity"
+    publication = repo.get_object(publish_result["publication_id"])
+    assert publication is not None
+    assert publication.metadata["integrity"]["recommendation"] == "pass"
+    assert publication.metadata["integrity"]["similarity_score"] == 0.08
 
 
 def test_integrity_decisions_are_not_indexed(monkeypatch: pytest.MonkeyPatch) -> None:
