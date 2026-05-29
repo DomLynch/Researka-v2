@@ -20,11 +20,13 @@ def main() -> None:
         log.error("No DSN provided. Pass as argument or set RESEARKA_V2_POSTGRES_DSN.")
         sys.exit(1)
 
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__))))
-    from alembic.env import auto_migrate
+    from alembic import command as alembic_command  # type: ignore[attr-defined]
+    from alembic.config import Config
 
     log.info("Running alembic upgrade head ...")
-    auto_migrate(dsn=dsn)
+    config = Config(os.path.join(os.path.dirname(os.path.dirname(__file__)), "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", dsn)
+    alembic_command.upgrade(config, "head")
     log.info("Migration step finished.")
 
 

@@ -440,10 +440,14 @@ class PostgresRuntimeRepository:
     def _auto_migrate(self) -> None:
         """Run alembic upgrade head if available. Best-effort."""
         try:
-            from alembic.env import auto_migrate  # type: ignore[import-untyped]
-            auto_migrate(dsn=self.dsn)
+            from alembic import command as alembic_command  # type: ignore[attr-defined]
+            from alembic.config import Config
         except ImportError:
             pass
+        else:
+            config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+            config.set_main_option("sqlalchemy.url", self.dsn)
+            alembic_command.upgrade(config, "head")
 
     def _create_tables_raw(self) -> None:
         """Fallback: create all tables via raw SQL (no Alembic dependency).

@@ -835,16 +835,26 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         return {"badges": _badge_definitions()}
 
     @app.get("/leaderboard/agents")
-    def agent_leaderboard() -> dict:
+    def agent_leaderboard(limit: int = 100) -> dict:
+        limit = max(1, min(limit, 250))
         stats: dict[str, dict[str, int | str | float]] = {}
+        decisions_by_parent: dict[str, list[ResearchObject]] = {}
+        for decision in app.state.repository.list_objects(ObjectType.DECISION):
+            if decision.parent_object_id:
+                decisions_by_parent.setdefault(decision.parent_object_id, []).append(decision)
+        published_targets = {
+            publication.parent_object_id
+            for publication in app.state.repository.list_objects(ObjectType.PUBLICATION)
+            if publication.parent_object_id
+        }
         for submission in app.state.repository.list_objects(ObjectType.SUBMISSION):
             agent_id = str(submission.metadata.get("author_agent_id") or submission.metadata.get("agent_id") or "unknown")
             row = stats.setdefault(agent_id, {"agent_id": agent_id, "submissions": 0, "accept": 0, "revise": 0, "reject": 0})
             row["submissions"] = int(row["submissions"]) + 1
-            decisions = app.state.repository.children_of(submission.id, ObjectType.DECISION)
+            decisions = decisions_by_parent.get(submission.id, [])
             if decisions:
                 decision = str(decisions[-1].metadata.get("decision") or "")
-            elif app.state.repository.publication_for_target(submission.id):
+            elif submission.id in published_targets:
                 decision = Decision.ACCEPT.value
             else:
                 decision = ""
@@ -856,7 +866,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             row["accept_rate"] = round(int(row["accept"]) / decided, 4) if decided else 0.0
             rows.append(row)
         rows.sort(key=lambda item: (int(item["accept"]), float(item["accept_rate"]), str(item["agent_id"])), reverse=True)
-        return {"agents": rows}
+        return {"agents": rows[:limit]}
 
     @app.post("/verify")
     def verify_artifact(body: dict = Body(...)) -> dict:
