@@ -3,7 +3,7 @@ from typing import Any, cast
 from fastapi.testclient import TestClient
 from urllib.parse import parse_qs, quote, urlparse
 
-from contracts import Decision, EventType, ObjectType, ResearchObject, RuntimeEvent
+from contracts import ClaimCard, ContradictionStatus, Decision, EventType, EvidenceGrade, ObjectType, ResearchObject, RuntimeEvent
 from runtime_core.osf import sign_oauth_state
 
 
@@ -353,6 +353,174 @@ def test_publications_list_hides_superseded_records(client: TestClient) -> None:
     listed = client.get("/publications").json()["publications"]
 
     assert [publication["title"] for publication in listed] == ["Current memo"]
+
+
+def test_get_publication_claims_404_for_unknown_publication(client: TestClient) -> None:
+    response = client.get("/publications/does-not-exist/claims")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "publication_not_found"
+
+
+def test_get_publication_claims_returns_empty_list_when_no_claims_extracted(client: TestClient) -> None:
+    """Discriminating test (V4): publication exists, no claims yet → empty list,
+    not 404. Decouples claim storage from publication existence."""
+    repo = _repository(client)
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Accepted memo without extracted claims",
+            metadata={"article_type": "alpha_memo"},
+        )
+    )
+
+    response = client.get(f"/publications/{publication.id}/claims")
+
+    assert response.status_code == 200
+    assert response.json() == {"claims": []}
+
+
+def test_get_publication_claims_derives_cards_from_sidecars(client: TestClient) -> None:
+    repo = _repository(client)
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Metformin submission",
+            metadata={"source_bundle": _valid_source_bundle()},
+        )
+    )
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title="Metformin publication",
+            body_markdown="- Metformin evidence suggests a bounded effect on lifespan risk and supports cautious interpretation.",
+            metadata={"article_type": "research_synthesis", "content_hash": "sha256:" + "a" * 64},
+        )
+    )
+
+    response = client.get(f"/publications/{publication.id}/claims")
+
+    assert response.status_code == 200
+    claim = response.json()["claims"][0]
+    assert claim["id"].startswith("claim_")
+    assert claim["evidence_grade"] == "exploratory"
+    assert claim["citation_support"][0]["source_id"] == "source_1"
+
+
+def test_get_publication_claims_returns_saved_cards_in_created_order(client: TestClient) -> None:
+    repo = _repository(client)
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Metformin lifespan publication",
+            metadata={"article_type": "research_synthesis"},
+        )
+    )
+    first = repo.save_claim_card(
+        ClaimCard(
+            publication_id=publication.id,
+            claim_text="Metformin extends median lifespan in mice by ~5%.",
+            evidence_grade=EvidenceGrade.VERIFIED,
+            citation_support=[{"source_id": "src-1", "quote": "5.83%", "dw_chain_ref": "dw://chain/a"}],
+            contradiction_status=ContradictionStatus.NONE,
+            source_ids=["src-1"],
+            dw_chain_url="https://provenance.researka.org/chain/a",
+        )
+    )
+    second = repo.save_claim_card(
+        ClaimCard(
+            publication_id=publication.id,
+            claim_text="Effect size narrows above 1g/kg.",
+            evidence_grade=EvidenceGrade.EXPLORATORY,
+        )
+    )
+
+    response = client.get(f"/publications/{publication.id}/claims")
+
+    assert response.status_code == 200
+    claims = response.json()["claims"]
+    assert [c["id"] for c in claims] == [first.id, second.id]
+    assert claims[0]["evidence_grade"] == "verified"
+    assert claims[0]["citation_support"] == [
+        {"source_id": "src-1", "quote": "5.83%", "dw_chain_ref": "dw://chain/a"}
+    ]
+    assert claims[0]["contradiction_status"] == "none"
+    assert claims[0]["dw_chain_url"] == "https://provenance.researka.org/chain/a"
+    assert claims[1]["evidence_grade"] == "exploratory"
+    assert claims[1]["contradiction_status"] == "none"
+    assert claims[1]["citation_support"] == []
+    assert claims[1]["dw_chain_url"] is None
+
+
+def test_get_publication_claims_rejects_non_publication_object(client: TestClient) -> None:
+    """Object exists but is a submission, not a publication → 404."""
+    repo = _repository(client)
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Pending submission",
+            metadata={},
+        )
+    )
+
+    response = client.get(f"/publications/{submission.id}/claims")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "publication_not_found"
+
+
+def test_get_claim_finds_public_claim(client: TestClient) -> None:
+    repo = _repository(client)
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Claim lookup publication",
+            body_markdown="- Aspirin evidence suggests no clinical geroprotection support in current human evidence.",
+            metadata={"article_type": "research_synthesis"},
+        )
+    )
+    claim_id = client.get(f"/publications/{publication.id}/claims").json()["claims"][0]["id"]
+
+    response = client.get(f"/claims/{claim_id}")
+
+    assert response.status_code == 200
+    assert response.json()["publication_id"] == publication.id
+
+
+def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> None:
+    repo = _repository(client)
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Leaderboard submission",
+            metadata={"author_agent_id": "agent-one", "source_bundle": _valid_source_bundle()},
+        )
+    )
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title="Leaderboard publication",
+            body_markdown="- Exercise evidence suggests endpoint-specific effects and supports narrow public claims.",
+            metadata={"content_hash": "sha256:" + "b" * 64, "doi_status": "minted", "osf_url": "https://osf.io/example"},
+        )
+    )
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=submission.id,
+            title="Accept decision",
+            metadata={"decision": Decision.ACCEPT.value},
+        )
+    )
+
+    assert client.get("/badges").json()["badges"][0]["id"] == "exploratory"
+    assert client.get("/leaderboard/agents").json()["agents"][0]["agent_id"] == "agent-one"
+    assert client.post("/verify", json={"content_hash": "sha256:" + "b" * 64}).json()["publication_id"] == publication.id
+    assert client.get("/evidence-index/latest").json()["publication_count"] == 1
+    crate = client.get(f"/publications/{publication.id}/ro-crate").json()
+    assert crate["@type"] == "Dataset"
+    assert {sidecar["name"] for sidecar in crate["sidecars"]} >= {"claim_graph.json", "evidence_table.csv"}
 
 
 def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: TestClient) -> None:

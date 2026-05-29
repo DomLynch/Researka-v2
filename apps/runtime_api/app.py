@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 
 from apps.runtime_api import rate_limits
 from apps.worker.main import WorkerApp
-from contracts import AuditReview, AuditVerdict, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
+from contracts import AuditReview, AuditVerdict, ClaimCard, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
 from runtime_core.osf import (
     backfill_missing_publication_dois,
@@ -343,6 +343,76 @@ def _is_publicly_listed(publication: ResearchObject) -> bool:
     if metadata.get("superseded_by"):
         return False
     return str(metadata.get("public_visibility") or "listed").strip().lower() != "hidden"
+
+
+def _publication_submission(repo: RuntimeRepository, publication: ResearchObject) -> ResearchObject | None:
+    submission = repo.get_object(publication.parent_object_id) if publication.parent_object_id else None
+    if submission is None or submission.object_type != ObjectType.SUBMISSION:
+        return None
+    return submission
+
+
+def _stable_claim_id(publication_id: str, index: int, text: str) -> str:
+    digest = hashlib.sha256(f"{publication_id}:{index}:{text}".encode("utf-8")).hexdigest()[:16]
+    return f"claim_{digest}"
+
+
+def _derived_claim_cards(publication: ResearchObject, submission: ResearchObject | None) -> list[ClaimCard]:
+    graph, _, _ = build_sidecar(publication, submission, "claim_graph.json")
+    traces, _, _ = build_sidecar(publication, submission, "citation_traces.json")
+    trace_by_claim = {
+        str(trace.get("claim_id")): trace.get("candidate_sources") or []
+        for trace in traces.get("traces", [])
+        if isinstance(trace, dict)
+    } if isinstance(traces, dict) else {}
+    nodes = graph.get("nodes", []) if isinstance(graph, dict) else []
+    cards: list[ClaimCard] = []
+    for index, node in enumerate((n for n in nodes if isinstance(n, dict) and n.get("type") == "claim"), start=1):
+        text = str(node.get("text") or "").strip()
+        if not text:
+            continue
+        support = [
+            {"source_id": f"source_{source_index}", **source}
+            for source_index, source in enumerate(trace_by_claim.get(str(node.get("id")), [])[:5], start=1)
+            if isinstance(source, dict)
+        ]
+        cards.append(
+            ClaimCard(
+                id=_stable_claim_id(publication.id, index, text),
+                publication_id=publication.id,
+                claim_text=text,
+                citation_support=support,
+                source_ids=[str(item["source_id"]) for item in support],
+                dw_chain_url=publication.metadata.get("dw_chain_url") or publication.metadata.get("dw_chain"),
+            )
+        )
+    return cards
+
+
+def _publication_claim_cards(repo: RuntimeRepository, publication: ResearchObject) -> list[ClaimCard]:
+    saved = repo.list_claim_cards(publication.id)
+    if saved:
+        return saved
+    return _derived_claim_cards(publication, _publication_submission(repo, publication))
+
+
+def _badge_definitions() -> list[dict[str, str]]:
+    return [
+        {"id": "exploratory", "label": "Exploratory", "meaning": "Claim is public but still early or indirectly supported."},
+        {"id": "verified", "label": "Verified", "meaning": "Claim has direct citation support and no known contradiction."},
+        {"id": "certified", "label": "Certified", "meaning": "Claim has strong support plus provenance and reviewer confidence."},
+        {"id": "contested", "label": "Contested", "meaning": "Claim has material conflicting evidence or reviewer concern."},
+        {"id": "rejected", "label": "Rejected", "meaning": "Claim or artifact failed Researka gatekeeping."},
+    ]
+
+
+def _normalise_sha(value: str) -> str:
+    text = value.strip().lower()
+    if text.startswith("sha256:"):
+        return text
+    if re.fullmatch(r"[0-9a-f]{64}", text):
+        return f"sha256:{text}"
+    return text
 
 
 def _string_list(value: object) -> list[str]:
@@ -738,6 +808,121 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         payload = publication.model_dump(mode="json")
         payload["sidecars"] = sidecar_manifest(publication.id)
         return payload
+
+    @app.get("/publications/{publication_id}/claims")
+    def list_publication_claims(publication_id: str) -> dict:
+        publication = app.state.repository.get_object(publication_id)
+        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+            raise HTTPException(status_code=404, detail="publication_not_found")
+        claims = _publication_claim_cards(app.state.repository, publication)
+        return {"claims": [c.model_dump(mode="json") for c in claims]}
+
+    @app.get("/claims/{claim_id}")
+    def get_claim(claim_id: str) -> dict:
+        publications = [
+            obj
+            for obj in app.state.repository.list_objects(ObjectType.PUBLICATION)
+            if _is_publicly_listed(obj)
+        ]
+        for publication in publications:
+            for claim in _publication_claim_cards(app.state.repository, publication):
+                if claim.id == claim_id:
+                    return claim.model_dump(mode="json")
+        raise HTTPException(status_code=404, detail="claim_not_found")
+
+    @app.get("/badges")
+    def list_badges() -> dict:
+        return {"badges": _badge_definitions()}
+
+    @app.get("/leaderboard/agents")
+    def agent_leaderboard() -> dict:
+        stats: dict[str, dict[str, int | str | float]] = {}
+        for submission in app.state.repository.list_objects(ObjectType.SUBMISSION):
+            agent_id = str(submission.metadata.get("author_agent_id") or submission.metadata.get("agent_id") or "unknown")
+            row = stats.setdefault(agent_id, {"agent_id": agent_id, "submissions": 0, "accept": 0, "revise": 0, "reject": 0})
+            row["submissions"] = int(row["submissions"]) + 1
+            decisions = app.state.repository.children_of(submission.id, ObjectType.DECISION)
+            if decisions:
+                decision = str(decisions[-1].metadata.get("decision") or "")
+            elif app.state.repository.publication_for_target(submission.id):
+                decision = Decision.ACCEPT.value
+            else:
+                decision = ""
+            if decision in {Decision.ACCEPT.value, Decision.REVISE.value, Decision.REJECT.value}:
+                row[decision] = int(row[decision]) + 1
+        rows = []
+        for row in stats.values():
+            decided = int(row["accept"]) + int(row["revise"]) + int(row["reject"])
+            row["accept_rate"] = round(int(row["accept"]) / decided, 4) if decided else 0.0
+            rows.append(row)
+        rows.sort(key=lambda item: (int(item["accept"]), float(item["accept_rate"]), str(item["agent_id"])), reverse=True)
+        return {"agents": rows}
+
+    @app.post("/verify")
+    def verify_artifact(body: dict = Body(...)) -> dict:
+        candidate = str(body.get("content_hash") or body.get("sha256") or "").strip()
+        if not candidate and body.get("text") is not None:
+            candidate = f"sha256:{hashlib.sha256(str(body['text']).encode('utf-8')).hexdigest()}"
+        if not candidate:
+            raise HTTPException(status_code=400, detail="content_hash_or_text_required")
+        candidate = _normalise_sha(candidate)
+        for publication in app.state.repository.list_objects(ObjectType.PUBLICATION):
+            if not _is_publicly_listed(publication):
+                continue
+            hashes = {
+                _normalise_sha(str(publication.metadata.get("content_hash") or "")),
+                _normalise_sha(str(publication.metadata.get("sha256") or "")),
+                f"sha256:{hashlib.sha256((publication.body_markdown or '').encode('utf-8')).hexdigest()}",
+            }
+            if candidate in hashes:
+                return {"matched": True, "publication_id": publication.id, "title": publication.title, "hash": candidate}
+        return {"matched": False, "hash": candidate}
+
+    @app.get("/evidence-index/latest")
+    def evidence_index_latest() -> dict:
+        publications = [p for p in app.state.repository.list_objects(ObjectType.PUBLICATION) if _is_publicly_listed(p)]
+        decisions = app.state.repository.list_objects(ObjectType.DECISION)
+        decision_counts = {value: 0 for value in ("accept", "revise", "reject")}
+        for decision in decisions:
+            value = str(decision.metadata.get("decision") or "")
+            if value in decision_counts:
+                decision_counts[value] += 1
+        claims = [
+            claim.model_dump(mode="json")
+            for publication in publications[:25]
+            for claim in _publication_claim_cards(app.state.repository, publication)[:5]
+        ]
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "publication_count": len(publications),
+            "decision_counts": decision_counts,
+            "claim_count_sampled": len(claims),
+            "top_claims": claims[:25],
+        }
+
+    @app.get("/publications/{publication_id}/ro-crate")
+    def get_publication_ro_crate(publication_id: str) -> dict:
+        publication = app.state.repository.get_object(publication_id)
+        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+            raise HTTPException(status_code=404, detail="publication_not_found")
+        submission = _publication_submission(app.state.repository, publication)
+        sidecars = []
+        for item in sidecar_manifest(publication.id):
+            payload, media_type, filename = build_sidecar(publication, submission, item["name"])
+            sidecars.append({"name": filename, "media_type": media_type, "content": payload})
+        return {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@type": "Dataset",
+            "id": publication.id,
+            "name": publication.title,
+            "doi": publication.metadata.get("doi"),
+            "doi_status": publication.metadata.get("doi_status"),
+            "osf_url": publication.metadata.get("osf_url"),
+            "dw_chain_url": publication.metadata.get("dw_chain_url"),
+            "content_hash": publication.metadata.get("content_hash") or publication.metadata.get("sha256"),
+            "publication": publication.model_dump(mode="json"),
+            "sidecars": sidecars,
+        }
 
     @app.get("/publications/{publication_id}/sidecars/{sidecar_name}")
     def get_publication_sidecar(publication_id: str, sidecar_name: str):

@@ -9,9 +9,51 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
 
-from contracts import ApiKeyCreateResponse, ApiKeyInfo, AuditReview, AuditVerdict, FailureClass, JobStatus, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob
+from contracts import (
+    ApiKeyCreateResponse,
+    ApiKeyInfo,
+    AuditReview,
+    AuditVerdict,
+    ClaimCard,
+    FailureClass,
+    JobStatus,
+    ObjectType,
+    ResearchObject,
+    RuntimeEvent,
+    RuntimeJob,
+)
 
 OSF_TOKEN_METADATA_ENCRYPTION_PREFIX = "fernet:v1:"
+
+
+def _claim_card_to_row(card: ClaimCard) -> tuple:
+    return (
+        card.id,
+        card.publication_id,
+        card.claim_text,
+        card.evidence_grade.value,
+        json.dumps(card.citation_support),
+        card.contradiction_status.value,
+        json.dumps(card.source_ids),
+        card.dw_chain_url,
+        card.created_at,
+    )
+
+
+def _claim_card_from_row(row: dict | None) -> ClaimCard | None:
+    if row is None:
+        return None
+    return ClaimCard(
+        id=row["id"],
+        publication_id=row["publication_id"],
+        claim_text=row["claim_text"],
+        evidence_grade=row["evidence_grade"],
+        citation_support=json.loads(row["citation_support"]),
+        contradiction_status=row["contradiction_status"],
+        source_ids=json.loads(row["source_ids"]),
+        dw_chain_url=row["dw_chain_url"],
+        created_at=row["created_at"],
+    )
 
 
 def _read_secret_value(*, direct_env: str, path_env: str) -> str | None:
@@ -96,6 +138,10 @@ class RuntimeRepository(Protocol):
     def list_audit_reviews(self, submission_id: str | None = None) -> list[AuditReview]: ...
     def audit_summary(self, submission_id: str | None = None) -> dict: ...
 
+    # Claim cards (per-publication atomic claims)
+    def save_claim_card(self, card: ClaimCard) -> ClaimCard: ...
+    def list_claim_cards(self, publication_id: str) -> list[ClaimCard]: ...
+
 
 class InMemoryRuntimeRepository:
     def __init__(self, *, lease_ttl_seconds: int = 300) -> None:
@@ -109,6 +155,7 @@ class InMemoryRuntimeRepository:
         self.api_key_usage: dict[tuple[str, str], int] = {}
         self.osf_oauth_tokens: dict[str, dict] = {}
         self.audit_reviews: list[AuditReview] = []
+        self.claim_cards: list[ClaimCard] = []
         self.lease_ttl_seconds = lease_ttl_seconds
 
     def reset(self) -> None:
@@ -122,6 +169,7 @@ class InMemoryRuntimeRepository:
         self.api_key_usage.clear()
         self.osf_oauth_tokens.clear()
         self.audit_reviews.clear()
+        self.claim_cards.clear()
 
     def create_object(self, obj: ResearchObject) -> ResearchObject:
         self.objects[obj.id] = obj
@@ -320,6 +368,18 @@ class InMemoryRuntimeRepository:
             "by_verdict": by_verdict,
         }
 
+    # --- Claim cards (in-memory) ---
+
+    def save_claim_card(self, card: ClaimCard) -> ClaimCard:
+        self.claim_cards.append(card)
+        return card
+
+    def list_claim_cards(self, publication_id: str) -> list[ClaimCard]:
+        return sorted(
+            (c for c in self.claim_cards if c.publication_id == publication_id),
+            key=lambda c: c.created_at,
+        )
+
 
 def postgres_dsn_from_env() -> str | None:
     return os.environ.get("TEST_POSTGRES_DSN") or os.environ.get("RESEARKA_V2_POSTGRES_DSN")
@@ -475,13 +535,32 @@ class PostgresRuntimeRepository:
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS claim_cards (
+                    id TEXT PRIMARY KEY,
+                    publication_id TEXT NOT NULL,
+                    claim_text TEXT NOT NULL,
+                    evidence_grade TEXT NOT NULL,
+                    citation_support TEXT NOT NULL DEFAULT '[]',
+                    contradiction_status TEXT NOT NULL DEFAULT 'none',
+                    source_ids TEXT NOT NULL DEFAULT '[]',
+                    dw_chain_url TEXT NULL,
+                    created_at TIMESTAMPTZ NOT NULL
+                )
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_claim_cards_publication_id "
+                "ON claim_cards(publication_id)"
+            )
             cur.execute("SELECT pg_advisory_unlock(62004201)")
             conn.commit()
 
     def reset(self) -> None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
-                "TRUNCATE audit_reviews, osf_oauth_tokens, api_key_usage, "
+                "TRUNCATE claim_cards, audit_reviews, osf_oauth_tokens, api_key_usage, "
                 "api_keys, runtime_events, runtime_jobs, research_objects;"
             )
             conn.commit()
@@ -952,3 +1031,31 @@ class PostgresRuntimeRepository:
             "by_auditor": by_auditor,
             "by_verdict": by_verdict,
         }
+
+    # --- Claim cards (postgres) ---
+
+    def save_claim_card(self, card: ClaimCard) -> ClaimCard:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO claim_cards (
+                    id, publication_id, claim_text, evidence_grade,
+                    citation_support, contradiction_status, source_ids,
+                    dw_chain_url, created_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                _claim_card_to_row(card),
+            )
+            conn.commit()
+        return card
+
+    def list_claim_cards(self, publication_id: str) -> list[ClaimCard]:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM claim_cards WHERE publication_id = %s ORDER BY created_at ASC",
+                (publication_id,),
+            )
+            rows = cur.fetchall()
+        cards = [_claim_card_from_row(row) for row in rows]
+        return [card for card in cards if card is not None]

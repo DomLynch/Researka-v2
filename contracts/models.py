@@ -269,3 +269,36 @@ class AuditReview(BaseModel):
     verdict_match: AuditVerdict | None = None
     confidence: float = 0.0  # 0.0-1.0
     created_at: datetime = Field(default_factory=utc_now)
+
+
+class EvidenceGrade(StrEnum):
+    """Badge taxonomy for a single claim. Mirrors the public Researka grade ladder."""
+    EXPLORATORY = "exploratory"
+    VERIFIED = "verified"
+    CERTIFIED = "certified"
+    CONTESTED = "contested"
+    REJECTED = "rejected"
+
+
+class ContradictionStatus(StrEnum):
+    NONE = "none"
+    CONTRADICTED = "contradicted"
+    CORROBORATED = "corroborated"
+
+
+class ClaimCard(BaseModel):
+    """Atomic claim extracted from an accepted publication.
+
+    First-class entity so badges, evidence index, verification page, RO-Crate,
+    and contradiction signals can join/filter without re-parsing publication
+    metadata blobs.
+    """
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    publication_id: str
+    claim_text: str
+    evidence_grade: EvidenceGrade = EvidenceGrade.EXPLORATORY
+    citation_support: list[dict] = Field(default_factory=list)
+    contradiction_status: ContradictionStatus = ContradictionStatus.NONE
+    source_ids: list[str] = Field(default_factory=list)
+    dw_chain_url: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
