@@ -739,6 +739,14 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         payload["sidecars"] = sidecar_manifest(publication.id)
         return payload
 
+    @app.get("/publications/{publication_id}/claims")
+    def list_publication_claims(publication_id: str) -> dict:
+        publication = app.state.repository.get_object(publication_id)
+        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+            raise HTTPException(status_code=404, detail="publication_not_found")
+        claims = app.state.repository.list_claim_cards(publication_id)
+        return {"claims": [c.model_dump(mode="json") for c in claims]}
+
     @app.get("/publications/{publication_id}/sidecars/{sidecar_name}")
     def get_publication_sidecar(publication_id: str, sidecar_name: str):
         publication = app.state.repository.get_object(publication_id)
