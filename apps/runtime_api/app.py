@@ -404,22 +404,26 @@ def _publication_passport(repo: RuntimeRepository, publication: ResearchObject) 
     latest_decision = decisions[-1] if decisions else None
     content_hash = metadata.get("content_hash") or metadata.get("sha256") or f"sha256:{hashlib.sha256((publication.body_markdown or '').encode('utf-8')).hexdigest()}"
     ror_id = metadata.get("institution_ror") or metadata.get("ror_id") or submission_metadata.get("institution_ror") or submission_metadata.get("ror_id")
+    institution_name = metadata.get("institution_name") or submission_metadata.get("institution_name")
+    identifiers = {
+        "doi": metadata.get("doi") or metadata.get("osf_doi"),
+        "osf_url": metadata.get("osf_url"),
+        "orcid": metadata.get("orcid") or metadata.get("submitter_orcid") or metadata.get("author_orcid"),
+        "ror_id": ror_id,
+        "raid_id": metadata.get("raid_id") or submission_metadata.get("raid_id"),
+    }
     return {
         "publication_id": publication.id,
         "submission_id": publication.parent_object_id,
         "artifact_type": _artifact_type_for_submission(submission),
         "decision": (latest_decision.metadata.get("decision") if latest_decision else Decision.ACCEPT.value),
         "content_hash": content_hash,
-        "persistent_identifiers": {
-            "doi": metadata.get("doi") or metadata.get("osf_doi"),
-            "osf_url": metadata.get("osf_url"),
-            "orcid": metadata.get("orcid") or metadata.get("submitter_orcid") or metadata.get("author_orcid"),
-            "ror_id": ror_id,
-            "raid_id": metadata.get("raid_id") or submission_metadata.get("raid_id"),
-        },
+        "persistent_identifiers": identifiers,
+        "persistent_identifier_status": {key: "supplied" if value else "not_supplied" for key, value in identifiers.items()},
         "institution": {
-            "name": metadata.get("institution_name") or submission_metadata.get("institution_name"),
+            "name": institution_name,
             "ror_id": ror_id,
+            "status": "supplied" if institution_name or ror_id else "not_supplied",
         },
         "integrity": metadata.get("integrity") if isinstance(metadata.get("integrity"), dict) else None,
         "provenance": {

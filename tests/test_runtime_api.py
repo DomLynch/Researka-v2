@@ -570,11 +570,25 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
     passport = client.get(f"/publications/{publication.id}/passport").json()
     assert passport["persistent_identifiers"]["ror_id"] == "https://ror.org/123456789"
     assert passport["persistent_identifiers"]["raid_id"] == "https://raid.org/example"
+    assert passport["persistent_identifier_status"]["ror_id"] == "supplied"
+    assert passport["persistent_identifier_status"]["raid_id"] == "supplied"
+    assert passport["institution"]["status"] == "supplied"
     assert passport["integrity"]["recommendation"] == "pass"
     crate = client.get(f"/publications/{publication.id}/ro-crate").json()
     assert crate["@type"] == "Dataset"
     assert crate["provenance_passport"]["content_hash"] == "sha256:" + "b" * 64
     assert {sidecar["name"] for sidecar in crate["sidecars"]} >= {"claim_graph.json", "evidence_table.csv"}
+
+    bare_submission = repo.create_object(ResearchObject(object_type=ObjectType.SUBMISSION, title="Bare submission"))
+    bare_publication = repo.create_object(
+        ResearchObject(object_type=ObjectType.PUBLICATION, parent_object_id=bare_submission.id, title="Bare publication")
+    )
+    bare_passport = client.get(f"/publications/{bare_publication.id}/passport").json()
+    assert bare_passport["persistent_identifiers"]["ror_id"] is None
+    assert bare_passport["persistent_identifiers"]["raid_id"] is None
+    assert bare_passport["persistent_identifier_status"]["ror_id"] == "not_supplied"
+    assert bare_passport["persistent_identifier_status"]["raid_id"] == "not_supplied"
+    assert bare_passport["institution"]["status"] == "not_supplied"
 
 
 def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: TestClient) -> None:
