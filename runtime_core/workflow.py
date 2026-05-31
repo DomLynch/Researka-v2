@@ -13,6 +13,7 @@ from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
 from .reviewer_panel import reviewer_from_env
 from .repos import RuntimeRepository
+from .sanitizer import extract_markdown_section
 
 
 REVIEW_RUBRIC_KEYS = (
@@ -111,6 +112,16 @@ def _integrity_payload_from_publication(publication: ResearchObject, submission:
         }
     )
     return payload
+
+
+def _submission_full_body_markdown(submission: ResearchObject) -> str | None:
+    metadata_body = submission.metadata.get("body_markdown")
+    if isinstance(metadata_body, str) and metadata_body.strip():
+        return metadata_body
+    body = str(submission.body_markdown or "")
+    if extract_markdown_section(body, "Abstract") and extract_markdown_section(body, "References"):
+        return body
+    return None
 
 
 class WorkflowEngine:
@@ -629,7 +640,7 @@ class WorkflowEngine:
             abstract=str(submission.metadata.get("abstract", "")).strip(),
             sections=dict(submission.metadata.get("sections", {})),
             source_bundle=list(submission.metadata.get("source_bundle", [])),
-            body_markdown=submission.metadata.get("body_markdown"),
+            body_markdown=_submission_full_body_markdown(submission),
             article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
             core_claims_resolved=bool(submission.metadata.get("core_claims_resolved", True)),
         )

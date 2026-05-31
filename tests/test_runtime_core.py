@@ -138,6 +138,39 @@ def test_publish_job_is_idempotent_per_target() -> None:
     assert len(repo.jobs) == 1
 
 
+def test_publish_uses_submission_body_when_metadata_body_missing() -> None:
+    body = "\n\n".join(
+        [
+            "# Full manuscript",
+            "### Abstract\n\n" + " ".join(["abstract"] * 30),
+            "### Methods\n\n" + " ".join(["methods"] * 30),
+            "### Results\n\n" + " ".join(["results"] * 30),
+            "### Limitations\n\n" + " ".join(["limitations"] * 30),
+            "### Conclusion\n\n" + " ".join(["conclusion"] * 30),
+            "### References\n\n- Example 2024. DOI: 10.1234/example.",
+        ]
+    )
+    repo = InMemoryRuntimeRepository()
+    submission = repo.create_object(ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Accepted body-column manuscript",
+        body_markdown=body,
+        metadata={
+            "abstract": "A structured abstract for a public research synthesis.",
+            "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
+            "sections": _full_sections(),
+            "source_bundle": _valid_source_bundle(),
+            "core_claims_resolved": True,
+        },
+    ))
+
+    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+
+    publication = repo.get_object(result["publication_id"])
+    assert publication is not None
+    assert publication.body_markdown.startswith("# Full manuscript")
+
+
 def test_reject_is_terminal() -> None:
     engine = WorkflowEngine()
     context = WorkflowContext(target_object_id="obj-4", domain_slug="longevity")
