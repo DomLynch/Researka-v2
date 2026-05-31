@@ -155,16 +155,26 @@ def sanitize_source_ledger(
 
 
 def extract_markdown_section(body: str, heading: str) -> str:
-    pattern = re.compile(rf"(?ms)^#{{2,6}}\s+{re.escape(heading)}\s*\n(.*?)(?=^#{{2,6}}\s+|\Z)")
+    pattern = re.compile(rf"(?ms)^(#{{2,6}})\s+{re.escape(heading)}\s*\n")
     match = pattern.search(str(body or ""))
     if not match:
         return ""
-    return match.group(1).strip()
+    level = len(match.group(1))
+    stop = re.search(rf"(?m)^#{{2,{level}}}\s+", str(body or "")[match.end() :])
+    end = match.end() + stop.start() if stop else len(str(body or ""))
+    return str(body or "")[match.end() : end].strip()
 
 
 def remove_markdown_section(body: str, heading: str) -> str:
-    pattern = re.compile(rf"(?ms)^#{{2,6}}\s+{re.escape(heading)}\s*\n.*?(?=^#{{2,6}}\s+|\Z)")
-    return _normalize_spacing(pattern.sub("", str(body or "")))
+    text = str(body or "")
+    pattern = re.compile(rf"(?ms)^(#{{2,6}})\s+{re.escape(heading)}\s*\n")
+    match = pattern.search(text)
+    if not match:
+        return _normalize_spacing(text)
+    level = len(match.group(1))
+    stop = re.search(rf"(?m)^#{{2,{level}}}\s+", text[match.end() :])
+    end = match.end() + stop.start() if stop else len(text)
+    return _normalize_spacing(text[: match.start()] + text[end:])
 
 
 def _normalize_spacing(text: str) -> str:

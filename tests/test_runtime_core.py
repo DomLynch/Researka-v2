@@ -601,6 +601,33 @@ def test_full_manuscript_structure_accepts_demoted_heading_levels() -> None:
     assert artifact.body_markdown.startswith("# Full manuscript")
 
 
+def test_full_manuscript_structure_counts_nested_subsections() -> None:
+    body = "\n\n".join(
+        [
+            "# Full manuscript",
+            "### Abstract\n\n" + " ".join(["abstract"] * 30),
+            "### Methods",
+            "#### Review type\n\n" + " ".join(["methods"] * 30),
+            "#### Search strategy\n\n" + " ".join(["search"] * 30),
+            "### Results\n\n" + " ".join(["results"] * 30),
+            "### Limitations\n\n" + " ".join(["limitations"] * 30),
+            "### Conclusion\n\n" + " ".join(["conclusion"] * 30),
+            "### References\n\n- Example 2024. DOI: 10.1234/example.",
+        ]
+    )
+
+    artifact = compile_publication(
+        title="Nested manuscript",
+        abstract="A structured abstract for a public research synthesis.",
+        sections={},
+        source_bundle=[{"evidence_type": "primary", "year": 2024}],
+        body_markdown=body,
+        article_type="rapid_evidence_synthesis",
+    )
+
+    assert "#### Search strategy" in artifact.body_markdown
+
+
 def test_failure_classifier_maps_structure_gate() -> None:
     assert classify_failure_reason("structure_gate: 'Conclusion' empty or placeholder-thin") == FailureClass.STRUCTURE_GATE
 
