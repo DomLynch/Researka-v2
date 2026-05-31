@@ -155,7 +155,7 @@ def sanitize_source_ledger(
 
 
 def extract_markdown_section(body: str, heading: str) -> str:
-    pattern = re.compile(rf"(?ms)^## {re.escape(heading)}\s*\n(.*?)(?=^## |\Z)")
+    pattern = re.compile(rf"(?ms)^#{{2,6}}\s+{re.escape(heading)}\s*\n(.*?)(?=^#{{2,6}}\s+|\Z)")
     match = pattern.search(str(body or ""))
     if not match:
         return ""
@@ -163,7 +163,7 @@ def extract_markdown_section(body: str, heading: str) -> str:
 
 
 def remove_markdown_section(body: str, heading: str) -> str:
-    pattern = re.compile(rf"(?ms)^## {re.escape(heading)}\s*\n.*?(?=^## |\Z)")
+    pattern = re.compile(rf"(?ms)^#{{2,6}}\s+{re.escape(heading)}\s*\n.*?(?=^#{{2,6}}\s+|\Z)")
     return _normalize_spacing(pattern.sub("", str(body or "")))
 
 
