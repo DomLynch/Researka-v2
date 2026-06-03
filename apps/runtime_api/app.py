@@ -7,16 +7,24 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import Body, FastAPI, HTTPException, Request
+from pydantic import BaseModel, Field
+from fastapi import BackgroundTasks, Body, FastAPI, HTTPException, Request
 
 from apps.worker.main import WorkerApp
 from contracts import AuditReview, AuditVerdict, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload, normalize_orcid
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
+from runtime_core.agent_query import fail_agent_query_job, run_agent_query_job
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 
 _calibration_cache: dict | None = None
 _calibration_path: str | None = None
 _AGENT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,62}$")
+
+
+class AgentQueryPayload(BaseModel):
+    query: str = Field(min_length=3, max_length=240)
+    depth: str = "standard"
+    contactEmail: str | None = Field(default=None, max_length=320)
 
 
 def reset_calibration_cache() -> None:
@@ -159,6 +167,22 @@ def _env_int(name: str, default: int, *, floor: int, ceiling: int) -> int:
     return max(floor, min(value, ceiling))
 
 
+def _env_float(name: str, default: float, *, floor: float, ceiling: float) -> float:
+    try:
+        value = float(os.environ.get(name, str(default)))
+    except ValueError:
+        value = default
+    return max(floor, min(value, ceiling))
+
+
+def _feature_enabled(name: str, default: str = "0") -> bool:
+    return os.environ.get(name, default).lower() not in {"0", "false", "no", "off"}
+
+
+def _clean_query(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip()[:240]
+
+
 def _registration_bucket(request: Request) -> tuple[str, str, int]:
     host = request.client.host if request.client else "unknown"
     if host in {"127.0.0.1", "::1", "testclient"}:
@@ -180,6 +204,59 @@ def _check_public_registration(app: FastAPI, request: Request) -> None:
     if app.state.public_registration_counts.get(key, 0) >= limit:
         raise HTTPException(status_code=429, detail="registration_rate_limited")
     app.state.public_registration_counts[key] = app.state.public_registration_counts.get(key, 0) + 1
+
+
+def _check_agent_query(app: FastAPI, request: Request) -> dict[str, str]:
+    if not _feature_enabled("RESEARKA_V2_AGENT_QUERY_ENABLED"):
+        raise HTTPException(status_code=503, detail="agent_query_disabled")
+    day = datetime.now(UTC).strftime("%Y-%m-%d")
+    bucket, _, _ = _registration_bucket(request)
+    bucket_hash = hashlib.sha256(bucket.encode()).hexdigest()
+    limit = _env_int("RESEARKA_V2_AGENT_QUERY_PER_IP_PER_DAY", 25, floor=1, ceiling=10_000)
+    used = sum(
+        1 for item in app.state.repository.list_objects(ObjectType.AGENT_QUERY)
+        if item.metadata.get("request_day") == day and item.metadata.get("client_bucket_hash") == bucket_hash
+    )
+    if used >= limit:
+        raise HTTPException(status_code=429, detail="agent_query_rate_limited")
+    return {"request_day": day, "client_bucket_hash": bucket_hash}
+
+
+def _query_caps(depth: str) -> dict:
+    standard = depth == "standard"
+    return {
+        "max_runtime_sec": _env_int("RESEARKA_V2_AGENT_QUERY_MAX_RUNTIME_SEC", 180 if standard else 60, floor=5, ceiling=3600),
+        "max_sources": _env_int("RESEARKA_V2_AGENT_QUERY_MAX_SOURCES", 24 if standard else 8, floor=1, ceiling=100),
+        "max_cost_usd": _env_float("RESEARKA_V2_AGENT_QUERY_MAX_COST_USD", 0.50 if standard else 0.10, floor=0.0, ceiling=100.0),
+    }
+
+
+def _agent_query_response(obj: ResearchObject, *, repo: RuntimeRepository) -> dict:
+    metadata = obj.metadata
+    queued = [
+        item for item in repo.list_objects(ObjectType.AGENT_QUERY)
+        if item.metadata.get("status") == "queued"
+    ]
+    position = next((i + 1 for i, item in enumerate(queued) if item.id == obj.id), None)
+    return {
+        "jobId": obj.id,
+        "status": metadata.get("status", "queued"),
+        "query": metadata.get("query", obj.title),
+        "depth": metadata.get("depth", "standard"),
+        "createdAt": obj.created_at.isoformat(),
+        "updatedAt": metadata.get("updated_at", obj.created_at.isoformat()),
+        "position": position,
+        "errorMessage": metadata.get("error_message"),
+        "result": metadata.get("result"),
+        "caps": metadata.get("caps", {}),
+    }
+
+
+def _run_agent_query_background(repo: RuntimeRepository, job_id: str) -> None:
+    try:
+        run_agent_query_job(repo, job_id)
+    except Exception as exc:
+        fail_agent_query_job(repo, job_id, str(exc))
 
 
 def _trusted_submission_metadata(payload: SubmissionPayload, identity: dict[str, str | None]) -> dict:
@@ -291,6 +368,38 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             "owner_orcid": key.owner_orcid,
             "created_at": key.created_at.isoformat(),
         }
+
+    @app.post("/agent-query/jobs", status_code=202)
+    def create_agent_query_job(payload: AgentQueryPayload, request: Request, background_tasks: BackgroundTasks) -> dict:
+        request_bucket = _check_agent_query(app, request)
+        query = _clean_query(payload.query)
+        depth = payload.depth if payload.depth in {"brief", "standard"} else "standard"
+        obj = app.state.repository.create_object(
+            ResearchObject(
+                object_type=ObjectType.AGENT_QUERY,
+                title=query,
+                metadata={
+                    "query": query,
+                    "depth": depth,
+                    "status": "queued",
+                    "updated_at": datetime.now(UTC).isoformat(),
+                    "caps": _query_caps(depth),
+                    "contact_email_provided": bool(payload.contactEmail),
+                    "lane": "public_on_demand_agent_query",
+                    **request_bucket,
+                },
+            )
+        )
+        response = _agent_query_response(obj, repo=app.state.repository)
+        background_tasks.add_task(_run_agent_query_background, app.state.repository, obj.id)
+        return response
+
+    @app.get("/agent-query/jobs/{job_id}")
+    def get_agent_query_job(job_id: str) -> dict:
+        obj = app.state.repository.get_object(job_id)
+        if obj is None or obj.object_type != ObjectType.AGENT_QUERY:
+            raise HTTPException(status_code=404, detail="agent_query_job_not_found")
+        return _agent_query_response(obj, repo=app.state.repository)
 
     @app.get("/submissions/{submission_id}")
     def get_submission(submission_id: str) -> dict:

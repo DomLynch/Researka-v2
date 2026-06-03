@@ -83,6 +83,7 @@ class ObjectType(StrEnum):
     DECISION = "decision"
     PUBLICATION = "publication"
     AUDIT_REVIEW = "audit_review"
+    AGENT_QUERY = "agent_query"
 
 
 class EventType(StrEnum):
