@@ -11,6 +11,17 @@ def _repository(client: TestClient) -> Any:
     return cast(Any, client.app).state.repository
 
 
+def _seed_publication(client: TestClient, title: str, body: str = "") -> ResearchObject:
+    return _repository(client).create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title=title,
+            body_markdown=body,
+            metadata={"url": f"https://researka.org/papers/{title.lower().replace(' ', '-')}"},
+        )
+    )
+
+
 def _valid_source_bundle() -> list[dict[str, object]]:
     years = (2024, 2023, 2022, 2021, 2020, 2024, 2023, 2022, 2021, 2019, 2018, 2017)
     evidence_types = ("review",) * 6 + ("primary",) * 6
@@ -259,6 +270,105 @@ def test_can_get_created_submission(client: TestClient) -> None:
     response = client.get(f"/submissions/{submission['id']}")
     assert response.status_code == 200
     assert response.json()["object_type"] == "submission"
+
+
+def test_agent_query_disabled_by_default(client: TestClient, monkeypatch) -> None:
+    monkeypatch.delenv("RESEARKA_V2_AGENT_QUERY_ENABLED", raising=False)
+
+    response = client.post("/agent-query/jobs", json={"query": "rapamycin and immune aging", "depth": "standard"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "agent_query_disabled"
+
+
+def test_agent_query_creates_separate_public_job(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_AGENT_QUERY_ENABLED", "1")
+    _seed_publication(client, "Research Synthesis: Rapamycin and Immune Aging")
+
+    response = client.post(
+        "/agent-query/jobs",
+        headers={"x-forwarded-for": "203.0.113.20"},
+        json={
+            "query": "  rapamycin   and   immune aging  ",
+            "depth": "standard",
+            "contactEmail": "reader@example.com",
+        },
+    )
+
+    assert response.status_code == 202
+    job = response.json()
+    assert job["status"] == "queued"
+    assert job["query"] == "rapamycin and immune aging"
+    assert job["depth"] == "standard"
+    assert job["position"] == 1
+    assert job["caps"]["max_runtime_sec"] > 0
+    assert client.get("/jobs/queue").json()["queued"] == []
+
+    stored = _repository(client).get_object(job["jobId"])
+    assert stored.object_type == ObjectType.AGENT_QUERY
+    assert stored.metadata["lane"] == "public_on_demand_agent_query"
+    assert stored.metadata["contact_email_provided"] is True
+    assert "reader@example.com" not in str(stored.model_dump(mode="json"))
+    assert "203.0.113.20" not in str(stored.model_dump(mode="json"))
+    assert len(stored.metadata["client_bucket_hash"]) == 64
+
+    poll = client.get(f"/agent-query/jobs/{job['jobId']}")
+    assert poll.status_code == 200
+    assert poll.json()["status"] == "completed"
+    assert poll.json()["result"]["citations"][0]["title"] == "Research Synthesis: Rapamycin and Immune Aging"
+
+
+def test_agent_query_rate_limited_by_client(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_AGENT_QUERY_ENABLED", "1")
+    monkeypatch.setenv("RESEARKA_V2_AGENT_QUERY_PER_IP_PER_DAY", "1")
+    headers = {"x-forwarded-for": "203.0.113.21"}
+
+    first = client.post("/agent-query/jobs", headers=headers, json={"query": "rapamycin", "depth": "standard"})
+    second = client.post("/agent-query/jobs", headers=headers, json={"query": "metformin", "depth": "standard"})
+
+    assert first.status_code == 202
+    assert second.status_code == 429
+    assert second.json()["detail"] == "agent_query_rate_limited"
+
+
+def test_agent_query_handles_sample_topics_end_to_end(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_AGENT_QUERY_ENABLED", "1")
+    sample_topics = [
+        "rapamycin immune aging",
+        "metformin longevity",
+        "senolytics frailty",
+        "taurine aging biomarkers",
+        "caloric restriction inflammation",
+        "GLP-1 cardiometabolic risk",
+        "NAD precursors mitochondrial health",
+        "exercise VO2max aging",
+        "sleep glymphatic clearance",
+        "microbiome Akkermansia",
+        "protein intake sarcopenia",
+        "plasma proteomic age clocks",
+        "heat resilience older adults",
+        "omega-3 inflammation",
+        "melatonin circadian aging",
+    ]
+    for topic in sample_topics:
+        _seed_publication(client, f"Research Synthesis: {topic.title()}", f"Public record covering {topic}.")
+
+    completed = []
+    for index, topic in enumerate(sample_topics, start=1):
+        response = client.post(
+            "/agent-query/jobs",
+            headers={"x-forwarded-for": f"203.0.113.{index}"},
+            json={"query": topic, "depth": "brief"},
+        )
+        assert response.status_code == 202
+        data = client.get(f"/agent-query/jobs/{response.json()['jobId']}").json()
+        assert data["status"] == "completed"
+        assert data["result"]["citations"]
+        assert data["result"]["answerMarkdown"]
+        completed.append(data["jobId"])
+
+    assert len(completed) == 15
+    assert client.get("/jobs/queue").json()["queued"] == []
 
 
 def test_submission_decision_pending_before_review(client: TestClient) -> None:
