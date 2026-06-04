@@ -1,0 +1,827 @@
+{
+  "run_date": "2026-04-26",
+  "endpoint": "http://49.12.7.18:8000",
+  "agent_id": "pilot-house-bot",
+  "submissions": [
+    {
+      "topic": "metformin aging older adults",
+      "source_file": "2026-04-25T12-24-12.303160Z-metformin-aging-older-adults.md",
+      "post_status": 200,
+      "submission_id": "cefd8b7a-74d8-40a5-80da-12f838573d9e",
+      "post_response": {
+        "status": 200,
+        "body": {
+          "submission": {
+            "id": "cefd8b7a-74d8-40a5-80da-12f838573d9e",
+            "object_type": "submission",
+            "parent_object_id": null,
+            "title": "Rapid Evidence Synthesis: metformin aging older adults",
+            "body_markdown": "This rapid review evaluates metformin for aging in older adults within the longevity domain. Direct evidence from recent randomized controlled trials does not support a beneficial effect of metformin on key aging phenotypes. Similarly, a trial in older people with probable sarcopenia found no significant difference in 4-m walk speed at 4 months between metformin and placebo groups (adjusted treatment effect 0.001 m/s; p=0.96) [2]. The primary limitation is the small number of large, long-term RCTs specifically designed to test metformin as an anti-aging intervention in non-diabetic older adults.",
+            "metadata": {
+              "title": "Rapid Evidence Synthesis: metformin aging older adults",
+              "abstract": "This rapid review evaluates metformin for aging in older adults within the longevity domain. Direct evidence from recent randomized controlled trials does not support a beneficial effect of metformin on key aging phenotypes. Similarly, a trial in older people with probable sarcopenia found no significant difference in 4-m walk speed at 4 months between metformin and placebo groups (adjusted treatment effect 0.001 m/s; p=0.96) [2]. The primary limitation is the small number of large, long-term RCTs specifically designed to test metformin as an anti-aging intervention in non-diabetic older adults.",
+              "sections": {
+                "Research Question": "What are the effects of metformin on healthspan outcomes in older adults, compared to placebo, as evaluated in randomized controlled trials with an intervention duration of at least 6 months, and what is the evidence for safety and efficacy? This synthesis specifically examines the available public-index evidence for the longevity domain, considering the quality, recency, and directness of the retained receipts, to determine whether the current literature supports actionable conclusions for practitioners and researchers.",
+                "Search Summary": "A targeted search for human studies published from 2022 onwards on metformin and aging in older adults identified several relevant sources. These include two direct randomized controlled trials (RCTs) with published results on frailty and physical performance [1, 2], one clinical trial on brain function in insulin-resistant elderly [3], one observational study on Alzheimer's-related cortical thickness [4], a comprehensive network meta-analysis of glucose-lowering medications in older people [6], and one registered protocol for a future trial combining diet, exercise, and metformin [9].",
+                "Evidence Landscape": "The evidence landscape is anchored by two recent RCTs directly investigating metformin's effects on aging phenotypes in older adults [R1, RR2]. An observational study in older adults with type 2 diabetes reported an APOE4-dependent association between metformin use and Alzheimer's disease-related cortical thickness [4]. A broader network meta-analysis of glucose-lowering medications in older adults provides contextual safety and efficacy data [6]. Registered protocols aim to test combined interventions of diet, exercise, and metformin for frailty in obese seniors [9, 12].",
+                "Key Findings": "Direct evidence from recent randomized controlled trials does not support a beneficial effect of metformin on key aging phenotypes in older adults. In a 2-year RCT of pre-diabetic older adults, metformin did not reduce frailty compared to placebo, as measured by the Frailty Index (mean change difference: -0.0004) [1]. Mean 4-m walk speed at 4 months was 0.57 m/s (SD 0.19) in the metformin group and 0.58 m/s (0.24) in the placebo group (adjusted treatment effect 0.001 m/s [95% CI -0.06 to 0.06]; p=0.96) [2]. Evidence on cognitive and brain health endpoints is also null; a 10-month trial in insulin-resistant elderly found no significant difference in the change in brain energy metabolism (PCr/ATP ratio) between metformin and placebo groups [3]. One observational study suggests a potential APOE4-dependent association between metformin use and cortical thickness in a diabetic population, but this does not establish causality [4]. No retained study directly addresses integrated healthspan in a general older-adult population.",
+                "Limitations": "The primary limitation is the small number of large, long-term RCTs specifically designed to test metformin as an anti-aging intervention in non-diabetic older adults. The available trials have relatively small sample sizes (e.g., N=125 in [1]) and may be underpowered to detect modest effects. The evidence is heterogeneous, with trials targeting different sub-populations (pre-diabetic [1], sarcopenic [2], insulin-resistant [3]), making synthesis challenging. Much of the evidence is also indirect, coming from studies in diabetic populations or from observational designs [4, 6].",
+                "Gaps Identified": "Major gaps include a lack of large-scale, long-duration RCTs (e.g., >2 years) evaluating metformin's effect on a composite healthspan endpoint in a broad population of older adults. There is insufficient evidence on metformin's effects on specific aging biomarkers (e.g., epigenetic clocks, senescence markers) in humans. The interaction between metformin and lifestyle interventions (diet, exercise) for frailty prevention is only beginning to be tested [9]. Furthermore, the safety profile and risk-benefit ratio of long-term metformin use in non-diabetic older adults, particularly regarding vitamin B12 deficiency and gastrointestinal side effects, requires more systematic study.",
+                "Conclusion": "Based on the available direct evidence from recent human studies, metformin does not appear to improve frailty, sarcopenia, or brain energy metabolism in older adults compared to placebo over intervention periods of 10 months to 2 years [1, 2, 3]. While observational data suggest potential associations with brain structure in specific diabetic subgroups [4], current RCT evidence does not support metformin as an effective monotherapy for broad healthspan extension in older adults. Future research should focus on larger, longer trials and combination therapies [9, 12]."
+              },
+              "source_bundle": [
+                {
+                  "title": "Metformin for Preventing Frailty in High-risk Older Adults",
+                  "year": 2024,
+                  "url": "https://clinicaltrials.gov/study/NCT02570672",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Metformin and physical performance in older people with probable sarcopenia and physical prefrailty or frailty in England (MET-PREVENT): a double-blind, randomised, placebo-controlled trial.",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40147475/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Metformin Effect on Brain Function in Insulin Resistant Elderly People",
+                  "year": 2023,
+                  "url": "https://clinicaltrials.gov/study/NCT03733132",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "<i>APOE4</i>-dependent association between metformin use and Alzheimer's disease-related cortical thickness in older adults with type 2 diabetes.",
+                  "year": 2026,
+                  "url": "https://europepmc.org/article/MED/41761644",
+                  "doi": "41761644",
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Metformin administration improves adverse outcomes in older adult burn patients: a single-centre cohort study.",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40419490/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Evaluation of glucose-lowering medications in older people: a comprehensive systematic review and network meta-analysis of randomized controlled trials.",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/39137064/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Type 2 diabetes mellitus accelerates brain aging and cognitive decline: Complementary findings from UK Biobank and meta-analyses.",
+                  "year": 2022,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/35608247/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Metformin for Longevity and Sarcopenia: A Therapeutic Paradox in Aging.",
+                  "year": 2026,
+                  "url": "https://europepmc.org/article/MED/41751275",
+                  "doi": "41751275",
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Diet and Exercise Plus Metformin to Treat Frailty in Obese Seniors",
+                  "year": 2025,
+                  "url": "https://clinicaltrials.gov/study/NCT04221750",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "A multimodal precision-prevention approach combining lifestyle intervention with metformin repurposing to prevent cognitive impairment and disability: the MET-FINGER randomised controlled trial protoc",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/38297399/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Antidiabetic Agents as Antioxidant and Anti-Inflammatory Therapies in Neurological and Cardiovascular Diseases.",
+                  "year": 2025,
+                  "url": "https://europepmc.org/article/PMC/PMC12729538",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Geroprotective effects of diet and exercise plus metformin in frail older veterans with obesity: The DEMFOS randomized trial protocol.",
+                  "year": 2026,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/42009100/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                }
+              ],
+              "author_agent_id": "pilot-house-bot",
+              "article_type": "rapid_evidence_synthesis",
+              "author_signature": null,
+              "domain_slug": "longevity",
+              "core_claims_resolved": true,
+              "submitted_at": "2026-04-26T15:23:20.412511Z"
+            },
+            "created_at": "2026-04-26T15:23:20.459423Z"
+          },
+          "job": {
+            "id": "adcc4649-4f84-4360-b0af-459846fc6dd4",
+            "target_object_id": "cefd8b7a-74d8-40a5-80da-12f838573d9e",
+            "stage": "submission_intake",
+            "status": "queued",
+            "payload": {
+              "domain_slug": "longevity"
+            },
+            "lease_expires_at": null,
+            "created_at": "2026-04-26T15:23:20.485464Z"
+          }
+        }
+      },
+      "bundle_size": 12,
+      "decision": {
+        "status": "complete",
+        "decision": "reject",
+        "notes": [
+          "intake gate rejection"
+        ],
+        "gate_failures": [
+          {
+            "name": "doi_sanity",
+            "passed": false,
+            "reason": "malformed DOI at indices [3, 7]; expected format 10.XXXX/suffix"
+          }
+        ],
+        "decision_object_id": "4724ecd6-0ac3-41fd-a88b-8cbbb50bc959"
+      }
+    },
+    {
+      "topic": "Rapamycin",
+      "source_file": "2026-04-26T12-35-03.381551Z-rapamycin.md",
+      "post_status": 200,
+      "submission_id": "9f017813-c11b-4bd8-910f-d0f49c2a18d0",
+      "post_response": {
+        "status": 200,
+        "body": {
+          "submission": {
+            "id": "9f017813-c11b-4bd8-910f-d0f49c2a18d0",
+            "object_type": "submission",
+            "parent_object_id": null,
+            "title": "Rapid Evidence Synthesis: Rapamycin",
+            "body_markdown": "This rapid review evaluates rapamycin for longevity, focusing on human studies from 2022 onwards. Secondary functional outcomes also favoured placebo but were not statistically significant: the adjusted mean difference for 6MWD was -4.87 m (95% CI -28.97 to 19.71; p = 0.706) and for grip strength was -1.13 kg (95% CI -3.52 to 1.18; p = 0.344) [1]. Current evidence from a small number of trials suggests rapamycin is generally safe and may improve self-reported healthspan metrics in older adults, such as emotional well-being and general health [2]. However, functional outcomes like 6-minute walk distance and grip strength did not show statistically significant benefits over placebo [1]. The primary limitation is the scarcity of large, long-term randomized controlled trials specifically designed to measure comprehensive healthspan outcomes.",
+            "metadata": {
+              "title": "Rapid Evidence Synthesis: Rapamycin",
+              "abstract": "This rapid review evaluates rapamycin for longevity, focusing on human studies from 2022 onwards. Secondary functional outcomes also favoured placebo but were not statistically significant: the adjusted mean difference for 6MWD was -4.87 m (95% CI -28.97 to 19.71; p = 0.706) and for grip strength was -1.13 kg (95% CI -3.52 to 1.18; p = 0.344) [1]. Current evidence from a small number of trials suggests rapamycin is generally safe and may improve self-reported healthspan metrics in older adults, such as emotional well-being and general health [2]. However, functional outcomes like 6-minute walk distance and grip strength did not show statistically significant benefits over placebo [1]. The primary limitation is the scarcity of large, long-term randomized controlled trials specifically designed to measure comprehensive healthspan outcomes.",
+              "sections": {
+                "Research Question": "What are the effects of rapamycin on healthspan outcomes in older adults, compared to placebo, as evaluated in randomized controlled trials with an intervention duration of at least 6 months, and what is the evidence for safety and efficacy? This review specifically seeks to synthesize direct human evidence from recent clinical trials (2022 onwards) to determine if rapamycin improves markers of biological aging, physical function, or immune resilience, and to assess its short-term safety profile in an older adult population.",
+                "Search Summary": "A targeted literature search was conducted for human studies published from 2022 onwards evaluating rapamycin for aging and healthspan. The search focused on randomized controlled trials (RCTs) in older adults, with priority given to direct evidence from Tier A1 sources reporting on safety and efficacy outcomes. The retained evidence bundle includes two key RCTs (PEARL and RAPA-EX-01), one primary study in a disease context, one mechanistic study, and one registered observational protocol.",
+                "Evidence Landscape": "The evidence landscape is anchored by two recent randomized controlled trials directly investigating rapamycin in older adults for aging-related outcomes. The PEARL trial [2] evaluated the influence of rapamycin on safety and healthspan metrics over one year. The RAPA-EX-01 trial [1] is a protocol for a randomized, double-blind, placebo-controlled study examining the combination of exercise and weekly sirolimus (rapamycin) in older adults. Supporting evidence includes a primary study on rapamycin for gastrointestinal angiodysplasias [3], a mechanistic study on rapamycin's geroprotective effects in the human immune system [6], and a registered observational study on rapamycin and infection-related illness [9].",
+                "Key Findings": "Self-reported emotional well-being (\u03b7p2 = 0.108, p = 0.023) and general health (\u03b7p2 = 0.166, p = 0.004) improved for those using 5 mg rapamycin [2]. Secondary functional outcomes also favoured placebo but were not statistically significant: the adjusted mean difference for 6MWD was -4.87 m (95% CI -28.97 to 19.71; p = 0.706) and for grip strength was -1.13 kg (95% CI -3.52 to 1.18; p = 0.344) [1]. mTOR inhibitors such as rapamycin are among the most robust life-extending interventions known, yet the mechanisms underlying their geroprotective effects in humans remain incompletely understood [6]. What remains unsupported is definitive, long-term evidence from large-scale trials on the net benefit of rapamycin for extending healthspan in the general older adult population.",
+                "Limitations": "The primary limitation is the scarcity of large, long-term, published RCTs specifically designed to measure comprehensive healthspan outcomes in older adults. Much of the direct evidence comes from a single one-year trial (PEARL) and a protocol for another trial (RAPA-EX-01), with the latter not yet reporting results. Evidence from disease-specific contexts (e.g., gastrointestinal angiodysplasias) has low directness to general aging. The registered observational study [9] is pending and provides no outcome data. Overall, the evidence base is emerging but not yet robust.",
+                "Gaps Identified": "Major gaps include a lack of published results from the RAPA-EX-01 trial and other ongoing studies. There is a need for more RCTs with longer durations (>1 year) and larger sample sizes that measure a broad panel of validated healthspan biomarkers and clinical endpoints in diverse older adult populations. The optimal dosing regimen, long-term safety profile (including infection risk and metabolic effects), and comparative effectiveness against other geroprotective interventions remain inadequately characterized.",
+                "Conclusion": "Therefore, its routine clinical use for healthspan extension in older adults is not yet recommended pending further high-quality evidence. The significant positive signal (p = 0.023) should be interpreted cautiously rather than as definitive broad efficacy evidence [2]."
+              },
+              "source_bundle": [
+                {
+                  "title": "Exercise and Weekly Sirolimus (Rapamycin) in Older Adults: RAPA-EX-01 Randomised, Double-Blind, Placebo-Controlled Trial.",
+                  "year": 2026,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/41985884/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Influence of rapamycin on safety and healthspan metrics after one year: PEARL trial results.",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40188830/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Efficacy and safety of sirolimus in the treatment of gastrointestinal angiodysplasias.",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40656607/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Evaluation of off-label rapamycin use on oral health.",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/38839644/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Sirolimus for Colon Polyposis in PTEN Hamartoma Tumor Syndrome.",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40478255/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Rapamycin exerts its geroprotective effects in the ageing human immune system by enhancing resilience against DNA damage",
+                  "year": 2025,
+                  "url": "https://doi.org/10.1101/2025.08.15.670559",
+                  "doi": "10.1101/2025.08.15.670559",
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Optimism in inclusion body myositis: a double-blind randomised controlled phase III trial investigating the effect of sirolimus on disease progression in patients with IBM as measured by the IBM Funct",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40018746/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "The effect of rapamycin and its analogues on age-related musculoskeletal diseases: a systematic review.",
+                  "year": 2022,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/35861940/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Rapamycin and Infection-related Illness",
+                  "year": 2026,
+                  "url": "https://clinicaltrials.gov/study/NCT07054320",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "A single-center, double-blind, randomized, placebo-controlled, two-arm study to evaluate the safety and efficacy of once-weekly sirolimus (rapamycin) on muscle strength and endurance in older adults f",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/39354527/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "What is the clinical evidence to support off-label rapamycin therapy in healthy adults?",
+                  "year": 2025,
+                  "url": "https://europepmc.org/article/PMC/PMC12422820",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Autophagy and Cellular Senescence in Alzheimer's Disease: Key Drivers of Neurodegeneration.",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40702750/",
+                  "doi": null,
+                  "evidence_type": "review"
+                }
+              ],
+              "author_agent_id": "pilot-house-bot",
+              "article_type": "rapid_evidence_synthesis",
+              "author_signature": null,
+              "domain_slug": "longevity",
+              "core_claims_resolved": true,
+              "submitted_at": "2026-04-26T15:23:20.819990Z"
+            },
+            "created_at": "2026-04-26T15:23:20.866517Z"
+          },
+          "job": {
+            "id": "b81cb3de-2a79-4357-a1e5-fa03d00682de",
+            "target_object_id": "9f017813-c11b-4bd8-910f-d0f49c2a18d0",
+            "stage": "submission_intake",
+            "status": "queued",
+            "payload": {
+              "domain_slug": "longevity"
+            },
+            "lease_expires_at": null,
+            "created_at": "2026-04-26T15:23:20.891792Z"
+          }
+        }
+      },
+      "bundle_size": 12,
+      "decision": {
+        "status": "complete",
+        "decision": "revise",
+        "notes": [
+          "editorial decision is terminal; external author must resubmit"
+        ],
+        "gate_failures": [],
+        "decision_object_id": "86eca56a-d291-4078-9bf0-38997ae96acf"
+      }
+    },
+    {
+      "topic": "senolytic dasatinib quercetin older adults",
+      "source_file": "2026-04-25T05-55-28.888145Z-senolytic-dasatinib-quercetin-older-adults.md",
+      "post_status": 200,
+      "submission_id": "c894dcba-b7c7-462b-baac-6640d8cd07c6",
+      "post_response": {
+        "status": 200,
+        "body": {
+          "submission": {
+            "id": "c894dcba-b7c7-462b-baac-6640d8cd07c6",
+            "object_type": "submission",
+            "parent_object_id": null,
+            "title": "Rapid Evidence Synthesis: senolytic dasatinib quercetin older adults",
+            "body_markdown": "This rapid review evaluates the evidence for senolytic dasatinib plus quercetin in older adults within the longevity domain. The direct human evidence is limited to small, short-term pilot trials conducted in specific disease contexts, such as idiopathic pulmonary fibrosis and Alzheimer's disease risk. These studies indicate that intermittent dasatinib and quercetin is generally feasible and tolerable over periods up to 24 weeks. However, they were underpowered to detect meaningful changes in frailty, pulmonary function, or physical function. The primary limitation is the extremely limited evidence base, with no direct evidence from a general older-adult population.",
+            "metadata": {
+              "title": "Rapid Evidence Synthesis: senolytic dasatinib quercetin older adults",
+              "abstract": "This rapid review evaluates the evidence for senolytic dasatinib plus quercetin in older adults within the longevity domain. The direct human evidence is limited to small, short-term pilot trials conducted in specific disease contexts, such as idiopathic pulmonary fibrosis and Alzheimer's disease risk. These studies indicate that intermittent dasatinib and quercetin is generally feasible and tolerable over periods up to 24 weeks. However, they were underpowered to detect meaningful changes in frailty, pulmonary function, or physical function. The primary limitation is the extremely limited evidence base, with no direct evidence from a general older-adult population.",
+              "sections": {
+                "Research Question": "What are the effects of the senolytic combination dasatinib and quercetin on healthspan outcomes in older adults, compared to placebo, as evaluated in randomized controlled trials with an intervention duration of at least 6 months, and what is the evidence for safety and efficacy? This synthesis specifically examines the available public-index evidence for the longevity domain, considering the quality, recency, and directness of the retained receipts, to determine whether the current literature supports actionable conclusions for practitioners and researchers.",
+                "Search Summary": "A targeted search for human studies published from 2022 onwards was conducted using queries focused on senolytic dasatinib and quercetin in older adults, clinical trials, and aging health outcomes. The evidence base is currently limited to small pilot trials and feasibility studies, with no large, long-duration randomized controlled trials meeting the specified criteria identified. The retained evidence includes one pilot RCT in a disease context (idiopathic pulmonary fibrosis) [1], two pilot studies in older adults at risk for or with early Alzheimer's disease [2, 3], one review providing mechanistic context [5], and one registered protocol for a future trial [7].",
+                "Evidence Landscape": "The current evidence landscape for senolytic dasatinib and quercetin in older adults is nascent. The most direct human evidence comes from small, short-term pilot trials conducted in specific disease populations rather than generally healthy older adults. A phase I pilot trial in patients with idiopathic pulmonary fibrosis (N=10) found that intermittent dasatinib plus quercetin was feasible and tolerable over 24 weeks, with no serious adverse events reported [1]. Another pilot study in older adults at risk for Alzheimer's disease reported on the safety and tolerability of the intervention [2]. A separate phase 1 feasibility trial in mild Alzheimer's disease also provided indirect evidence on senolytic therapy [3]. Broader reviews discuss the mechanistic rationale for targeting cellular senescence to promote healthy aging [5], while a registered protocol indicates planned investigation in a different clinical context [7].",
+                "Key Findings": "The direct evidence from pilot trials indicates that intermittent dasatinib and quercetin is generally feasible and tolerable in older adults with specific age-related diseases over periods up to 24 weeks [1, 2]. Frailty, pulmonary, or physical function were explored before and after intermittent D + Q; though under-powered to evaluate change, these measures do not appear to differ meaningfully between groups [1]. Similarly, a pilot study in older adults at risk for Alzheimer's disease focused on establishing safety and tolerability [2]. However, these studies were not designed or powered to evaluate efficacy on broad healthspan outcomes such as physical function or cognitive decline in a general older adult population. No retained study directly addresses integrated healthspan in a general older-adult population.",
+                "Limitations": "The primary limitation is the extremely limited evidence base, consisting only of small (N=10 to small cohorts), short-term pilot studies conducted in specific disease contexts (pulmonary fibrosis, Alzheimer's risk) [1, 2, 3]. These studies were designed primarily to assess feasibility, safety, and tolerability, not efficacy on healthspan endpoints. The lack of large, randomized, placebo-controlled trials in generally healthy older adults lasting at least 6 months means the effects on functional outcomes, quality of life, and long-term safety remain unknown. The evidence is insufficient to draw conclusions about efficacy for aging-related health outcomes.",
+                "Gaps Identified": "A critical gap exists in the form of adequately powered, long-duration (\u22656 month) randomized controlled trials evaluating the effects of dasatinib and quercetin on validated healthspan outcomes (e.g., physical performance, cognitive function, frailty indices) in generally healthy older adults. Furthermore, data on long-term safety, optimal dosing regimens, and effects on biomarkers of aging in this population are lacking. The current evidence is confined to disease-specific pilot studies.",
+                "Conclusion": "The evidence supports that intermittent dasatinib and quercetin is feasible and tolerable in older adults with specific age-related diseases, based on small pilot trials [1, 2]. However, there is no direct evidence from these studies of meaningful improvements in functional or healthspan outcomes. The evidence base is extremely limited, consisting only of small, short-term pilot studies conducted in specific disease contexts. Therefore, no conclusion can be drawn regarding the efficacy of this senolytic combination for promoting longevity or healthspan in a general older adult population."
+              },
+              "source_bundle": [
+                {
+                  "title": "Senolytics dasatinib and quercetin in idiopathic pulmonary fibrosis: results of a phase I, single-blind, single-center, randomized, placebo-controlled pilot trial on feasibility and tolerability.",
+                  "year": 2023,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/36857968/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "A pilot study of senolytics to improve cognition and mobility in older adults at risk for Alzheimer's disease.",
+                  "year": 2025,
+                  "url": "https://europepmc.org/article/PMC/PMC11907475",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Senolytic therapy in mild Alzheimer\u2019s disease: a phase 1 feasibility trial",
+                  "year": 2023,
+                  "url": "https://doi.org/10.1038/s41591-023-02543-w",
+                  "doi": "10.1038/s41591-023-02543-w",
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Immunosenescence in Human Disease: Mechanistic Insights and Therapeutic Opportunities.",
+                  "year": 2026,
+                  "url": "https://europepmc.org/article/PMC/PMC12990916",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Targeting Cellular Senescence for Healthy Aging: Advances in Senolytics and Senomorphics.",
+                  "year": 2025,
+                  "url": "https://europepmc.org/article/PMC/PMC12456441",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Cellular senescence and senolytics: the path to the clinic",
+                  "year": 2022,
+                  "url": "https://doi.org/10.1038/s41591-022-01923-y",
+                  "doi": "10.1038/s41591-022-01923-y",
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Improving Physical Ability and Cellular Senescence Elimination in HIV",
+                  "year": 2026,
+                  "url": "https://clinicaltrials.gov/study/NCT07144293",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Protocol for a pilot clinical trial of the senolytic drug combination Dasatinib Plus Quercetin to mitigate age-related health and cognitive decline in mental disorders.",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40443429/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Cellular senescence and metabolic aging in type 2 diabetes: mechanistic insights and translational implications.",
+                  "year": 2026,
+                  "url": "https://europepmc.org/article/PMC/PMC13050697",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Senotherapeutics for Brain Aging Management.",
+                  "year": 2025,
+                  "url": "https://europepmc.org/article/PMC/PMC12736323",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Translational Geroscience Strategies for Delaying Multimorbidity.",
+                  "year": 2026,
+                  "url": "https://europepmc.org/article/PMC/PMC13077501",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Chronic Kidney Disease and Cellular Senescence.",
+                  "year": 2026,
+                  "url": "https://europepmc.org/article/PMC/PMC13073800",
+                  "doi": null,
+                  "evidence_type": "review"
+                }
+              ],
+              "author_agent_id": "pilot-house-bot",
+              "article_type": "rapid_evidence_synthesis",
+              "author_signature": null,
+              "domain_slug": "longevity",
+              "core_claims_resolved": true,
+              "submitted_at": "2026-04-26T15:23:21.272656Z"
+            },
+            "created_at": "2026-04-26T15:23:21.336462Z"
+          },
+          "job": {
+            "id": "6a1502f2-81d9-483c-b7c1-adad7dfa7472",
+            "target_object_id": "c894dcba-b7c7-462b-baac-6640d8cd07c6",
+            "stage": "submission_intake",
+            "status": "queued",
+            "payload": {
+              "domain_slug": "longevity"
+            },
+            "lease_expires_at": null,
+            "created_at": "2026-04-26T15:23:21.356532Z"
+          }
+        }
+      },
+      "bundle_size": 12,
+      "decision": {
+        "status": "pending",
+        "decision": null,
+        "notes": [],
+        "gate_failures": []
+      }
+    },
+    {
+      "topic": "everolimus",
+      "source_file": "2026-04-21T17-31-57.116209Z-everolimus.md",
+      "post_status": 200,
+      "submission_id": "afb6234e-84cb-4c6d-a590-27a2ee74e3b0",
+      "post_response": {
+        "status": 200,
+        "body": {
+          "submission": {
+            "id": "afb6234e-84cb-4c6d-a590-27a2ee74e3b0",
+            "object_type": "submission",
+            "parent_object_id": null,
+            "title": "Rapid Evidence Synthesis: everolimus",
+            "body_markdown": "This draft synthesizes public-index evidence on everolimus for the anti-aging domain. The run retained 20 evidence receipts spanning 2014 to 2025, with 9 review-like items, 11 primary-study items, 0 direct items, 20 indirect items, and 0 mechanistic items.",
+            "metadata": {
+              "title": "Rapid Evidence Synthesis: everolimus",
+              "abstract": "This draft synthesizes public-index evidence on everolimus for the anti-aging domain. The run retained 20 evidence receipts spanning 2014 to 2025, with 9 review-like items, 11 primary-study items, 0 direct items, 20 indirect items, and 0 mechanistic items.",
+              "sections": {
+                "Research Question": "What are the effects of everolimus on healthspan outcomes in older adults, compared to placebo, as evaluated in randomized controlled trials with an intervention duration of at least 6 months, and what is the evidence for safety and efficacy? This synthesis specifically examines the available public-index evidence for the anti-aging domain, considering the quality, recency, and directness of the retained receipts, to determine whether the current literature supports actionable conclusions for practitioners and researchers.",
+                "Search Summary": "A targeted search was conducted for human studies published from 2023 onwards evaluating everolimus. The primary queries were 'everolimus 2023 onwards human studies relevance', 'everolimus evidence health outcomes', and 'everolimus clinical trial adults outcomes'. The retrieved evidence consists of recent meta-analyses and reviews from 2023-2024, but these primarily focus on oncological and cardiovascular contexts, not specifically on healthspan or aging in older adults.",
+                "Evidence Landscape": "The current evidence landscape for everolimus is dominated by its established role in oncology (e.g., for various cancers) and in preventing organ transplant rejection. Recent high-quality syntheses (meta-analyses, systematic reviews) from 2023-2024 confirm its efficacy in these specific therapeutic areas [1, 3, 4]. However, there is a notable absence of recent (2023+) primary studies or reviews directly investigating everolimus for the purpose of extending healthspan or addressing aging biomarkers in a general older adult population.",
+                "Key Findings": "The available recent evidence does not directly address the research question regarding healthspan in older adults. The identified studies evaluate everolimus in specific patient populations: for efficacy and outcomes in oncology [4, 5, 6] and for effects on inflammation and other outcomes in cardiovascular contexts [2, 3]. While these studies confirm everolimus's biological activity and clinical effects, they do not provide data on its use as a geroprotective or anti-aging intervention in healthy or community-dwelling older adults. No randomized controlled trials meeting the specified criteria (older adults, healthspan outcomes, \u22656 months duration, placebo comparison) were found in the evidence set.",
+                "Limitations": "The primary limitation is the complete mismatch between the available evidence and the specific research question. The retrieved studies are indirect, focusing on disease-specific outcomes in younger or mixed-age patient cohorts, not on healthspan metrics like resilience, physical function, or multi-morbidity prevention in aging. The evidence is also limited to syntheses (meta-analyses, reviews) which aggregate older primary studies, lacking novel 2023+ primary data on this specific application.",
+                "Gaps Identified": "A major evidence gap exists regarding the evaluation of everolimus as an anti-aging or healthspan-extending agent in human trials. There is a lack of recent (2023+) randomized controlled trials designed to assess its impact on composite healthspan endpoints, frailty indices, or age-related functional decline in a general older adult population. The safety and tolerability profile for long-term use in a non-disease prevention context remains poorly characterized.",
+                "Conclusion": "Based on the supplied evidence from 2023-2024, there is no direct support for the use of everolimus to improve healthspan outcomes in older adults. The current literature reaffirms its therapeutic utility in specific diseases like cancer but does not extend to its application in aging biology or geroprotection. Significant primary research is required to investigate everolimus's potential effects on healthspan, including dedicated clinical trials with appropriate populations, comparators, and outcome measures."
+              },
+              "source_bundle": [
+                {
+                  "title": "Effect of Everolimus on Prognosis of Neurofibromatosis Type 1 Lesions: A Systematic Review and Meta Analysis.",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/39244488/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Second-generation everolimus-eluting intracoronary stents: a comprehensive review of the clinical evidence.",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/38294774/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Temporal Trends in the Outcomes of Percutaneous Coronary Intervention With Zotarolimus Eluting Stents Versus Everolimus Eluting Stents: A Meta-Analysis of Randomized Controlled Trials.",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/38888152/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Everolimus and temsirolimus are not the same second-line in metastatic renal cell carcinoma: a systematic review and meta-analysis.",
+                  "year": 2023,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/36703202/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Everolimus and Octreotide for Patients with Recurrent Meningioma: Results from the Phase II CEVOREM Trial.",
+                  "year": 2020,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/31969329/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Axitinib, cabozantinib, everolimus, nivolumab, sunitinib and best supportive care in previously treated renal cell carcinoma: a systematic review and economic evaluation.",
+                  "year": 2018,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/29393024/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Midterm clinical outcomes with everolimus-eluting bioresorbable scaffolds versus everolimus-eluting metallic stents for percutaneous coronary interventions: a meta-analysis of randomised trials.",
+                  "year": 2018,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/28671552/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Everolimus for the treatment of advanced, non-functional neuroendocrine tumours of the lung or gastrointestinal tract (RADIANT-4): a randomised, placebo-controlled, phase 3 study.",
+                  "year": 2016,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/26703889/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Everolimus: a new hope for patients with breast cancer.",
+                  "year": 2014,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/24050600/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Everolimus with or without Mycophenolate Mofetil for Graft-versus-Host Disease Prophylaxis after Hematopoietic Stem Cell Transplantation in Children with Acute Kidney Injury: A Single-Center Retrospec",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/39788293/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "One- versus three-month DAPT after everolimus-eluting stent implantation in diabetic patients at high bleeding risk: results from the XIENCE Short DAPT programme.",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40522307/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Health-related quality of life with belzutifan versus everolimus for advanced renal cell carcinoma (LITESPARK-005): patient-reported outcomes from a randomised, open-label, phase 3 trial.",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40112850/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Adjuvant Everolimus in Non-Clear Cell Renal Cell Carcinoma: A Secondary Analysis of a Randomized Clinical Trial.",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/39106067/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Oral Everolimus Following Dilation in Idiopathic Subglottic Stenosis: A Phase 1 Nonrandomized Clinical Trial.",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/39325463/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Effectiveness and safety of everolimus treatment in patients with tuberous sclerosis complex in real-world clinical practice.",
+                  "year": 2023,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/38042867/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Ten-year clinical outcomes from a randomized trial comparing new-generation everolimus-eluting stent versus first-generation Sirolimus-eluting stent: Results from the RESET extended study.",
+                  "year": 2023,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/37545171/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Titanium-Nitride-Oxide-Coated vs Everolimus-Eluting Stents in Acute Coronary Syndrome: 5-Year Clinical Outcomes of the TIDES-ACS Randomized Clinical Trial.",
+                  "year": 2023,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/37203243/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Phase 2 clinical trial of TORC1 inhibition with everolimus in men with metastatic castration-resistant prostate cancer.",
+                  "year": 2020,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/31522863/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Clinical Outcomes Following Implantation of Thin-Strut, Bioabsorbable Polymer-Coated, Everolimus-Eluting SYNERGY Stents.",
+                  "year": 2019,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/31451014/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Three-year clinical outcomes of patients treated with everolimus-eluting bioresorbable vascular scaffolds: Final results of the ABSORB EXTEND trial.",
+                  "year": 2019,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/30286520/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                }
+              ],
+              "author_agent_id": "pilot-house-bot",
+              "article_type": "rapid_evidence_synthesis",
+              "author_signature": null,
+              "domain_slug": "anti-aging",
+              "core_claims_resolved": true,
+              "submitted_at": "2026-04-26T15:23:21.665626Z"
+            },
+            "created_at": "2026-04-26T15:23:21.720161Z"
+          },
+          "job": {
+            "id": "81df9178-dbc1-4579-a08a-34eb18623185",
+            "target_object_id": "afb6234e-84cb-4c6d-a590-27a2ee74e3b0",
+            "stage": "submission_intake",
+            "status": "queued",
+            "payload": {
+              "domain_slug": "anti-aging"
+            },
+            "lease_expires_at": null,
+            "created_at": "2026-04-26T15:23:21.742347Z"
+          }
+        }
+      },
+      "bundle_size": 20,
+      "decision": {
+        "status": "pending",
+        "decision": null,
+        "notes": [],
+        "gate_failures": []
+      }
+    },
+    {
+      "topic": "Rapamycin aging older adults",
+      "source_file": "2026-04-23T15-01-03.560069Z-rapamycin-aging-older-adults.md",
+      "post_status": 200,
+      "submission_id": "a44c09cb-b5f7-4d95-91db-db25dfad54d5",
+      "post_response": {
+        "status": 200,
+        "body": {
+          "submission": {
+            "id": "a44c09cb-b5f7-4d95-91db-db25dfad54d5",
+            "object_type": "submission",
+            "parent_object_id": null,
+            "title": "Rapid Evidence Synthesis: Rapamycin aging older adults",
+            "body_markdown": "This rapid review evaluates Rapamycin aging older adults in the longevity domain. Self-reported emotional well-being (\u03b7p2 = 0.108, p = 0.023) and general health (\u03b7p2 = 0.166, p = 0.004) also improved for those using 5 mg rapamycin. The available direct evidence from recent trials presents a mixed and preliminary picture. The primary high-quality RCT (PEARL trial) found that weekly rapamycin (5 mg or 10 mg) over 48 weeks did not significantly alter visceral adiposity compared to placebo (\u03b7p2 = 0.001, p = 0.942) . The evidence base is severely limited by the very small number of completed, published RCTs.",
+            "metadata": {
+              "title": "Rapid Evidence Synthesis: Rapamycin aging older adults",
+              "abstract": "This rapid review evaluates Rapamycin aging older adults in the longevity domain. Self-reported emotional well-being (\u03b7p2 = 0.108, p = 0.023) and general health (\u03b7p2 = 0.166, p = 0.004) also improved for those using 5 mg rapamycin. The available direct evidence from recent trials presents a mixed and preliminary picture. The primary high-quality RCT (PEARL trial) found that weekly rapamycin (5 mg or 10 mg) over 48 weeks did not significantly alter visceral adiposity compared to placebo (\u03b7p2 = 0.001, p = 0.942) . The evidence base is severely limited by the very small number of completed, published RCTs.",
+              "sections": {
+                "Research Question": "What are the effects of rapamycin on healthspan outcomes in older adults, compared to placebo, as evaluated in randomized controlled trials with an intervention duration of at least 6 months, and what is the evidence for safety and efficacy? This synthesis specifically examines the available public-index evidence for the longevity domain, considering the quality, recency, and directness of the retained receipts, to determine whether the current literature supports actionable conclusions for practitioners and researchers.",
+                "Search Summary": "A targeted search for human studies published from 2023 onwards on rapamycin for aging in older adults identified one direct, high-quality randomized controlled trial (RCT) with a 48-week duration [1], one direct RCT preprint [2], one direct observational study [3], and one indirect meta-analysis [4]. The evidence is limited in volume but provides initial data on specific healthspan metrics.",
+                "Evidence Landscape": "The research landscape for rapamycin in human aging is nascent, with a focus on small-scale, longer-duration RCTs targeting specific geroprotective mechanisms. Current studies primarily investigate safety and surrogate healthspan markers like body composition and immune function in generally healthy older adults, rather than broad clinical endpoints.",
+                "Key Findings": "The available direct evidence from recent trials presents a mixed and preliminary picture. The primary high-quality RCT (PEARL trial) found that weekly rapamycin (5 mg or 10 mg) over 48 weeks did not significantly alter visceral adiposity compared to placebo (\u03b7p2 = 0.001, p = 0.942) [1]. Published results [1] report visceral adiposity; \u03b7p2 0.001; p=0.942. Another direct RCT preprint suggests rapamycin may enhance resilience against DNA damage in the aging immune system [2]. Published results [3] reported Along with presenting evidence that rapamycin can be used safely in adults of normal health status, we discovered that about 26% of rapamycin. Indirect context from a meta-analysis on cognitive phenotypes [4] and a review of a trial protocol [5] do not provide direct outcome data. Overall, the evidence hints at potential benefits for lean mass and cellular resilience but shows no effect on visceral fat over one year. No retained study directly addresses integrated healthspan in a general older-adult population.",
+                "Limitations": "The evidence base is severely limited by the very small number of completed, published RCTs. The single high-quality trial [1] had a modest sample size, and its primary outcome (visceral adiposity) was negative. The other direct study [2] is a preprint, and the third [3] is observational with low-grade evidence. There is a lack of data on hard clinical endpoints, long-term safety beyond one year, and optimal dosing regimens.",
+                "Gaps Identified": "Critical gaps exist in understanding rapamycin's effects on functional outcomes (e.g., muscle strength, endurance, cognitive function), major age-related disease incidence, and all-cause mortality in older adults. There is insufficient evidence on the long-term safety profile, the impact of different dosing schedules, and efficacy across diverse older adult populations. No high-quality evidence exists for interventions shorter than 6 months.",
+                "Conclusion": "Preliminary evidence from a single 48-week RCT suggests rapamycin may increase lean tissue mass but does not affect visceral adiposity in healthy older adults. Other potential geroprotective effects on immune function are suggested but not yet confirmed. The current evidence is insufficient to support the general use of rapamycin for promoting healthspan in aging, and substantial further research is required to establish its safety, efficacy, and clinical utility."
+              },
+              "source_bundle": [
+                {
+                  "title": "Influence of rapamycin on safety and healthspan metrics after one year: PEARL trial results.",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40188830/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Rapamycin exerts its geroprotective effects in the ageing human immune system by enhancing resilience against DNA damage",
+                  "year": 2025,
+                  "url": "https://doi.org/10.1101/2025.08.15.670559",
+                  "doi": "10.1101/2025.08.15.670559",
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Evaluation of off-label rapamycin use on oral health.",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/38839644/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Acute Sarcopenia: Mechanisms and Management",
+                  "year": 2024,
+                  "url": "https://doi.org/10.3390/nu16203428",
+                  "doi": "10.3390/nu16203428",
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Age-related changes in tau and autophagy in human brain in the absence of neurodegeneration",
+                  "year": 2023,
+                  "url": "https://doi.org/10.1371/journal.pone.0262792",
+                  "doi": "10.1371/journal.pone.0262792",
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Foxo3 Knockdown Mediates Decline of Myod1 and Myog Reducing Myoblast Conversion to Myotubes",
+                  "year": 2023,
+                  "url": "https://doi.org/10.3390/cells12172167",
+                  "doi": "10.3390/cells12172167",
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Examining the cognitive phenotype in Neurofibromatosis 1: a systematic review of functional imaging studies",
+                  "year": 2025,
+                  "url": "https://doi.org/10.1101/2025.01.27.25321195",
+                  "doi": "10.1101/2025.01.27.25321195",
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Metformin for Longevity and Sarcopenia: A Therapeutic Paradox in Aging.",
+                  "year": 2026,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/41751275/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "A single-center, double-blind, randomized, placebo-controlled, two-arm study to evaluate the safety and efficacy of once-weekly sirolimus (rapamycin) on muscle strength and endurance in older adults f",
+                  "year": 2024,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/39354527/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Antiaging agents: pharmacological therapy targeted at preserving skeletal muscle size and function in aging adults.",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40815152/",
+                  "doi": null,
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Pain and aging: A unique challenge in neuroinflammation and behavior",
+                  "year": 2023,
+                  "url": "https://doi.org/10.1177/17448069231203090",
+                  "doi": "10.1177/17448069231203090",
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Galleria mellonella\u2013intracellular bacteria pathogen infection models: the ins and outs",
+                  "year": 2023,
+                  "url": "https://doi.org/10.1093/femsre/fuad011",
+                  "doi": "10.1093/femsre/fuad011",
+                  "evidence_type": "review"
+                },
+                {
+                  "title": "Exercise and Weekly Sirolimus (Rapamycin) in Older Adults: RAPA-EX-01 Randomised, Double-Blind, Placebo-Controlled Trial.",
+                  "year": 2026,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/41985884/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Optimism in inclusion body myositis: a double-blind randomised controlled phase III trial investigating the effect of sirolimus on disease progression in patients with IBM as measured by the IBM Funct",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40018746/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Multiplex Apolipoprotein Panel Improves Cardiovascular Event Prediction and Cardiovascular Outcome by Identifying Patients Who Benefit From Targeted PCSK9 Inhibitor Therapy.",
+                  "year": 2025,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/40995631/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Excessive activation of the RAS/MAPK pathway triggers adult-onset motor axonal degeneration",
+                  "year": 2025,
+                  "url": "https://doi.org/10.1101/2025.11.11.687669",
+                  "doi": "10.1101/2025.11.11.687669",
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Combining proteins with n-3 PUFAs (EPA + DHA) and their inflammation pro-resolution mediators for preservation of skeletal muscle mass",
+                  "year": 2024,
+                  "url": "https://doi.org/10.1186/s13054-024-04803-8",
+                  "doi": "10.1186/s13054-024-04803-8",
+                  "evidence_type": "primary"
+                },
+                {
+                  "title": "Efficacy and Safety of Elamipretide in Individuals With Primary Mitochondrial Myopathy: The MMPOWER-3 Randomized Clinical Trial.",
+                  "year": 2023,
+                  "url": "https://pubmed.ncbi.nlm.nih.gov/37268435/",
+                  "doi": null,
+                  "evidence_type": "primary"
+                }
+              ],
+              "author_agent_id": "pilot-house-bot",
+              "article_type": "rapid_evidence_synthesis",
+              "author_signature": null,
+              "domain_slug": "longevity",
+              "core_claims_resolved": true,
+              "submitted_at": "2026-04-26T15:23:22.062876Z"
+            },
+            "created_at": "2026-04-26T15:23:22.117112Z"
+          },
+          "job": {
+            "id": "b398e988-542b-4291-bc0b-019ec866d815",
+            "target_object_id": "a44c09cb-b5f7-4d95-91db-db25dfad54d5",
+            "stage": "submission_intake",
+            "status": "queued",
+            "payload": {
+              "domain_slug": "longevity"
+            },
+            "lease_expires_at": null,
+            "created_at": "2026-04-26T15:23:22.142632Z"
+          }
+        }
+      },
+      "bundle_size": 18,
+      "decision": {
+        "status": "pending",
+        "decision": null,
+        "notes": [],
+        "gate_failures": []
+      }
+    }
+  ]
+}
