@@ -355,6 +355,18 @@ class ReviewerPanel:
                 raise ValueError("accept_has_overclaim")
             if synthesis_quality not in {"strong", "adequate"}:
                 raise ValueError("accept_synthesis_quality_invalid")
+        if (
+            recommendation == "revise"
+            and not required_revisions
+            and not (
+                all(score >= 4 for score in normalized_scores.values())
+                and not major_issues
+                and claim_support == "supported"
+                and overclaim == "none"
+                and synthesis_quality in {"strong", "adequate"}
+            )
+        ):
+            raise ValueError("revise_missing_required_revisions")
 
     def _error_text(self, result: ProviderResult) -> str:
         if result.error is None:

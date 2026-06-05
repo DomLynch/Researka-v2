@@ -291,7 +291,8 @@ class WorkflowEngine:
             "accept = all scores >= 4, zero major_issues, claim_support=supported, overclaim=none. Rare. "
             "Accept is invalid when the manuscript explicitly says evidence is mixed, human data are sparse, broad benefit remains unproven, or the conclusion is only mechanistically credible.\n"
             "If any score is below 4 or major_issues is non-empty, recommendation must be revise or reject, never accept.\n"
-            "revise = at least one score < 4 or non-empty major_issues, but the manuscript is still salvageable with bounded edits.\n"
+            "revise = at least one score < 4 or non-empty major_issues, but the manuscript is still salvageable with bounded edits and required_revisions lists concrete fixes.\n"
+            "Do not label accept-quality papers as revise for minor wording polish only; put polish in minor_issues and recommend accept.\n"
             "reject = structurally broken, needs scope reset, or claims materially unsupported beyond bounded edits.\n\n"
             '{"recommendation":"accept|revise|reject","rubric_scores":{'
             '"research_question_quality":1-5,"synthesis_quality":1-5,'
@@ -459,6 +460,15 @@ class WorkflowEngine:
                 if overclaim != "none":
                     raise ValueError("provider_error:bad_request:accept_has_overclaim")
                 raise ValueError("provider_error:bad_request:accept_synthesis_quality_invalid")
+        if recommendation == "revise" and not required_revisions and not _accept_contract_satisfied(
+            normalized_scores,
+            major_issues=major_issues,
+            required_revisions=required_revisions,
+            claim_support=claim_support,
+            overclaim=overclaim,
+            synthesis_quality=synthesis_quality,
+        ):
+            raise ValueError("provider_error:bad_request:revise_missing_required_revisions")
 
         return normalized_scores, major_issues, minor_issues, required_revisions, claim_support, overclaim, synthesis_quality
 

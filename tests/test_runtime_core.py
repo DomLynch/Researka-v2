@@ -475,6 +475,8 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
     assert "External-style accept" in prompt
     assert "accept = all scores >= 4" in prompt
     assert "Accept is invalid when the manuscript explicitly says evidence is mixed" in prompt
+    assert "required_revisions lists concrete fixes" in prompt
+    assert "Do not label accept-quality papers as revise for minor wording polish only" in prompt
     assert "reject = structurally broken" in prompt
     empirical_prompt = WorkflowEngine()._review_system_prompt(ArticleType.EMPIRICAL_STUDY.value)
     assert "empirical study reviewer" in empirical_prompt.lower()
@@ -1086,6 +1088,58 @@ def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
     assert '"recommendation": "revise"' in result.response.text
     assert result.response.metadata["route"] == "primary_failed_sparring_used"
     assert "accept_rubric_too_weak" in str(result.response.metadata["primary_error"])
+
+
+def test_reviewer_panel_rejects_non_actionable_revise_contract() -> None:
+    class Provider:
+        def __init__(self, provider: str, model: str, payload: dict[str, object]) -> None:
+            self.provider = provider
+            self.model = model
+            self.payload = payload
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:
+            return ProviderResult(
+                ok=True,
+                response=ProviderResponse(
+                    text=json.dumps(self.payload),
+                    provider=self.provider,
+                    model=self.model,
+                    usage=ProviderUsage(input_tokens=10, output_tokens=5, cost_usd=0.1),
+                ),
+            )
+
+    panel = ReviewerPanel(
+        primary=Provider(
+            "mimo",
+            "mimo-v2.5-pro",
+            _review_payload("revise", required_revisions=[]),
+        ),
+        sparring=Provider(
+            "gemma",
+            "google/gemma-4-31b-it",
+            _review_payload("accept", review_markdown="Sparring accepts."),
+        ),
+        fallback=Provider(
+            "mistral",
+            "mistralai/mistral-small-2603",
+            _review_payload("reject", review_markdown="Fallback rejects."),
+        ),
+    )
+
+    result = panel.complete(
+        ProviderRequest(
+            system_prompt="system",
+            user_prompt="user",
+            prompt_version="reviewer-v1",
+            response_format="json_object",
+        )
+    )
+
+    assert result.ok is True
+    assert result.response is not None
+    assert result.response.metadata["route"] == "primary_failed_sparring_used"
+    assert "revise_missing_required_revisions" in str(result.response.metadata["primary_error"])
+    assert '"recommendation": "accept"' in result.response.text
 
 
 def test_workflow_stores_panel_route_metadata() -> None:
@@ -1929,6 +1983,36 @@ def test_accept_requires_strong_rubric_contract() -> None:
     assert review_job is not None
     with pytest.raises(ValueError, match="accept_rubric_too_weak|accept_has_major_issues|accept_claim_support_not_supported|accept_has_overclaim|accept_has_required_revisions"):
         engine.handle_job(review_job, repo)
+
+
+def test_non_actionable_revise_is_rejected_before_review_storage() -> None:
+    class BadReviseProvider:
+        provider = "bad-revise"
+        model = "bad-revise-model"
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:
+            return ProviderResult(
+                ok=True,
+                response=ProviderResponse(
+                    text=json.dumps(_review_payload("revise", required_revisions=[])),
+                    provider=self.provider,
+                    model=self.model,
+                    usage=ProviderUsage(input_tokens=10, output_tokens=10, cost_usd=0.0),
+                ),
+            )
+
+    repo = InMemoryRuntimeRepository()
+    submission = _calibration_submission(repo, recommendation="revise")
+    engine = WorkflowEngine(provider=BadReviseProvider())
+    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    engine.handle_job(intake_job, repo)
+    repo.complete_job(intake_job.id)
+
+    review_job = repo.claim_next_job()
+    assert review_job is not None
+    with pytest.raises(ValueError, match="revise_missing_required_revisions"):
+        engine.handle_job(review_job, repo)
+    assert repo.list_objects(ObjectType.REVIEW) == []
 
 
 def test_missing_rubric_fields_are_rejected() -> None:
