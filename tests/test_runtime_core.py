@@ -1715,6 +1715,51 @@ def test_minor_issues_only_revise_is_calibrated_to_accept() -> None:
     assert repo.queued_jobs()[0].stage == Stage.PUBLISH
 
 
+def test_existing_minor_issues_only_review_is_calibrated_by_editorial() -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _calibration_submission(repo, recommendation="revise")
+    review = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.REVIEW,
+            parent_object_id=submission.id,
+            title=f"Review for {submission.title}",
+            body_markdown="Excellent synthesis. Minor issues do not detract from core quality.",
+            metadata={
+                "recommendation": "revise",
+                "rubric_scores": {
+                    "research_question_quality": 5,
+                    "synthesis_quality": 5,
+                    "claim_evidence_alignment": 5,
+                    "limitations_quality": 5,
+                    "gaps_quality": 4,
+                    "source_grounding": 4,
+                },
+                "major_issues": [],
+                "minor_issues": ["Clarify one wording detail."],
+                "required_revisions": [],
+                "claim_support_verdict": "supported",
+                "overclaim_verdict": "none",
+                "synthesis_quality_verdict": "strong",
+            },
+        )
+    )
+
+    engine = WorkflowEngine(provider=_rubric_revise_provider())
+    editorial_job = RuntimeJob(
+        target_object_id=submission.id,
+        stage=Stage.EDITORIAL,
+        payload={"review_id": review.id, "domain_slug": "longevity"},
+    )
+    result = engine.handle_job(editorial_job, repo)
+
+    decision = repo.list_objects(ObjectType.DECISION)[0]
+    assert result["terminal_decision"] == Decision.ACCEPT.value
+    assert decision.metadata["decision"] == Decision.ACCEPT.value
+    assert decision.metadata["original_recommendation"] == Decision.REVISE.value
+    assert decision.metadata["recommendation_calibration"] == "minor_issues_only_accept_contract"
+    assert repo.queued_jobs()[0].stage == Stage.PUBLISH
+
+
 def test_calibration_revise_rubric_fields_stored() -> None:
     repo = InMemoryRuntimeRepository()
     submission = _calibration_submission(repo, recommendation="revise")

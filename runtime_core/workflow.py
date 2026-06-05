@@ -39,13 +39,36 @@ def _accept_contract_satisfied(
     synthesis_quality: str,
 ) -> bool:
     return (
-        all(score >= 4 for score in rubric_scores.values())
+        set(rubric_scores) == set(REVIEW_RUBRIC_KEYS)
+        and all(score >= 4 for score in rubric_scores.values())
         and not major_issues
         and not required_revisions
         and claim_support == "supported"
         and overclaim == "none"
         and synthesis_quality in {"strong", "adequate"}
     )
+
+
+def _calibrated_recommendation(
+    recommendation: str,
+    rubric_scores: dict[str, int],
+    *,
+    major_issues: list[str],
+    required_revisions: list[str],
+    claim_support: str,
+    overclaim: str,
+    synthesis_quality: str,
+) -> str:
+    if recommendation == "revise" and _accept_contract_satisfied(
+        rubric_scores,
+        major_issues=major_issues,
+        required_revisions=required_revisions,
+        claim_support=claim_support,
+        overclaim=overclaim,
+        synthesis_quality=synthesis_quality,
+    ):
+        return "accept"
+    return recommendation
 
 
 def _publication_identity_metadata(submission_metadata: dict) -> dict:
@@ -335,15 +358,15 @@ class WorkflowEngine:
             recommendation=recommendation,
         )
         original_recommendation = recommendation
-        if recommendation == "revise" and _accept_contract_satisfied(
+        recommendation = _calibrated_recommendation(
+            recommendation,
             rubric_scores,
             major_issues=major_issues,
             required_revisions=required_revisions,
             claim_support=claim_support,
             overclaim=overclaim,
             synthesis_quality=synthesis_quality,
-        ):
-            recommendation = "accept"
+        )
         metadata = {
             "prompt_version": REVIEWER_PROMPT_VERSION,
             "provider": result.response.provider,
@@ -627,6 +650,18 @@ class WorkflowEngine:
         recommendation = str(review.metadata["recommendation"]).strip().lower()
         if recommendation not in {"accept", "revise", "reject"}:
             raise ValueError(f"invalid_review_recommendation:{recommendation}")
+        original_recommendation = recommendation
+        rubric_scores = review.metadata.get("rubric_scores")
+        if isinstance(rubric_scores, dict):
+            recommendation = _calibrated_recommendation(
+                recommendation,
+                {str(key): int(value) for key, value in rubric_scores.items() if isinstance(value, int)},
+                major_issues=[str(item) for item in review.metadata.get("major_issues", []) if str(item).strip()],
+                required_revisions=[str(item) for item in review.metadata.get("required_revisions", []) if str(item).strip()],
+                claim_support=str(review.metadata.get("claim_support_verdict", "")).strip().lower(),
+                overclaim=str(review.metadata.get("overclaim_verdict", "")).strip().lower(),
+                synthesis_quality=str(review.metadata.get("synthesis_quality_verdict", "")).strip().lower(),
+            )
         decision = {
             "accept": Decision.ACCEPT,
             "revise": Decision.REVISE,
@@ -649,6 +684,14 @@ class WorkflowEngine:
                     "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
                     "notes": outcome.notes,
                     "review_id": review.id,
+                    **(
+                        {
+                            "original_recommendation": original_recommendation,
+                            "recommendation_calibration": "minor_issues_only_accept_contract",
+                        }
+                        if original_recommendation != recommendation
+                        else {}
+                    ),
                     **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
                 },
             )
