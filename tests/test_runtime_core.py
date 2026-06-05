@@ -1515,6 +1515,44 @@ def _rubric_accept_provider() -> object:
     return Provider()
 
 
+def _minor_only_revise_provider() -> object:
+    class Provider:
+        provider = "minor-only-revise"
+        model = "minor-only-revise-model"
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:
+            return ProviderResult(
+                ok=True,
+                response=ProviderResponse(
+                    text=json.dumps(
+                        {
+                            "recommendation": "revise",
+                            "rubric_scores": {
+                                "research_question_quality": 5,
+                                "synthesis_quality": 5,
+                                "claim_evidence_alignment": 5,
+                                "limitations_quality": 5,
+                                "gaps_quality": 4,
+                                "source_grounding": 4,
+                            },
+                            "major_issues": [],
+                            "minor_issues": ["Clarify one wording detail."],
+                            "required_revisions": [],
+                            "claim_support_verdict": "supported",
+                            "overclaim_verdict": "none",
+                            "synthesis_quality_verdict": "strong",
+                            "review_markdown": "Excellent synthesis. Minor issues do not detract from core quality.",
+                        }
+                    ),
+                    provider=self.provider,
+                    model=self.model,
+                    usage=ProviderUsage(input_tokens=20, output_tokens=10, cost_usd=0.0),
+                ),
+            )
+
+    return Provider()
+
+
 def _rubric_revise_provider() -> object:
     class Provider:
         provider = "calibration-revise"
@@ -1647,6 +1685,34 @@ def test_calibration_accept_rubric_fields_stored() -> None:
 
     decision = repo.list_objects(ObjectType.DECISION)[0]
     assert decision.metadata["decision"] == Decision.ACCEPT.value
+
+
+def test_minor_issues_only_revise_is_calibrated_to_accept() -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _calibration_submission(repo, recommendation="revise")
+    engine = WorkflowEngine(provider=_minor_only_revise_provider())
+
+    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    engine.handle_job(intake_job, repo)
+    repo.complete_job(intake_job.id)
+
+    review_job = repo.claim_next_job()
+    engine.handle_job(review_job, repo)
+    repo.complete_job(review_job.id)
+
+    review = repo.list_objects(ObjectType.REVIEW)[0]
+    assert review.metadata["recommendation"] == Decision.ACCEPT.value
+    assert review.metadata["original_recommendation"] == Decision.REVISE.value
+    assert review.metadata["recommendation_calibration"] == "minor_issues_only_accept_contract"
+    assert review.metadata["minor_issues"] == ["Clarify one wording detail."]
+
+    editorial_job = repo.claim_next_job()
+    engine.handle_job(editorial_job, repo)
+    repo.complete_job(editorial_job.id)
+
+    decision = repo.list_objects(ObjectType.DECISION)[0]
+    assert decision.metadata["decision"] == Decision.ACCEPT.value
+    assert repo.queued_jobs()[0].stage == Stage.PUBLISH
 
 
 def test_calibration_revise_rubric_fields_stored() -> None:

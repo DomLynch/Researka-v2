@@ -29,6 +29,25 @@ OVERCLAIM_VERDICTS = {"none", "mild", "significant"}
 SYNTHESIS_QUALITY_VERDICTS = {"strong", "adequate", "weak", "empty"}
 
 
+def _accept_contract_satisfied(
+    rubric_scores: dict[str, int],
+    *,
+    major_issues: list[str],
+    required_revisions: list[str],
+    claim_support: str,
+    overclaim: str,
+    synthesis_quality: str,
+) -> bool:
+    return (
+        all(score >= 4 for score in rubric_scores.values())
+        and not major_issues
+        and not required_revisions
+        and claim_support == "supported"
+        and overclaim == "none"
+        and synthesis_quality in {"strong", "adequate"}
+    )
+
+
 def _publication_identity_metadata(submission_metadata: dict) -> dict:
     keys = (
         "identity_source",
@@ -315,6 +334,16 @@ class WorkflowEngine:
             payload,
             recommendation=recommendation,
         )
+        original_recommendation = recommendation
+        if recommendation == "revise" and _accept_contract_satisfied(
+            rubric_scores,
+            major_issues=major_issues,
+            required_revisions=required_revisions,
+            claim_support=claim_support,
+            overclaim=overclaim,
+            synthesis_quality=synthesis_quality,
+        ):
+            recommendation = "accept"
         metadata = {
             "prompt_version": REVIEWER_PROMPT_VERSION,
             "provider": result.response.provider,
@@ -332,6 +361,9 @@ class WorkflowEngine:
             "overclaim_verdict": overclaim,
             "synthesis_quality_verdict": synthesis_quality,
         }
+        if original_recommendation != recommendation:
+            metadata["original_recommendation"] = original_recommendation
+            metadata["recommendation_calibration"] = "minor_issues_only_accept_contract"
         return recommendation, review_markdown, metadata
 
     def _integrity_decision_metadata(self, submission: ResearchObject, integrity: dict[str, Any], recommendation: str) -> dict[str, object]:
@@ -385,17 +417,24 @@ class WorkflowEngine:
             raise ValueError("provider_error:bad_request:invalid_synthesis_quality_verdict")
 
         if recommendation == "accept":
-            if any(score < 4 for score in normalized_scores.values()):
-                raise ValueError("provider_error:bad_request:accept_rubric_too_weak")
-            if major_issues:
-                raise ValueError("provider_error:bad_request:accept_has_major_issues")
-            if required_revisions:
-                raise ValueError("provider_error:bad_request:accept_has_required_revisions")
-            if claim_support != "supported":
-                raise ValueError("provider_error:bad_request:accept_claim_support_not_supported")
-            if overclaim != "none":
-                raise ValueError("provider_error:bad_request:accept_has_overclaim")
-            if synthesis_quality not in {"strong", "adequate"}:
+            if not _accept_contract_satisfied(
+                normalized_scores,
+                major_issues=major_issues,
+                required_revisions=required_revisions,
+                claim_support=claim_support,
+                overclaim=overclaim,
+                synthesis_quality=synthesis_quality,
+            ):
+                if any(score < 4 for score in normalized_scores.values()):
+                    raise ValueError("provider_error:bad_request:accept_rubric_too_weak")
+                if major_issues:
+                    raise ValueError("provider_error:bad_request:accept_has_major_issues")
+                if required_revisions:
+                    raise ValueError("provider_error:bad_request:accept_has_required_revisions")
+                if claim_support != "supported":
+                    raise ValueError("provider_error:bad_request:accept_claim_support_not_supported")
+                if overclaim != "none":
+                    raise ValueError("provider_error:bad_request:accept_has_overclaim")
                 raise ValueError("provider_error:bad_request:accept_synthesis_quality_invalid")
 
         return normalized_scores, major_issues, minor_issues, required_revisions, claim_support, overclaim, synthesis_quality
