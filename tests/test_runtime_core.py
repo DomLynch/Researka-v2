@@ -1090,7 +1090,15 @@ def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
     assert "accept_rubric_too_weak" in str(result.response.metadata["primary_error"])
 
 
-def test_reviewer_panel_rejects_non_actionable_revise_contract() -> None:
+@pytest.mark.parametrize(
+    ("required_revisions", "expected_error"),
+    [
+        ([], "revise_missing_required_revisions"),
+        (None, "missing_required_revisions"),
+        ("__missing__", "missing_required_revisions"),
+    ],
+)
+def test_reviewer_panel_rejects_non_actionable_revise_contract(required_revisions: object, expected_error: str) -> None:
     class Provider:
         def __init__(self, provider: str, model: str, payload: dict[str, object]) -> None:
             self.provider = provider
@@ -1108,11 +1116,17 @@ def test_reviewer_panel_rejects_non_actionable_revise_contract() -> None:
                 ),
             )
 
+    primary_payload = _review_payload("revise")
+    if required_revisions == "__missing__":
+        primary_payload.pop("required_revisions")
+    else:
+        primary_payload["required_revisions"] = required_revisions
+
     panel = ReviewerPanel(
         primary=Provider(
             "mimo",
             "mimo-v2.5-pro",
-            _review_payload("revise", required_revisions=[]),
+            primary_payload,
         ),
         sparring=Provider(
             "gemma",
@@ -1138,7 +1152,7 @@ def test_reviewer_panel_rejects_non_actionable_revise_contract() -> None:
     assert result.ok is True
     assert result.response is not None
     assert result.response.metadata["route"] == "primary_failed_sparring_used"
-    assert "revise_missing_required_revisions" in str(result.response.metadata["primary_error"])
+    assert expected_error in str(result.response.metadata["primary_error"])
     assert '"recommendation": "accept"' in result.response.text
 
 
@@ -1985,16 +1999,29 @@ def test_accept_requires_strong_rubric_contract() -> None:
         engine.handle_job(review_job, repo)
 
 
-def test_non_actionable_revise_is_rejected_before_review_storage() -> None:
+@pytest.mark.parametrize(
+    ("required_revisions", "expected_error"),
+    [
+        ([], "revise_missing_required_revisions"),
+        (None, "missing_required_revisions"),
+        ("__missing__", "missing_required_revisions"),
+    ],
+)
+def test_non_actionable_revise_is_rejected_before_review_storage(required_revisions: object, expected_error: str) -> None:
     class BadReviseProvider:
         provider = "bad-revise"
         model = "bad-revise-model"
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
+            payload = _review_payload("revise")
+            if required_revisions == "__missing__":
+                payload.pop("required_revisions")
+            else:
+                payload["required_revisions"] = required_revisions
             return ProviderResult(
                 ok=True,
                 response=ProviderResponse(
-                    text=json.dumps(_review_payload("revise", required_revisions=[])),
+                    text=json.dumps(payload),
                     provider=self.provider,
                     model=self.model,
                     usage=ProviderUsage(input_tokens=10, output_tokens=10, cost_usd=0.0),
@@ -2010,7 +2037,7 @@ def test_non_actionable_revise_is_rejected_before_review_storage() -> None:
 
     review_job = repo.claim_next_job()
     assert review_job is not None
-    with pytest.raises(ValueError, match="revise_missing_required_revisions"):
+    with pytest.raises(ValueError, match=expected_error):
         engine.handle_job(review_job, repo)
     assert repo.list_objects(ObjectType.REVIEW) == []
 
