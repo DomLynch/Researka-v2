@@ -1755,6 +1755,56 @@ def test_calibration_accept_rubric_fields_stored() -> None:
     assert decision.metadata["decision"] == Decision.ACCEPT.value
 
 
+def test_panel_accept_contract_matches_workflow_contract() -> None:
+    class StaticReviewProvider:
+        provider = "static-reviewer"
+        model = "static-reviewer-model"
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:
+            return ProviderResult(
+                ok=True,
+                response=ProviderResponse(
+                    text=json.dumps(
+                        _review_payload(
+                            "accept",
+                            rubric_scores={
+                                "research_question_quality": 5,
+                                "synthesis_quality": 3,
+                                "claim_evidence_alignment": 5,
+                                "limitations_quality": 4,
+                                "gaps_quality": 4,
+                                "source_grounding": 5,
+                            },
+                        )
+                    ),
+                    provider=self.provider,
+                    model=self.model,
+                    usage=ProviderUsage(input_tokens=10, output_tokens=10, cost_usd=0.0),
+                ),
+            )
+
+    repo = InMemoryRuntimeRepository()
+    submission = _calibration_submission(repo, recommendation="accept")
+    panel = ReviewerPanel(
+        primary=StaticReviewProvider(),
+        sparring=StaticReviewProvider(),
+        fallback=StaticReviewProvider(),
+    )
+    engine = WorkflowEngine(provider=panel)
+
+    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    engine.handle_job(intake_job, repo)
+    repo.complete_job(intake_job.id)
+
+    review_job = repo.claim_next_job()
+    engine.handle_job(review_job, repo)
+    repo.complete_job(review_job.id)
+
+    review = repo.list_objects(ObjectType.REVIEW)[0]
+    assert review.metadata["recommendation"] == Decision.ACCEPT.value
+    assert review.metadata["rubric_scores"]["synthesis_quality"] == 3
+
+
 def test_minor_issues_only_revise_is_calibrated_to_accept() -> None:
     repo = InMemoryRuntimeRepository()
     submission = _calibration_submission(repo, recommendation="revise")
