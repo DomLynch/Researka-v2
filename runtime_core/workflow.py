@@ -11,22 +11,19 @@ from .integrity_client import check_integrity, index_integrity
 from .osf import mint_publication_doi, mint_publication_doi_with_oauth, osf_publication_metadata_from_env
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
+from .review_contract import (
+    CLAIM_SUPPORT_VERDICTS,
+    OVERCLAIM_VERDICTS,
+    REVIEW_RUBRIC_KEYS,
+    SYNTHESIS_QUALITY_VERDICTS,
+    accept_contract_failure,
+    accept_contract_satisfied,
+)
 from .reviewer_panel import reviewer_from_env
 from .repos import RuntimeRepository
 from .sanitizer import extract_markdown_section
 
 
-REVIEW_RUBRIC_KEYS = (
-    "research_question_quality",
-    "synthesis_quality",
-    "claim_evidence_alignment",
-    "limitations_quality",
-    "gaps_quality",
-    "source_grounding",
-)
-CLAIM_SUPPORT_VERDICTS = {"supported", "partially_supported", "unsupported"}
-OVERCLAIM_VERDICTS = {"none", "mild", "significant"}
-SYNTHESIS_QUALITY_VERDICTS = {"strong", "adequate", "weak", "empty"}
 PUBLICATION_DEDUPE_METADATA_KEYS = (
     "submission_identity_key",
     "submission_payload_hash",
@@ -34,26 +31,6 @@ PUBLICATION_DEDUPE_METADATA_KEYS = (
     "source_citation_hash",
     "author_signature",
 )
-
-
-def _accept_contract_satisfied(
-    rubric_scores: dict[str, int],
-    *,
-    major_issues: list[str],
-    required_revisions: list[str],
-    claim_support: str,
-    overclaim: str,
-    synthesis_quality: str,
-) -> bool:
-    return (
-        set(rubric_scores) == set(REVIEW_RUBRIC_KEYS)
-        and all(score >= 4 for score in rubric_scores.values())
-        and not major_issues
-        and not required_revisions
-        and claim_support == "supported"
-        and overclaim == "none"
-        and synthesis_quality in {"strong", "adequate"}
-    )
 
 
 def _calibrated_recommendation(
@@ -66,7 +43,7 @@ def _calibrated_recommendation(
     overclaim: str,
     synthesis_quality: str,
 ) -> str:
-    if recommendation == "revise" and _accept_contract_satisfied(
+    if recommendation == "revise" and accept_contract_satisfied(
         rubric_scores,
         major_issues=major_issues,
         required_revisions=required_revisions,
@@ -460,26 +437,17 @@ class WorkflowEngine:
             raise ValueError("provider_error:bad_request:invalid_synthesis_quality_verdict")
 
         if recommendation == "accept":
-            if not _accept_contract_satisfied(
+            failure = accept_contract_failure(
                 normalized_scores,
                 major_issues=major_issues,
                 required_revisions=required_revisions,
                 claim_support=claim_support,
                 overclaim=overclaim,
                 synthesis_quality=synthesis_quality,
-            ):
-                if any(score < 4 for score in normalized_scores.values()):
-                    raise ValueError("provider_error:bad_request:accept_rubric_too_weak")
-                if major_issues:
-                    raise ValueError("provider_error:bad_request:accept_has_major_issues")
-                if required_revisions:
-                    raise ValueError("provider_error:bad_request:accept_has_required_revisions")
-                if claim_support != "supported":
-                    raise ValueError("provider_error:bad_request:accept_claim_support_not_supported")
-                if overclaim != "none":
-                    raise ValueError("provider_error:bad_request:accept_has_overclaim")
-                raise ValueError("provider_error:bad_request:accept_synthesis_quality_invalid")
-        if recommendation == "revise" and not required_revisions and not _accept_contract_satisfied(
+            )
+            if failure:
+                raise ValueError(f"provider_error:bad_request:{failure}")
+        if recommendation == "revise" and not required_revisions and not accept_contract_satisfied(
             normalized_scores,
             major_issues=major_issues,
             required_revisions=required_revisions,

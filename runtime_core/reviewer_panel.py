@@ -16,18 +16,14 @@ from .providers import (
     ProviderResponse,
     ProviderResult,
 )
-
-REVIEW_RUBRIC_KEYS = (
-    "research_question_quality",
-    "synthesis_quality",
-    "claim_evidence_alignment",
-    "limitations_quality",
-    "gaps_quality",
-    "source_grounding",
+from .review_contract import (
+    CLAIM_SUPPORT_VERDICTS,
+    OVERCLAIM_VERDICTS,
+    REVIEW_RUBRIC_KEYS,
+    SYNTHESIS_QUALITY_VERDICTS,
+    accept_contract_failure,
+    accept_contract_satisfied,
 )
-CLAIM_SUPPORT_VERDICTS = {"supported", "partially_supported", "unsupported"}
-OVERCLAIM_VERDICTS = {"none", "mild", "significant"}
-SYNTHESIS_QUALITY_VERDICTS = {"strong", "adequate", "weak", "empty"}
 
 
 class ReviewerPanel:
@@ -336,34 +332,26 @@ class ReviewerPanel:
             raise ValueError("invalid_synthesis_quality_verdict")
 
         if recommendation == "accept":
-            # Threshold (tuned 2026-04-21): allow one dimension to dip to 3/5 if
-            # the other five are >= 4/5 and none fall below 3. Calibrated against
-            # elite_benchmark_v2 to lift elite-agreement from 0% baseline while
-            # keeping contested-revise rate intact.
-            weak_scores = sum(1 for score in normalized_scores.values() if score < 4)
-            if weak_scores > 1:
-                raise ValueError("accept_rubric_too_weak")
-            if min(normalized_scores.values()) < 3:
-                raise ValueError("accept_rubric_score_below_floor")
-            if major_issues:
-                raise ValueError("accept_has_major_issues")
-            if required_revisions:
-                raise ValueError("accept_has_required_revisions")
-            if claim_support != "supported":
-                raise ValueError("accept_claim_support_not_supported")
-            if overclaim != "none":
-                raise ValueError("accept_has_overclaim")
-            if synthesis_quality not in {"strong", "adequate"}:
-                raise ValueError("accept_synthesis_quality_invalid")
+            failure = accept_contract_failure(
+                normalized_scores,
+                major_issues=major_issues,
+                required_revisions=required_revisions,
+                claim_support=claim_support,
+                overclaim=overclaim,
+                synthesis_quality=synthesis_quality,
+            )
+            if failure:
+                raise ValueError(failure)
         if (
             recommendation == "revise"
             and not required_revisions
-            and not (
-                all(score >= 4 for score in normalized_scores.values())
-                and not major_issues
-                and claim_support == "supported"
-                and overclaim == "none"
-                and synthesis_quality in {"strong", "adequate"}
+            and not accept_contract_satisfied(
+                normalized_scores,
+                major_issues=major_issues,
+                required_revisions=required_revisions,
+                claim_support=claim_support,
+                overclaim=overclaim,
+                synthesis_quality=synthesis_quality,
             )
         ):
             raise ValueError("revise_missing_required_revisions")
