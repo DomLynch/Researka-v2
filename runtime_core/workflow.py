@@ -24,6 +24,15 @@ from .repos import RuntimeRepository
 from .sanitizer import extract_markdown_section
 
 
+PUBLICATION_DEDUPE_METADATA_KEYS = (
+    "submission_identity_key",
+    "submission_payload_hash",
+    "content_hash",
+    "source_citation_hash",
+    "author_signature",
+)
+
+
 def _calibrated_recommendation(
     recommendation: str,
     rubric_scores: dict[str, int],
@@ -48,6 +57,10 @@ def _calibrated_recommendation(
 
 def _publication_identity_metadata(submission_metadata: dict) -> dict:
     keys = (
+        *PUBLICATION_DEDUPE_METADATA_KEYS,
+        "run_id",
+        "topic",
+        "revision_of",
         "identity_source",
         "authenticated_agent_id",
         "claimed_author_agent_id",
@@ -72,6 +85,14 @@ def _publication_identity_metadata(submission_metadata: dict) -> dict:
     if metadata.get("orcid"):
         metadata["orcid_at_publication"] = metadata["orcid"]
     return metadata
+
+
+def _publication_dedupe_markers(metadata: dict) -> set[str]:
+    return {
+        str(value).strip()
+        for key in PUBLICATION_DEDUPE_METADATA_KEYS
+        if (value := metadata.get(key)) and str(value).strip()
+    }
 
 
 def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -> dict[str, object]:
@@ -162,7 +183,7 @@ class WorkflowEngine:
         elif article_type == ArticleType.RESEARCH_SYNTHESIS.value:
             article_specific = (
                 "You are the Researka research synthesis reviewer. Judge this as a long-form, gatekeeper-tier "
-                "research synthesis manuscript — typically 8000-30000 words, with a rich evidence corpus (25+ sources), "
+                "research synthesis manuscript — typically 8000-30000 words, with a rich evidence corpus, "
                 "explicit cross-domain integration, numeric traceability, and clear separation of mechanistic / "
                 "preclinical evidence from clinical / human evidence.\n\n"
                 "This is the v2 publishing-grade path. The bar is HIGHER than rapid evidence synthesis. Reward depth, "
@@ -690,8 +711,12 @@ class WorkflowEngine:
         if existing is not None:
             return {"publication_id": existing.id, "deduped": True}
         normalized_title = " ".join(str(submission.title or "").lower().split())
+        submission_markers = _publication_dedupe_markers(submission.metadata)
         for pub in repository.list_objects(ObjectType.PUBLICATION):
-            if " ".join(str(pub.title or "").lower().split()) == normalized_title:
+            if (
+                submission_markers & _publication_dedupe_markers(pub.metadata)
+                or " ".join(str(pub.title or "").lower().split()) == normalized_title
+            ):
                 return {"publication_id": pub.id, "deduped": True}
         artifact = compile_publication(
             title=submission.title,
@@ -717,6 +742,7 @@ class WorkflowEngine:
                 "gates": [gate.model_dump(mode="json") for gate in artifact.gates],
                 "author_agent_id": submission.metadata.get("author_agent_id"),
                 "integrity": submission.metadata.get("integrity"),
+                "source_submission_id": submission.id,
                 **_publication_identity_metadata(submission.metadata),
                 **osf_publication_metadata_from_env(),
                 **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),

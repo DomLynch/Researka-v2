@@ -54,12 +54,12 @@ _TYPE_THRESHOLDS: dict[str, dict[str, object]] = {
         "minimum_research_question_words": 50,
     },
     ArticleType.RESEARCH_SYNTHESIS.value: {
-        # Synthesis papers cite an order of magnitude more sources than RES.
-        "minimum_citations": 25,
+        # V3 full-paper lane keeps the live Researka source floor at 12 while
+        # using the full-manuscript section/body gates.
+        "minimum_citations": 12,
         # Synthesis papers must engage with foundational mechanism work
         # (often pre-2020 for established pathways like mTOR / autophagy),
-        # so the recency floor is lower than RES. 40% means at least 10 of
-        # 25 citations must be recent — current evidence is still required,
+        # so the recency floor is lower than RES. Current evidence is still required,
         # but the corpus is allowed to be majority-foundational.
         "minimum_recency_ratio": 0.4,
         # Abstract for a synthesis paper must convey the question, scope, and

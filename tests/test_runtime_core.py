@@ -171,6 +171,65 @@ def test_publish_uses_submission_body_when_metadata_body_missing() -> None:
     assert publication.body_markdown.startswith("# Full manuscript")
 
 
+def test_publish_preserves_submission_audit_hashes() -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = repo.create_object(ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Accepted hash-traced manuscript",
+        body_markdown="# Full manuscript\n\nBody",
+        metadata={
+            "abstract": "A structured abstract for a public research synthesis.",
+            "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
+            "sections": _full_sections(),
+            "source_bundle": _valid_source_bundle(),
+            "core_claims_resolved": True,
+            "author_agent_id": "agent-v3-full-paper",
+            "run_id": "synthesis-topic-v06-test",
+            "content_hash": "sha256:paper",
+            "submission_payload_hash": "sha256:payload",
+            "source_citation_hash": "sha256:sources",
+            "submission_identity_key": "sha256:identity",
+            "author_signature": "sha256:paper",
+        },
+    ))
+
+    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+
+    publication = repo.get_object(result["publication_id"])
+    assert publication is not None
+    assert publication.metadata["source_submission_id"] == submission.id
+    assert publication.metadata["run_id"] == "synthesis-topic-v06-test"
+    assert publication.metadata["content_hash"] == "sha256:paper"
+    assert publication.metadata["submission_payload_hash"] == "sha256:payload"
+    assert publication.metadata["source_citation_hash"] == "sha256:sources"
+    assert publication.metadata["submission_identity_key"] == "sha256:identity"
+
+
+def test_publish_dedupes_by_submission_identity_key() -> None:
+    repo = InMemoryRuntimeRepository()
+    existing = repo.create_object(ResearchObject(
+        object_type=ObjectType.PUBLICATION,
+        title="Earlier public title",
+        metadata={"submission_identity_key": "sha256:identity"},
+    ))
+    submission = repo.create_object(ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Retitled public manuscript",
+        metadata={
+            "abstract": "A structured abstract for a public research synthesis.",
+            "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
+            "sections": _full_sections(),
+            "source_bundle": _valid_source_bundle(),
+            "core_claims_resolved": True,
+            "submission_identity_key": "sha256:identity",
+        },
+    ))
+
+    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+
+    assert result == {"publication_id": existing.id, "deduped": True}
+
+
 def test_reject_is_terminal() -> None:
     engine = WorkflowEngine()
     context = WorkflowContext(target_object_id="obj-4", domain_slug="longevity")
