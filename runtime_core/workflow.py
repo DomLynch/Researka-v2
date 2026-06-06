@@ -206,7 +206,7 @@ class WorkflowEngine:
         elif article_type == ArticleType.RESEARCH_SYNTHESIS.value:
             article_specific = (
                 "You are the Researka research synthesis reviewer. Judge this as a long-form, gatekeeper-tier "
-                "research synthesis manuscript — typically 8000-30000 words, with a rich evidence corpus (25+ sources), "
+                "research synthesis manuscript — typically 8000-30000 words, with a rich evidence corpus, "
                 "explicit cross-domain integration, numeric traceability, and clear separation of mechanistic / "
                 "preclinical evidence from clinical / human evidence.\n\n"
                 "This is the v2 publishing-grade path. The bar is HIGHER than rapid evidence synthesis. Reward depth, "
