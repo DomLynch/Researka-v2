@@ -21,8 +21,8 @@ class PublicationTemplate:
     # Used by the synthesis path so reviewers see a richer artefact when the
     # author chooses to include depth sections.
     recommended_sections: tuple[str, ...] = ()
-    # Minimum total body word count, summed across required + recommended
-    # sections. Synthesis papers must have substance; RES has no minimum.
+    # Optional minimum total body word count, summed across required +
+    # recommended sections. Disabled by default; source grounding is the floor.
     minimum_body_word_count: int = 0
 
 
@@ -111,7 +111,7 @@ RESEARCH_SYNTHESIS = PublicationTemplate(
         "Flag absent or generic limitations on a long, ambitious synthesis — substantive scope demands substantive limits.",
     ),
     research_question_section="Abstract",
-    minimum_body_word_count=8000,
+    minimum_body_word_count=0,
 )
 
 PUBLICATION_TEMPLATES = {

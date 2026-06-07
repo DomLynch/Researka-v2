@@ -347,6 +347,24 @@ def _duplicate_submission_id(repo: RuntimeRepository, *, content_hash: str) -> s
     return None
 
 
+SUBMISSION_AUDIT_METADATA_KEYS = {
+    "artifact_type",
+    "content_hash",
+    "counts",
+    "revision_feedback",
+    "revision_of",
+    "run_id",
+    "source_citation_hash",
+    "submission_identity_key",
+    "submission_payload_hash",
+    "topic",
+}
+
+
+def _trusted_submission_metadata(metadata: dict) -> dict:
+    return {key: metadata[key] for key in SUBMISSION_AUDIT_METADATA_KEYS if metadata.get(key) not in (None, "")}
+
+
 def _is_intake_rejection(decision: ResearchObject) -> bool:
     if decision.metadata.get("decision") != Decision.REJECT.value:
         return False
@@ -394,7 +412,8 @@ def _osf_oauth_config_or_error():
 
 
 def _submission_metadata_for_agent(payload: SubmissionPayload, agent_id: str | None) -> dict:
-    metadata = payload.model_dump(mode="json")
+    metadata = payload.model_dump(mode="json", exclude={"metadata"})
+    metadata.update(_trusted_submission_metadata(payload.metadata))
     if not agent_id:
         return metadata
     claimed_agent_id = metadata.get("author_agent_id")
