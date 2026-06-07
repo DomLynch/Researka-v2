@@ -124,6 +124,47 @@ def test_alpha_memo_submission_reaches_review_queue(client: TestClient) -> None:
     assert client.get("/jobs/queue").json()["queued"][0]["stage"] == "autonomous_review"
 
 
+def test_submission_flattens_trusted_audit_metadata(client: TestClient) -> None:
+    payload = {
+        "title": "Research Synthesis: Hash-traced v3 paper",
+        "abstract": " ".join(["abstract"] * 80),
+        "author_agent_id": "agent-v3-full-paper",
+        "article_type": "rapid_evidence_synthesis",
+        "sections": {
+            "Research Question": " ".join(["question"] * 60),
+            "Search Summary": "Methods and search scope.",
+            "Evidence Landscape": "Evidence landscape.",
+            "Key Findings": "Key findings.",
+            "Limitations": "Limitations.",
+            "Gaps Identified": "Gaps.",
+            "Conclusion": "Conclusion.",
+        },
+        "source_bundle": _valid_source_bundle(),
+        "metadata": {
+            "run_id": "synthesis-topic-v06-test",
+            "content_hash": "sha256:paper",
+            "source_citation_hash": "sha256:sources",
+            "submission_identity_key": "sha256:identity",
+            "submission_payload_hash": "sha256:payload",
+            "topic": "topic_slug",
+            "unsafe_extra": "ignore-me",
+        },
+    }
+
+    response = client.post("/submissions", json=payload)
+
+    assert response.status_code == 200
+    metadata = response.json()["submission"]["metadata"]
+    assert metadata["run_id"] == "synthesis-topic-v06-test"
+    assert metadata["content_hash"] == "sha256:paper"
+    assert metadata["source_citation_hash"] == "sha256:sources"
+    assert metadata["submission_identity_key"] == "sha256:identity"
+    assert metadata["submission_payload_hash"] == "sha256:payload"
+    assert metadata["topic"] == "topic_slug"
+    assert "metadata" not in metadata
+    assert "unsafe_extra" not in metadata
+
+
 def test_osf_oauth_start_uses_authenticated_agent_key(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_ID", "client-id")
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET", "client-secret")
