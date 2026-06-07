@@ -10,10 +10,10 @@ These tests pin down:
   - The new ArticleType enum value resolves
   - The PublicationTemplate has the right required + recommended sections
   - submission_template_for() applies full-paper thresholds
-    (12 citations, 75-word abstract, no hard body-word floor)
+    (12 citations, 75-word abstract, 2k counted-body floor)
   - The intake gates use the Abstract (not Research Question) for the
     word-count check on synthesis papers
-  - Body-word-count gate is disabled for the live v3 full-paper lane
+  - Body-word-count gate keeps 2-3k papers eligible but blocks thin stubs
   - RES path is unchanged (regression check)
 """
 from __future__ import annotations
@@ -85,14 +85,14 @@ def test_research_synthesis_template_uses_abstract_for_research_question() -> No
     assert RESEARCH_SYNTHESIS.research_question_section == "Abstract"
 
 
-def test_research_synthesis_keeps_live_source_floor_without_body_gate() -> None:
+def test_research_synthesis_keeps_live_source_floor_with_low_body_gate() -> None:
     synthesis_t = submission_template_for(ArticleType.RESEARCH_SYNTHESIS.value)
     res_t = submission_template_for(ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)
     # V3 full papers keep the live 12-source floor and accept 2-3k word bodies.
     assert synthesis_t.minimum_citations == 12
     assert synthesis_t.minimum_citations == res_t.minimum_citations
     assert synthesis_t.minimum_research_question_words > res_t.minimum_research_question_words
-    assert synthesis_t.minimum_body_word_count == 0
+    assert synthesis_t.minimum_body_word_count == 2000
     assert res_t.minimum_body_word_count == 0
 
 
@@ -126,7 +126,7 @@ def test_synthesis_gate_reads_word_budget_from_abstract_not_research_question() 
 
 
 def test_synthesis_gate_allows_2k_body_when_sources_clear_floor() -> None:
-    """The live v3 path should not reject 2-3k papers only for body length."""
+    """The live v3 path should accept 2-3k papers when evidence gates pass."""
     concise_sections = {
         "Abstract": " ".join(["abstract"] * 80),
         "Introduction": " ".join(["i"] * 350),
@@ -141,8 +141,29 @@ def test_synthesis_gate_allows_2k_body_when_sources_clear_floor() -> None:
         source_bundle=_valid_synthesis_bundle(12),
         article_type="research_synthesis",
     )
-    assert not any(g.name == "minimum_body_word_count" for g in results)
+    body_gate = next(g for g in results if g.name == "minimum_body_word_count")
+    assert body_gate.passed is True
     assert all(g.passed for g in results)
+
+
+def test_synthesis_gate_blocks_stub_body_even_with_sources() -> None:
+    stub_sections = {
+        "Abstract": " ".join(["abstract"] * 80),
+        "Introduction": " ".join(["i"] * 80),
+        "Methods": " ".join(["m"] * 80),
+        "Results": " ".join(["r"] * 80),
+        "Discussion": " ".join(["d"] * 80),
+        "Limitations": " ".join(["l"] * 40),
+        "Conclusion": " ".join(["c"] * 40),
+    }
+    results = run_submission_template_checks(
+        sections=stub_sections,
+        source_bundle=_valid_synthesis_bundle(12),
+        article_type="research_synthesis",
+    )
+    body_gate = next(g for g in results if g.name == "minimum_body_word_count")
+    assert body_gate.passed is False
+    assert "2000" in body_gate.reason
 
 
 def test_synthesis_gate_minimum_citations_demands_12() -> None:
