@@ -111,7 +111,7 @@ RESEARCH_SYNTHESIS = PublicationTemplate(
         "Flag absent or generic limitations on a long, ambitious synthesis — substantive scope demands substantive limits.",
     ),
     research_question_section="Abstract",
-    minimum_body_word_count=0,
+    minimum_body_word_count=2000,
 )
 
 PUBLICATION_TEMPLATES = {
