@@ -2,7 +2,7 @@
 
 The synthesis path is the gatekeeper-tier publishing path. It is calibrated
 against the Research Agent Bot's natural output shape — long-form papers
-(~10-30k words) with 12+ sources, full IMRaD-style sections, optional
+ (2k+ words is acceptable) with 12+ sources, full IMRaD-style sections, optional
 depth sections, and numeric traceability — so that the bot's best work
 clears Researka without being destructively compressed into the rapid path.
 
@@ -10,11 +10,10 @@ These tests pin down:
   - The new ArticleType enum value resolves
   - The PublicationTemplate has the right required + recommended sections
   - submission_template_for() applies full-paper thresholds
-    (12 citations, 75-word abstract, 8000-word body)
+    (12 citations, 75-word abstract, no hard body-word floor)
   - The intake gates use the Abstract (not Research Question) for the
     word-count check on synthesis papers
-  - Body-word-count gate fires when sections are too thin
-  - Body-word-count gate passes when sections are substantial
+  - Body-word-count gate is disabled for the live v3 full-paper lane
   - RES path is unchanged (regression check)
 """
 from __future__ import annotations
@@ -86,15 +85,14 @@ def test_research_synthesis_template_uses_abstract_for_research_question() -> No
     assert RESEARCH_SYNTHESIS.research_question_section == "Abstract"
 
 
-def test_research_synthesis_keeps_live_source_floor_and_full_body_gate() -> None:
+def test_research_synthesis_keeps_live_source_floor_without_body_gate() -> None:
     synthesis_t = submission_template_for(ArticleType.RESEARCH_SYNTHESIS.value)
     res_t = submission_template_for(ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)
-    # V3 full papers keep the live 12-source floor while using full-paper depth gates.
+    # V3 full papers keep the live 12-source floor and accept 2-3k word bodies.
     assert synthesis_t.minimum_citations == 12
     assert synthesis_t.minimum_citations == res_t.minimum_citations
     assert synthesis_t.minimum_research_question_words > res_t.minimum_research_question_words
-    # Body-word floor is synthesis-only; RES has no minimum.
-    assert synthesis_t.minimum_body_word_count >= 8000
+    assert synthesis_t.minimum_body_word_count == 0
     assert res_t.minimum_body_word_count == 0
 
 
@@ -118,7 +116,7 @@ def test_synthesis_gate_reads_word_budget_from_abstract_not_research_question() 
     }
     results = run_submission_template_checks(
         sections=sections,
-        source_bundle=_valid_synthesis_bundle(25),
+        source_bundle=_valid_synthesis_bundle(12),
         article_type="research_synthesis",
     )
     rq_gate = next(g for g in results if g.name == "research_question_word_budget")
@@ -127,46 +125,24 @@ def test_synthesis_gate_reads_word_budget_from_abstract_not_research_question() 
     assert "Abstract" in rq_gate.reason
 
 
-def test_synthesis_gate_fires_minimum_body_word_count_when_too_thin() -> None:
-    """A synthesis paper with thin body sections should be rejected — the
-    article type promises substance."""
-    thin_sections = {
+def test_synthesis_gate_allows_2k_body_when_sources_clear_floor() -> None:
+    """The live v3 path should not reject 2-3k papers only for body length."""
+    concise_sections = {
         "Abstract": " ".join(["abstract"] * 80),
-        "Introduction": "short intro",
-        "Methods": "short methods",
-        "Results": "short results",
-        "Discussion": "short discussion",
-        "Limitations": "short limitations",
-        "Conclusion": "short conclusion",
+        "Introduction": " ".join(["i"] * 350),
+        "Methods": " ".join(["m"] * 300),
+        "Results": " ".join(["r"] * 850),
+        "Discussion": " ".join(["d"] * 450),
+        "Limitations": " ".join(["l"] * 200),
+        "Conclusion": " ".join(["c"] * 80),
     }
     results = run_submission_template_checks(
-        sections=thin_sections,
-        source_bundle=_valid_synthesis_bundle(25),
+        sections=concise_sections,
+        source_bundle=_valid_synthesis_bundle(12),
         article_type="research_synthesis",
     )
-    body_gate = next(g for g in results if g.name == "minimum_body_word_count")
-    assert body_gate.passed is False
-    assert "8000" in body_gate.reason
-
-
-def test_synthesis_gate_passes_minimum_body_word_count_when_substantial() -> None:
-    """A 23k-word synthesis (bot's canonical output) clears the body-word gate."""
-    fat_sections = {
-        "Abstract": " ".join(["a"] * 100),
-        "Introduction": " ".join(["i"] * 1500),
-        "Methods": " ".join(["m"] * 1500),
-        "Results": " ".join(["r"] * 4000),
-        "Discussion": " ".join(["d"] * 2000),
-        "Limitations": " ".join(["l"] * 500),
-        "Conclusion": " ".join(["c"] * 100),
-    }
-    results = run_submission_template_checks(
-        sections=fat_sections,
-        source_bundle=_valid_synthesis_bundle(40),
-        article_type="research_synthesis",
-    )
-    body_gate = next(g for g in results if g.name == "minimum_body_word_count")
-    assert body_gate.passed is True
+    assert not any(g.name == "minimum_body_word_count" for g in results)
+    assert all(g.passed for g in results)
 
 
 def test_synthesis_gate_minimum_citations_demands_12() -> None:
