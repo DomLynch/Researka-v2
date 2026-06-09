@@ -3,7 +3,7 @@ from typing import Any, cast
 
 from fastapi.testclient import TestClient
 
-from contracts import ResearchObject, RuntimeJob, Stage
+from contracts import Decision, EventType, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob, Stage
 from runtime_core.prompts import EDITOR_PROMPT_VERSION
 
 
@@ -79,6 +79,7 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     assert decision_payload["resubmission"] == {"allowed": False, "parent_submission_id": None}
     assert decision_payload["publication"]["publication_id"] == publication.id
     assert decision_payload["publication"]["url"] == f"https://researka.org/papers/{publication.id}"
+    assert decision_payload["publication"]["deduped"] is False
 
     repository.enqueue_job(RuntimeJob(target_object_id=publication.parent_object_id, stage=Stage.PUBLISH))
     duplicate_publish = client.post("/jobs/run-once", headers=_worker_headers())
@@ -86,6 +87,48 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     assert len(repository.list_objects("publication")) == 1
     stages_seen = {event.payload["stage"] for event in repository.list_events() if "stage" in event.payload}
     assert stages_seen == {"submission_intake", "autonomous_review", "autonomous_editorial_decision", "autonomous_publish"}
+
+
+def test_decision_response_reports_deduped_publication(client: TestClient) -> None:
+    repository = _repository(client)
+    original_submission = repository.create_object(
+        ResearchObject(object_type=ObjectType.SUBMISSION, title="Original semaglutide memo")
+    )
+    publication = repository.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=original_submission.id,
+            title="Semaglutide memo",
+            metadata={"article_type": "alpha_memo", "doi_status": "minted"},
+        )
+    )
+    duplicate_submission = repository.create_object(
+        ResearchObject(object_type=ObjectType.SUBMISSION, title="Duplicate semaglutide memo")
+    )
+    decision = repository.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=duplicate_submission.id,
+            title="Decision for duplicate semaglutide memo",
+            metadata={"decision": Decision.ACCEPT.value, "notes": ["accepted and queued for publish"]},
+        )
+    )
+    repository.record_event(
+        RuntimeEvent(
+            event_type=EventType.JOB_COMPLETED,
+            target_object_id=duplicate_submission.id,
+            payload={"stage": Stage.PUBLISH.value, "publication_id": publication.id, "deduped": True},
+        )
+    )
+
+    response = client.get(f"/submissions/{duplicate_submission.id}/decision")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision_object_id"] == decision.id
+    assert payload["publication"]["publication_id"] == publication.id
+    assert payload["publication"]["url"] == f"https://researka.org/alpha/{publication.id}"
+    assert payload["publication"]["deduped"] is True
 
 
 def test_end_to_end_publish_happy_path(client: TestClient) -> None:

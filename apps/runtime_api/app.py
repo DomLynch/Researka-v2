@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 from apps.runtime_api import rate_limits
 from apps.worker.main import WorkerApp
-from contracts import AuditReview, AuditVerdict, ClaimCard, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
+from contracts import AuditReview, AuditVerdict, ClaimCard, Decision, EventType, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
 from runtime_core.agent_query import fail_agent_query_job, run_agent_query_job
 from runtime_core.osf import (
@@ -717,7 +717,7 @@ def _public_decision_record(
     }
 
 
-def _publication_feedback(publication: ResearchObject | None) -> dict | None:
+def _publication_feedback(publication: ResearchObject | None, *, deduped: bool = False) -> dict | None:
     if publication is None:
         return None
     metadata = publication.metadata
@@ -726,12 +726,29 @@ def _publication_feedback(publication: ResearchObject | None) -> dict | None:
     return {
         "publication_id": publication.id,
         "url": f"https://researka.org/{public_path}/{publication.id}",
+        "deduped": deduped,
         "doi": metadata.get("doi") or metadata.get("osf_doi"),
         "doi_status": metadata.get("doi_status"),
         "osf_url": metadata.get("osf_url"),
         "dw_artifact_id": metadata.get("dw_artifact_id"),
         "dw_chain_url": metadata.get("dw_chain_url"),
     }
+
+
+def _decision_publication_feedback(repo: RuntimeRepository, submission_id: str) -> dict | None:
+    direct = repo.publication_for_target(submission_id)
+    if direct is not None:
+        return _publication_feedback(direct)
+    for event in reversed(repo.list_events()):
+        if event.target_object_id != submission_id or event.event_type != EventType.JOB_COMPLETED:
+            continue
+        if event.payload.get("stage") != Stage.PUBLISH.value or not event.payload.get("deduped"):
+            continue
+        publication_id = event.payload.get("publication_id")
+        publication = repo.get_object(str(publication_id)) if publication_id else None
+        if publication is not None and publication.object_type == ObjectType.PUBLICATION:
+            return _publication_feedback(publication, deduped=True)
+    return None
 
 
 def _submission_decision_response(
@@ -779,7 +796,7 @@ def _submission_decision_response(
             "allowed": decision_value in {Decision.REVISE.value, Decision.REJECT.value},
             "parent_submission_id": submission_id if decision_value in {Decision.REVISE.value, Decision.REJECT.value} else None,
         },
-        "publication": _publication_feedback(repo.publication_for_target(submission_id)),
+        "publication": _decision_publication_feedback(repo, submission_id),
     }
     return response
 
