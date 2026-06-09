@@ -9,7 +9,7 @@ Usage:
     python scripts/run_benchmark.py --corpus calibration/elite_benchmark_v3_cleaned.json --dry-run
 
 Requires RESEARKA_V2_PROVIDER env var (default: deterministic).
-For judge_panel: MIMO_API_KEY and OPENROUTER_API_KEY must be set.
+For judge_panel: MINIMAX_API_KEY and OPENROUTER_API_KEY must be set.
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import time
+from typing import TypedDict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -41,7 +42,15 @@ DOMAINS = [
     "genomics",
 ]
 
-SOURCE_TEMPLATES = [
+class SourceTemplate(TypedDict):
+    title: str
+    evidence_type: str
+    year: int
+    doi: str
+    url: str
+
+
+SOURCE_TEMPLATES: list[SourceTemplate] = [
     {"title": "Systematic review of {topic} interventions", "evidence_type": "review", "year": 2025,
      "doi": "10.1000/{id}", "url": "https://doi.org/10.1000/{id}"},
     {"title": "Primary study: {topic} efficacy in {model}", "evidence_type": "primary", "year": 2026,
@@ -569,7 +578,7 @@ def aggregate(records: list[dict]) -> dict:
         if r["outcome"] == "intake_rejected":
             by_domain[d]["intake_rejected"] += 1
 
-    by_style = {}
+    by_style: dict[str, dict[str, float]] = {}
     for r in records:
         style = r.get("style", "house")
         if style not in by_style:

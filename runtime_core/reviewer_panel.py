@@ -10,6 +10,7 @@ from .providers import (
     FallbackProvider,
     LanguageModelProvider,
     MimoProvider,
+    MiniMaxProvider,
     OpenRouterProvider,
     ProviderError,
     ProviderRequest,
@@ -172,7 +173,7 @@ class ReviewerPanel:
         FallbackProvider stamps `fallback_used` (and `fallback_reason` when true)
         into ProviderResponse.metadata. Surface those at the panel level as
         primary_fallback_used / sparring_fallback_used so the DW chain shows
-        when MiMo or Gemma was actually replaced by Mistral. Bare (un-wrapped)
+        when a primary reviewer or Gemma was actually replaced by Mistral. Bare (un-wrapped)
         slots and failed slots default to False — the flag is only true when we
         have positive evidence the safety net fired.
         """
@@ -367,21 +368,28 @@ def reviewer_from_env() -> LanguageModelProvider:
     if selected in {"judge_panel", "panel", "reviewer_panel"}:
         or_base_url = os.getenv("RESEARKA_V2_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
         # Backup model — Mistral by default. Used three ways:
-        #   (1) wraps MiMo so a transient MiMo failure still yields a primary review,
+        #   (1) wraps the primary reviewer so a transient failure still yields a primary review,
         #   (2) wraps Gemma so a transient Gemma failure still yields a sparring review,
         #   (3) is the panel-level tiebreaker on disagreement / both-failed.
         # Toggle off via RESEARKA_V2_REVIEWER_FALLBACK_ENABLED=0 if you want to study
-        # raw MiMo/Gemma failure rates without the safety net.
+        # raw primary/Gemma failure rates without the safety net.
         fallback_model = os.getenv("RESEARKA_V2_FALLBACK_MODEL", "mistralai/mistral-small-2603")
         fallback_enabled = os.getenv("RESEARKA_V2_REVIEWER_FALLBACK_ENABLED", "1").strip().lower() not in {"0", "false", "no"}
 
         def _make_fallback() -> OpenRouterProvider:
             return OpenRouterProvider(model=fallback_model, base_url=or_base_url)
 
-        primary_inner = MimoProvider(
-            model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2.5-pro"),
-            base_url=os.getenv("RESEARKA_V2_MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
-        )
+        primary_provider = os.getenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "minimax").strip().lower()
+        if primary_provider == "mimo":
+            primary_inner: LanguageModelProvider = MimoProvider(
+                model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2.5-pro"),
+                base_url=os.getenv("RESEARKA_V2_MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
+            )
+        else:
+            primary_inner = MiniMaxProvider(
+                model=os.getenv("RESEARKA_V2_MINIMAX_MODEL", "MiniMax-M3"),
+                base_url=os.getenv("RESEARKA_V2_MINIMAX_BASE_URL", "https://api.minimax.io/anthropic"),
+            )
         sparring_inner = OpenRouterProvider(
             model=os.getenv("RESEARKA_V2_REVIEWER_MODEL", "google/gemma-4-31b-it"),
             base_url=or_base_url,

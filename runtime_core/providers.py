@@ -123,15 +123,8 @@ class OpenAICompatibleProvider:
                 ),
             )
 
-        req = urllib.request.Request(
-            url=f"{self.base_url}/chat/completions",
-            data=json.dumps(self._payload_for(request)).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
+        req = self._request_for(request)
+
         # Rate-limit retries get their own (larger) attempt budget so a single
         # 429 burst doesn't spend all retries before the rate-limit window opens.
         attempt = 0
@@ -170,7 +163,20 @@ class OpenAICompatibleProvider:
                 attempt += 1
                 continue
 
-        raw_payload = cast(dict[str, Any], raw)
+        return self._result_from_raw(cast(dict[str, Any], raw))
+
+    def _request_for(self, request: ProviderRequest) -> urllib.request.Request:
+        return urllib.request.Request(
+            url=f"{self.base_url}/chat/completions",
+            data=json.dumps(self._payload_for(request)).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+    def _result_from_raw(self, raw_payload: dict[str, Any]) -> ProviderResult:
         choices = raw_payload.get("choices") or [{}]
         first_choice = choices[0] if isinstance(choices, list) and choices else {}
         message = first_choice.get("message") if isinstance(first_choice, dict) else {}
@@ -273,6 +279,71 @@ class MimoProvider(OpenAICompatibleProvider):
         )
 
 
+class AnthropicCompatibleProvider(OpenAICompatibleProvider):
+    def _request_for(self, request: ProviderRequest) -> urllib.request.Request:
+        return urllib.request.Request(
+            url=f"{self.base_url}/v1/messages",
+            data=json.dumps(self._payload_for(request)).encode("utf-8"),
+            headers={
+                "x-api-key": self.api_key,
+                "anthropic-version": os.getenv("ANTHROPIC_VERSION", "2023-06-01"),
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+    def _payload_for(self, request: ProviderRequest) -> dict[str, object]:
+        return {
+            "model": self.model,
+            "system": request.system_prompt,
+            "messages": [{"role": "user", "content": [{"type": "text", "text": request.user_prompt}]}],
+            "temperature": 0.1,
+            "max_tokens": request.max_output_tokens,
+            "thinking": {"type": "disabled"},
+        }
+
+    def _result_from_raw(self, raw_payload: dict[str, Any]) -> ProviderResult:
+        content = raw_payload.get("content") or []
+        blocks = content if isinstance(content, list) else []
+        text = "\n".join(str(block.get("text", "")).strip() for block in blocks if isinstance(block, dict) and block.get("type") == "text").strip()
+        usage = raw_payload.get("usage") or {}
+        usage = usage if isinstance(usage, dict) else {}
+        input_tokens = int(usage.get("input_tokens", 0) or 0)
+        output_tokens = int(usage.get("output_tokens", 0) or 0)
+        cost_usd = round(
+            (input_tokens / 1_000_000 * self.input_cost_per_million)
+            + (output_tokens / 1_000_000 * self.output_cost_per_million),
+            6,
+        )
+        return ProviderResult(
+            ok=True,
+            response=ProviderResponse(
+                text=text,
+                provider=self.provider,
+                model=str(raw_payload.get("model") or self.model),
+                usage=ProviderUsage(input_tokens=input_tokens, output_tokens=output_tokens, cost_usd=cost_usd),
+            ),
+        )
+
+
+class MiniMaxProvider(AnthropicCompatibleProvider):
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        model: str = "MiniMax-M3",
+        base_url: str = "https://api.minimax.io/anthropic",
+    ) -> None:
+        super().__init__(
+            provider="minimax",
+            model=model,
+            api_key=api_key or os.environ.get("MINIMAX_API_KEY", "") or os.environ.get("ANTHROPIC_API_KEY", ""),
+            base_url=base_url,
+            input_cost_per_million=float(os.getenv("RESEARKA_V2_MINIMAX_INPUT_USD_PER_MILLION", "0")),
+            output_cost_per_million=float(os.getenv("RESEARKA_V2_MINIMAX_OUTPUT_USD_PER_MILLION", "0")),
+        )
+
+
 class OpenRouterProvider(OpenAICompatibleProvider):
     def __init__(
         self,
@@ -293,7 +364,7 @@ class FallbackProvider:
     """Wraps a primary provider with a fallback that runs only on transient failure.
 
     Use this in the reviewer panel to add resilience to individual reviewer slots:
-    if MiMo or Gemma times out / is rate-limited / returns 5xx, the wrapped fallback
+    if the primary reviewer or Gemma times out / is rate-limited / returns 5xx, the wrapped fallback
     (typically Mistral) takes over so the panel doesn't lose that slot entirely.
 
     A 4xx (BAD_REQUEST — including missing API key) is NOT considered transient and
@@ -347,6 +418,11 @@ class FallbackProvider:
 
 def provider_from_env() -> LanguageModelProvider:
     selected = os.getenv("RESEARKA_V2_PROVIDER", "deterministic").strip().lower()
+    if selected == "minimax":
+        return MiniMaxProvider(
+            model=os.getenv("RESEARKA_V2_MINIMAX_MODEL", "MiniMax-M3"),
+            base_url=os.getenv("RESEARKA_V2_MINIMAX_BASE_URL", "https://api.minimax.io/anthropic"),
+        )
     if selected == "mimo":
         return MimoProvider(
             model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2.5-pro"),

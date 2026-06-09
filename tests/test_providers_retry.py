@@ -12,17 +12,21 @@ These tests cover the new behaviour:
 """
 from __future__ import annotations
 
+from email.message import Message
+import json
 import urllib.error
 
 import pytest
 
 from contracts import ProviderErrorClass
-from runtime_core.providers import OpenAICompatibleProvider, ProviderRequest
+from runtime_core.providers import MiniMaxProvider, OpenAICompatibleProvider, ProviderRequest
 
 
 class _RecordingHttpError(urllib.error.HTTPError):
     def __init__(self, code: int, retry_after: str | None = None) -> None:
-        headers = {"Retry-After": retry_after} if retry_after else {}
+        headers = Message()
+        if retry_after:
+            headers["Retry-After"] = retry_after
         super().__init__(
             url="http://example.test/v1/chat/completions",
             code=code,
@@ -72,6 +76,20 @@ def _patch_urlopen(monkeypatch: pytest.MonkeyPatch, side_effects: list[object]) 
 
 def _request() -> ProviderRequest:
     return ProviderRequest(system_prompt="s", user_prompt="u", prompt_version="v")
+
+
+class _JsonResponse:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self.payload = payload
+
+    def __enter__(self) -> "_JsonResponse":
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return json.dumps(self.payload).encode("utf-8")
 
 
 def test_rate_limit_uses_dedicated_budget_separate_from_other_retries(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -135,3 +153,42 @@ def test_5xx_uses_standard_attempt_budget(monkeypatch: pytest.MonkeyPatch) -> No
     assert result.error is not None
     assert result.error.error_class is ProviderErrorClass.PROVIDER_UNAVAILABLE
     assert counter[0] == 3
+
+
+def test_minimax_provider_uses_anthropic_messages_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_urlopen(req: object, **_kwargs: object) -> _JsonResponse:
+        request = req  # urllib Request, kept as object to avoid private typing.
+        seen["url"] = getattr(request, "full_url")
+        seen["payload"] = json.loads(getattr(request, "data").decode("utf-8"))
+        seen["api_key"] = request.get_header("X-api-key")  # type: ignore[attr-defined]
+        return _JsonResponse(
+            {
+                "model": "MiniMax-M3",
+                "content": [{"type": "text", "text": "{\"recommendation\":\"accept\"}"}],
+                "usage": {"input_tokens": 12, "output_tokens": 5},
+            }
+        )
+
+    monkeypatch.setattr("runtime_core.providers.urllib.request.urlopen", fake_urlopen)
+
+    result = MiniMaxProvider(api_key="test-key").complete(_request())
+
+    assert result.ok is True
+    assert result.response is not None
+    assert seen["url"] == "https://api.minimax.io/anthropic/v1/messages"
+    assert seen["api_key"] == "test-key"
+    assert seen["payload"] == {
+        "model": "MiniMax-M3",
+        "system": "s",
+        "messages": [{"role": "user", "content": [{"type": "text", "text": "u"}]}],
+        "temperature": 0.1,
+        "max_tokens": 1200,
+        "thinking": {"type": "disabled"},
+    }
+    assert result.response.provider == "minimax"
+    assert result.response.model == "MiniMax-M3"
+    assert result.response.text == "{\"recommendation\":\"accept\"}"
+    assert result.response.usage.input_tokens == 12
+    assert result.response.usage.output_tokens == 5
