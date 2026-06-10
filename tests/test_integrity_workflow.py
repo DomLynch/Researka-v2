@@ -94,7 +94,7 @@ def _claim_next(repo: InMemoryRuntimeRepository) -> RuntimeJob:
     return job
 
 
-def test_integrity_service_down_fails_open(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_integrity_service_down_returns_unavailable_signal(monkeypatch: pytest.MonkeyPatch) -> None:
     class BrokenClient:
         def __init__(self, timeout: float) -> None:
             self.timeout = timeout
@@ -108,10 +108,18 @@ def test_integrity_service_down_fails_open(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "1")
     monkeypatch.setattr("runtime_core.integrity_client.httpx.Client", BrokenClient)
 
-    assert check_integrity({"submission_id": "sub-1"}) is None
+    # No longer silently None: stamped available=False so the skipped gate is auditable.
+    result = check_integrity({"submission_id": "sub-1"})
+    assert result is not None and result["available"] is False
+    assert result["recommendation"] == "pass"
+
+    # Opt-in fail-closed holds the submission (revise) instead of letting it proceed.
+    monkeypatch.setenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "1")
+    held = check_integrity({"submission_id": "sub-1"})
+    assert held is not None and held["recommendation"] == "revise"
 
 
-def test_integrity_malformed_json_fails_open(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_integrity_malformed_json_returns_unavailable_signal(monkeypatch: pytest.MonkeyPatch) -> None:
     class BadJsonResponse:
         def raise_for_status(self) -> None:
             return None
@@ -135,7 +143,8 @@ def test_integrity_malformed_json_fails_open(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "1")
     monkeypatch.setattr("runtime_core.integrity_client.httpx.Client", BadJsonClient)
 
-    assert check_integrity({"submission_id": "sub-1"}) is None
+    result = check_integrity({"submission_id": "sub-1"})
+    assert result is not None and result["available"] is False
 
 
 def test_integrity_missing_recommendation_continues_to_review(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -151,6 +160,25 @@ def test_integrity_missing_recommendation_continues_to_review(monkeypatch: pytes
     assert updated is not None
     assert updated.metadata["integrity"]["recommendation"] == "pass"
     assert updated.metadata["integrity"]["duplication_score"] == 0.91
+
+
+def test_integrity_unavailable_is_stamped_not_silent(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    monkeypatch.setattr(
+        "runtime_core.workflow.check_integrity",
+        lambda payload: {"available": False, "recommendation": "pass", "reason": "integrity_unavailable: x"},
+    )
+
+    WorkflowEngine(provider=AcceptProvider()).handle_job(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo
+    )
+    updated = repo.get_object(submission.id)
+
+    assert updated is not None
+    # The skipped gate is recorded on the submission — never a silent pass.
+    assert updated.metadata["integrity"]["available"] is False
+    assert [job.stage for job in repo.queued_jobs()] == [Stage.REVIEW]
 
 
 @pytest.mark.parametrize("recommendation", [Decision.REJECT.value, Decision.REVISE.value])

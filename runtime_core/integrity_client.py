@@ -29,6 +29,13 @@ def _headers() -> dict[str, str]:
     return {"x-api-key": api_key} if api_key else {}
 
 
+def _unavailable_recommendation() -> str:
+    # When the enabled integrity service is unreachable we never silently pass:
+    # the result is always stamped available=False. RESEARKA_INTEGRITY_FAIL_CLOSED=1
+    # additionally holds the submission (revise) instead of letting it proceed.
+    return "revise" if os.getenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "0") == "1" else "pass"
+
+
 def check_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
     if not _enabled():
         return None
@@ -37,10 +44,16 @@ def check_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
             response = client.post(f"{_base_url()}/check", json=payload, headers=_headers())
             response.raise_for_status()
             result = response.json()
-            return result if isinstance(result, dict) else None
+            if isinstance(result, dict):
+                return result
+            raise ValueError("integrity service returned a non-object response")
     except Exception as exc:
-        log.warning("integrity_check_fail_open", extra={"error": str(exc)})
-        return None
+        log.warning("integrity_check_unavailable", extra={"error": str(exc)})
+        return {
+            "available": False,
+            "recommendation": _unavailable_recommendation(),
+            "reason": f"integrity_unavailable: {exc}",
+        }
 
 
 def index_integrity(payload: dict[str, Any]) -> None:

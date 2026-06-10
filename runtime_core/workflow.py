@@ -105,6 +105,7 @@ def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -
         matched_sources = []
     return {
         "recommendation": recommendation or integrity.get("recommendation") or "pass",
+        "available": bool(integrity.get("available", True)),
         "matched_publication_id": integrity.get("matched_publication_id"),
         "duplication_score": duplication_score,
         "similarity_score": similarity_score,
