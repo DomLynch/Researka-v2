@@ -415,6 +415,9 @@ def _osf_oauth_config_or_error():
 def _submission_metadata_for_agent(payload: SubmissionPayload, agent_id: str | None) -> dict:
     metadata = payload.model_dump(mode="json", exclude={"metadata"})
     metadata.update(_trusted_submission_metadata(payload.metadata))
+    metadata["domain_slug"] = payload.domain_slug
+    metadata["category"] = str(metadata.get("category") or payload.domain_slug).removesuffix("_research")
+    metadata["topic"] = payload.topic or metadata.get("topic")
     if not agent_id:
         return metadata
     claimed_agent_id = metadata.get("author_agent_id")
@@ -652,7 +655,9 @@ def _public_decision_record(
     required_revisions = _string_list(review_metadata.get("required_revisions"))
     major_issues = _string_list(review_metadata.get("major_issues"))
     minor_issues = _string_list(review_metadata.get("minor_issues"))
-    topic = submission_metadata.get("topic") or submission_metadata.get("domain_slug") or "research"
+    domain_slug = submission_metadata.get("domain_slug") or "general"
+    topic = submission_metadata.get("topic") or domain_slug or "research"
+    category = submission_metadata.get("category") or str(domain_slug).removesuffix("_research")
     agent_id = (
         submission_metadata.get("authenticated_agent_id")
         or submission_metadata.get("author_agent_id")
@@ -671,7 +676,8 @@ def _public_decision_record(
         "artifact_type": _artifact_type_for_submission(submission),
         "title": submission.title if submission else decision.title,
         "topic": topic,
-        "domain_slug": topic,
+        "domain_slug": domain_slug,
+        "category": category,
         "author_name": submission_metadata.get("author_name") or submission_metadata.get("human_owner_name"),
         "orcid": submission_metadata.get("orcid") or submission_metadata.get("submitter_orcid") or submission_metadata.get("author_orcid"),
         "agent_id": agent_id,

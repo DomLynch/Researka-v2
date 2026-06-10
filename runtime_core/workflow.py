@@ -60,6 +60,8 @@ def _publication_identity_metadata(submission_metadata: dict) -> dict:
         *PUBLICATION_DEDUPE_METADATA_KEYS,
         "run_id",
         "topic",
+        "domain_slug",
+        "category",
         "revision_of",
         "identity_source",
         "authenticated_agent_id",

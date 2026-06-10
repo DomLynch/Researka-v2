@@ -44,6 +44,8 @@ def _submission_payload(search_summary: str) -> dict:
         "source_bundle": _valid_source_bundle(),
         "author_agent_id": "agent-demo",
         "domain_slug": "longevity",
+        "category": "longevity",
+        "topic": "cellular_senescence",
     }
 
 
@@ -57,6 +59,10 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     )
     assert seed.status_code == 200
     submission_id = seed.json()["submission"]["id"]
+    submission_metadata = seed.json()["submission"]["metadata"]
+    assert submission_metadata["domain_slug"] == "longevity"
+    assert submission_metadata["category"] == "longevity"
+    assert submission_metadata["topic"] == "cellular_senescence"
 
     for _ in range(12):
         queue = client.get("/jobs/queue").json()["queued"]
@@ -72,6 +78,9 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     assert repository.publication_for_target(publication.parent_object_id).id == publication.id
     assert publication.parent_object_id == submission_id
     assert publication.metadata["prompt_version"] == EDITOR_PROMPT_VERSION
+    assert publication.metadata["domain_slug"] == "longevity"
+    assert publication.metadata["category"] == "longevity"
+    assert publication.metadata["topic"] == "cellular_senescence"
     decision = client.get(f"/submissions/{submission_id}/decision")
     assert decision.status_code == 200
     decision_payload = decision.json()
@@ -87,6 +96,84 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     assert len(repository.list_objects("publication")) == 1
     stages_seen = {event.payload["stage"] for event in repository.list_events() if "stage" in event.payload}
     assert stages_seen == {"submission_intake", "autonomous_review", "autonomous_editorial_decision", "autonomous_publish"}
+
+
+def test_public_review_record_preserves_submission_domain_metadata(client: TestClient) -> None:
+    repository = _repository(client)
+    submission = repository.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="MedQA benchmark memo",
+            metadata={
+                "article_type": "alpha_memo",
+                "author_agent_id": "agent-v4-alpha-ai-research",
+                "category": "ai",
+                "domain_slug": "ai_research",
+                "topic": "medqa_benchmark",
+            },
+        )
+    )
+    review = repository.create_object(
+        ResearchObject(
+            object_type=ObjectType.REVIEW,
+            parent_object_id=submission.id,
+            title="Review for MedQA benchmark memo",
+            metadata={"major_issues": ["Needs tighter metric role separation."]},
+        )
+    )
+    decision = repository.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=submission.id,
+            title="Decision for MedQA benchmark memo",
+            metadata={
+                "decision": Decision.REJECT.value,
+                "review_id": review.id,
+            },
+        )
+    )
+
+    response = client.get(f"/reviews/{decision.id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["topic"] == "medqa_benchmark"
+    assert body["domain_slug"] == "ai_research"
+    assert body["category"] == "ai"
+
+
+def test_submission_api_preserves_v4_alpha_category_metadata(client: TestClient) -> None:
+    payload = {
+        "artifact_type": "alpha_memo",
+        "article_type": "alpha_memo",
+        "author_agent_id": "agent-v4-alpha-ai-research",
+        "agent_id": "agent-v4-alpha-ai-research",
+        "domain_slug": "ai_research",
+        "category": "ai",
+        "topic": "medqa_benchmark",
+        "metadata": {
+            "article_type": "alpha_memo",
+            "category": "ai",
+            "domain_slug": "ai_research",
+            "topic": "medqa_benchmark",
+        },
+        "title": "MedQA benchmark memo",
+        "abstract": "A bounded alpha memo on a benchmark-specific finding.",
+        "markdown": "# Alpha memo\n\nBounded benchmark memo.\n",
+        "source_bundle": [
+            {"title": f"MedQA source {index}", "evidence_type": "primary", "year": 2025}
+            for index in range(1, 6)
+        ],
+    }
+
+    response = client.post("/submissions", json=payload)
+
+    assert response.status_code == 200
+    metadata = response.json()["submission"]["metadata"]
+    assert metadata["article_type"] == "alpha_memo"
+    assert metadata["domain_slug"] == "ai_research"
+    assert metadata["category"] == "ai"
+    assert metadata["topic"] == "medqa_benchmark"
 
 
 def test_decision_response_reports_deduped_publication(client: TestClient) -> None:
