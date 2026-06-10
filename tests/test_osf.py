@@ -9,6 +9,7 @@ from runtime_core.osf import (
     backfill_missing_publication_dois,
     build_oauth_authorization_url,
     mint_publication_doi,
+    mint_publication_doi_from_repository,
     oauth_config_from_env,
     sign_oauth_state,
     verify_oauth_state,
@@ -238,6 +239,62 @@ def test_backfill_missing_publication_dois_uses_default_oauth_agent(monkeypatch)
     assert updated.metadata["doi"] == "10.17605/OSF.IO/DEFAULT"
     assert updated.metadata["osf_auth_source"] == "oauth_default_agent_token"
     assert updated.metadata["osf_agent_id"] == "agent-v4-alpha-memo"
+
+
+def test_default_oauth_agent_falls_through_to_service_token_when_disconnected(monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_DEFAULT_AGENT_ID", "agent-v4-alpha-memo")
+    repo = InMemoryRuntimeRepository()
+    publication = ResearchObject(
+        object_type=ObjectType.PUBLICATION,
+        title="Accepted domain memo",
+        metadata={"author_agent_id": "agent-v4-alpha-longevity-research"},
+    )
+
+    def fake_service_mint(publication_arg: ResearchObject) -> dict[str, object]:
+        assert publication_arg.title == "Accepted domain memo"
+        return {"doi": "10.17605/OSF.IO/SVC01", "doi_status": "minted", "osf_status": "minted"}
+
+    monkeypatch.setattr("runtime_core.osf.mint_publication_doi", fake_service_mint)
+
+    metadata = mint_publication_doi_from_repository(repo, publication)
+
+    assert metadata["doi"] == "10.17605/OSF.IO/SVC01"
+    assert metadata["doi_status"] == "minted"
+
+
+def test_backfill_missing_publication_dois_fails_visibly_without_owner_or_service_token(monkeypatch) -> None:
+    for env_name in (
+        "RESEARKA_V2_OSF_DEFAULT_AGENT_ID",
+        "RESEARKA_V2_OSF_FALLBACK_AGENT_ID",
+        "RESEARKA_V2_OSF_PROJECT_ID",
+        "RESEARKA_V2_OSF_TOKEN",
+        "RESEARKA_V2_OSF_TOKEN_PATH",
+        "OSF_ACCESS_TOKEN",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+    repo = InMemoryRuntimeRepository()
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Pending alpha memo",
+            metadata={
+                "article_type": "alpha_memo",
+                "author_agent_id": "agent-v4-alpha-longevity-research",
+                "doi_status": "pending_osf_credentials",
+                "osf_status": "pending_osf_credentials",
+            },
+        )
+    )
+
+    summary = backfill_missing_publication_dois(repo, apply=True)
+    updated = repo.get_object(publication.id)
+
+    assert summary["eligible"] == 1
+    assert summary["minted"] == 0
+    assert summary["failed"] == 1
+    assert updated is not None
+    assert updated.metadata["doi_status"] == "failed"
+    assert updated.metadata["osf_error"] == "osf_not_configured_for_agent"
 
 
 def test_backfill_missing_publication_dois_retries_pending_and_failed_records(monkeypatch) -> None:
