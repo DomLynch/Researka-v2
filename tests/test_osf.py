@@ -240,6 +240,57 @@ def test_backfill_missing_publication_dois_uses_default_oauth_agent(monkeypatch)
     assert updated.metadata["osf_agent_id"] == "agent-v4-alpha-memo"
 
 
+def test_backfill_missing_publication_dois_retries_pending_and_failed_records(monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_DEFAULT_AGENT_ID", "agent-v4-alpha-memo")
+    repo = InMemoryRuntimeRepository()
+    repo.store_osf_oauth_token("agent-v4-alpha-memo", {"access_token": "oauth-token", "root_project_id": "root-node"})
+    pending = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Pending alpha memo",
+            metadata={
+                "article_type": "alpha_memo",
+                "author_agent_id": "agent-v4-alpha-longevity-research",
+                "doi_status": "pending_osf_credentials",
+                "osf_status": "pending_osf_credentials",
+            },
+        )
+    )
+    failed = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Failed alpha memo",
+            metadata={
+                "article_type": "alpha_memo",
+                "author_agent_id": "agent-v4-alpha-ai-research",
+                "doi_status": "failed",
+                "osf_status": "failed",
+            },
+        )
+    )
+
+    def fake_mint(publication_arg: ResearchObject, *, token_metadata: dict[str, object], **_: object):
+        assert token_metadata["access_token"] == "oauth-token"
+        return (
+            {
+                "doi": f"10.17605/OSF.IO/{publication_arg.id[:5].upper()}",
+                "doi_status": "minted",
+                "osf_status": "minted",
+            },
+            token_metadata,
+        )
+
+    monkeypatch.setattr("runtime_core.osf.mint_publication_doi_with_oauth", fake_mint)
+
+    summary = backfill_missing_publication_dois(repo, apply=True)
+
+    assert summary["eligible"] == 2
+    assert summary["minted"] == 2
+    assert summary["failed"] == 0
+    assert repo.get_object(pending.id).metadata["doi_status"] == "minted"  # type: ignore[union-attr]
+    assert repo.get_object(failed.id).metadata["doi_status"] == "minted"  # type: ignore[union-attr]
+
+
 def test_oauth_state_roundtrip() -> None:
     state = sign_oauth_state(
         agent_id="agent-v3-full-paper",

@@ -1,10 +1,12 @@
 import os
+import logging
 from typing import Any, cast
 from fastapi.testclient import TestClient
 from urllib.parse import parse_qs, quote, urlparse
 
 from contracts import ClaimCard, ContradictionStatus, Decision, EventType, EvidenceGrade, ObjectType, ResearchObject, RuntimeEvent
 from runtime_core.osf import sign_oauth_state
+from runtime_core.repos import InMemoryRuntimeRepository
 
 
 def _repository(client: TestClient) -> Any:
@@ -37,6 +39,20 @@ def _valid_source_bundle() -> list[dict[str, object]]:
 
 def _worker_headers() -> dict[str, str]:
     return {"x-api-key": os.environ.get("RESEARKA_V2_ADMIN_KEY", "test-admin-key")}
+
+
+def test_create_app_warns_when_osf_default_owner_missing(monkeypatch, caplog) -> None:
+    from apps.runtime_api.app import create_app
+
+    monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH", "/run/secrets/key")
+    monkeypatch.delenv("RESEARKA_V2_OSF_DEFAULT_AGENT_ID", raising=False)
+    monkeypatch.delenv("RESEARKA_V2_OSF_FALLBACK_AGENT_ID", raising=False)
+
+    with caplog.at_level(logging.WARNING, logger="runtime_core.osf"):
+        create_app(InMemoryRuntimeRepository())
+
+    assert "osf_default_owner_agent_missing" in caplog.text
 
 
 def _run_until_idle(client: TestClient, limit: int = 12) -> None:

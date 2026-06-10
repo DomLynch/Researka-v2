@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import base64
 import hmac
@@ -14,6 +15,7 @@ from urllib import error, parse, request
 from contracts import ObjectType, ResearchObject
 
 
+log = logging.getLogger(__name__)
 DOI_CATEGORY = "doi"
 PUBLICATION_TAG_PREFIX = "researka-publication:"
 OSF_TRANSIENT_ERROR_MARKERS = (":404:", ":409:", ":429:", ":500:", ":502:", ":503:", ":504:")
@@ -95,6 +97,13 @@ def oauth_config_from_env() -> OSFOAuthConfig | None:
         state_secret=state_secret,
         timeout_seconds=float(os.environ.get("RESEARKA_V2_OSF_TIMEOUT_SECONDS", "15")),
     )
+
+
+def warn_if_osf_default_owner_missing() -> None:
+    if os.environ.get("RESEARKA_V2_OSF_DEFAULT_AGENT_ID") or os.environ.get("RESEARKA_V2_OSF_FALLBACK_AGENT_ID"):
+        return
+    if os.environ.get("RESEARKA_V2_OSF_OAUTH_CLIENT_ID") or os.environ.get("RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH"):
+        log.warning("osf_default_owner_agent_missing")
 
 
 def _b64url_encode(raw: bytes) -> str:

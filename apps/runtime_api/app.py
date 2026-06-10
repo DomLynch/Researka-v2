@@ -26,6 +26,7 @@ from runtime_core.osf import (
     osf_user_metadata_from_token,
     sign_oauth_state,
     verify_oauth_state,
+    warn_if_osf_default_owner_missing,
 )
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 from runtime_core.publication_sidecars import build_sidecar, sidecar_manifest
@@ -802,6 +803,7 @@ def _submission_decision_response(
 
 
 def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
+    warn_if_osf_default_owner_missing()
     if repository is not None:
         repo = repository
     elif dsn := postgres_dsn_from_env():

@@ -75,6 +75,7 @@ RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET_PATH=/run/secrets/researka_osf_oauth_client_
 RESEARKA_V2_OSF_OAUTH_STATE_SECRET_PATH=/run/secrets/researka_osf_oauth_state_secret
 RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH=/run/secrets/researka_osf_token_encryption_key
 RESEARKA_V2_OSF_OAUTH_REDIRECT_URI=https://api.researka.org/oauth/osf/callback
+RESEARKA_V2_OSF_DEFAULT_AGENT_ID=agent-v4-alpha-memo
 ```
 
 Generate `RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH` with:
@@ -103,6 +104,7 @@ RESEARKA_V2_OSF_ENABLED=0
 
 Runtime behavior:
 - Connected agent OAuth token wins first.
+- `RESEARKA_V2_OSF_DEFAULT_AGENT_ID` is the shared Researka-owned OSF publishing account used when domain-specific internal agents, such as longevity/AI/finance alpha agents, do not have their own OSF connection. API and worker startup log `osf_default_owner_agent_missing` when OSF OAuth is configured without this fallback.
 - Service token runs only when no agent OAuth token is stored.
 - Connected OAuth tokens are Fernet-encrypted at rest. `RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY_PATH` or `RESEARKA_V2_OSF_TOKEN_ENCRYPTION_KEY` is required before Researka will store connected OSF OAuth tokens.
 - Missing token path, missing token file, or empty token file leaves publications at `doi_status=pending_osf_credentials`.

@@ -7,6 +7,7 @@ import time
 
 from apps.worker.main import WorkerApp
 from runtime_core import WorkflowEngine
+from runtime_core.osf import warn_if_osf_default_owner_missing
 from runtime_core.repos import PostgresRuntimeRepository, postgres_dsn_from_env
 
 
@@ -22,6 +23,7 @@ def _sleep_seconds(env_name: str, default: float) -> float:
 
 
 def main() -> None:
+    warn_if_osf_default_owner_missing()
     dsn = postgres_dsn_from_env()
     if not dsn:
         raise RuntimeError("researka_v2_postgres_dsn_required_for_worker")
