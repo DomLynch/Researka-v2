@@ -238,7 +238,7 @@ def test_publication_mints_osf_doi_before_derivation_web_metadata(client: TestCl
             "sha256": "sha256:real-dw-hash",
         }
 
-    monkeypatch.setattr("runtime_core.workflow.mint_publication_doi", fake_mint_publication_doi)
+    monkeypatch.setattr("runtime_core.osf.mint_publication_doi", fake_mint_publication_doi)
     monkeypatch.setattr("runtime_core.workflow.emit_publication_to_derivation_web", fake_emit_publication_to_derivation_web)
 
     seed = client.post(
@@ -291,8 +291,8 @@ def test_publication_uses_connected_osf_oauth_token_before_service_token(client:
             {**token_metadata, "root_project_id": "oauth-root"},
         )
 
-    monkeypatch.setattr("runtime_core.workflow.mint_publication_doi", fake_mint_publication_doi)
-    monkeypatch.setattr("runtime_core.workflow.mint_publication_doi_with_oauth", fake_mint_publication_doi_with_oauth)
+    monkeypatch.setattr("runtime_core.osf.mint_publication_doi", fake_mint_publication_doi)
+    monkeypatch.setattr("runtime_core.osf.mint_publication_doi_with_oauth", fake_mint_publication_doi_with_oauth)
 
     seed = client.post(
         "/submissions",
@@ -315,6 +315,55 @@ def test_publication_uses_connected_osf_oauth_token_before_service_token(client:
     assert _repository(client).get_osf_oauth_token("agent-v3-full-paper")["root_project_id"] == "oauth-root"
 
 
+def test_publication_uses_default_osf_oauth_agent_when_submitter_is_not_connected(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    monkeypatch.setenv("RESEARKA_V2_OSF_DEFAULT_AGENT_ID", "agent-v4-alpha-memo")
+    create_resp = client.post(
+        "/ops/keys",
+        headers={"x-api-key": "admin-secret-123"},
+        json={"agent_id": "agent-v4-alpha-longevity-research"},
+    )
+    raw_key = create_resp.json()["raw_key"]
+    _repository(client).store_osf_oauth_token("agent-v4-alpha-memo", {"access_token": "default-oauth-token", "root_project_id": "oauth-root"})
+
+    def fake_mint_publication_doi_with_oauth(publication: ResearchObject, *, token_metadata: dict) -> tuple[dict[str, object], dict[str, object]]:
+        assert token_metadata["access_token"] == "default-oauth-token"
+        return (
+            {
+                "doi": "10.17605/OSF.IO/DEF01",
+                "doi_status": "minted",
+                "osf_status": "minted",
+                "osf_project_id": "oauth-root",
+                "osf_guid": "def01",
+                "osf_auth_source": "oauth_agent_token",
+                "osf": {"enabled": True, "status": "minted", "project_id": "oauth-root", "guid": "def01"},
+            },
+            token_metadata,
+        )
+
+    monkeypatch.setattr("runtime_core.osf.mint_publication_doi_with_oauth", fake_mint_publication_doi_with_oauth)
+
+    seed = client.post(
+        "/submissions",
+        headers={"x-api-key": raw_key},
+        json=_submission_payload(
+            "Databases searched include PubMed and review corpora, with a documented date window, explicit inclusion logic, and a stated narrowing rule that explains why these retained receipts best match the scoped research question."
+        ),
+    )
+    assert seed.status_code == 200
+
+    for _ in range(12):
+        queue = client.get("/jobs/queue").json()["queued"]
+        if not queue:
+            break
+        assert client.post("/jobs/run-once", headers=_worker_headers()).status_code == 200
+
+    publication = _repository(client).list_objects("publication")[0]
+    assert publication.metadata["doi"] == "10.17605/OSF.IO/DEF01"
+    assert publication.metadata["osf_auth_source"] == "oauth_default_agent_token"
+    assert publication.metadata["osf_agent_id"] == "agent-v4-alpha-memo"
+
+
 def test_osf_failure_marks_publication_without_blocking_derivation_web(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_OSF_PROJECT_ID", "root-osf-node")
     monkeypatch.setenv("RESEARKA_V2_OSF_TOKEN", "revoked-token")
@@ -333,7 +382,7 @@ def test_osf_failure_marks_publication_without_blocking_derivation_web(client: T
             "sha256": "sha256:real-dw-hash",
         }
 
-    monkeypatch.setattr("runtime_core.workflow.mint_publication_doi", fake_mint_publication_doi)
+    monkeypatch.setattr("runtime_core.osf.mint_publication_doi", fake_mint_publication_doi)
     monkeypatch.setattr("runtime_core.workflow.emit_publication_to_derivation_web", fake_emit_publication_to_derivation_web)
 
     seed = client.post(

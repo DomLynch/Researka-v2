@@ -8,7 +8,7 @@ from contracts import ArticleType, Decision, ObjectType, ResearchObject, Runtime
 from .compiler import compile_publication
 from .derivation_web import emit_decision_to_derivation_web, emit_publication_to_derivation_web
 from .integrity_client import check_integrity, index_integrity
-from .osf import mint_publication_doi, mint_publication_doi_with_oauth, osf_publication_metadata_from_env
+from .osf import mint_publication_doi_from_repository, osf_publication_metadata_from_env
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
 from .review_contract import (
@@ -114,18 +114,7 @@ def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -
 
 
 def _mint_publication_doi(repository: RuntimeRepository, publication: ResearchObject) -> dict:
-    agent_id = str(publication.metadata.get("author_agent_id") or publication.metadata.get("authenticated_agent_id") or "").strip()
-    if agent_id:
-        token_metadata = repository.get_osf_oauth_token(agent_id)
-        if token_metadata:
-            osf_metadata, updated_token_metadata = mint_publication_doi_with_oauth(
-                publication,
-                token_metadata=token_metadata,
-            )
-            if updated_token_metadata != token_metadata:
-                repository.store_osf_oauth_token(agent_id, updated_token_metadata)
-            return osf_metadata
-    return mint_publication_doi(publication)
+    return mint_publication_doi_from_repository(repository, publication)
 
 
 def _integrity_payload_from_submission(submission: ResearchObject) -> dict[str, Any]:

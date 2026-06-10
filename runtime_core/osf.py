@@ -523,6 +523,28 @@ def mint_publication_doi_with_oauth(
     return metadata, updated_token_metadata
 
 
+def _publication_osf_agent_ids(publication: ResearchObject) -> list[str]:
+    primary = str(publication.metadata.get("author_agent_id") or publication.metadata.get("authenticated_agent_id") or "").strip()
+    default_agent = str(os.environ.get("RESEARKA_V2_OSF_DEFAULT_AGENT_ID") or os.environ.get("RESEARKA_V2_OSF_FALLBACK_AGENT_ID") or "").strip()
+    return list(dict.fromkeys(agent_id for agent_id in (primary, default_agent) if agent_id))
+
+
+def mint_publication_doi_from_repository(repository: Any, publication: ResearchObject) -> dict[str, Any]:
+    primary_agent = str(publication.metadata.get("author_agent_id") or publication.metadata.get("authenticated_agent_id") or "").strip()
+    for agent_id in _publication_osf_agent_ids(publication):
+        token_metadata = repository.get_osf_oauth_token(agent_id)
+        if not token_metadata:
+            continue
+        metadata, updated_token_metadata = mint_publication_doi_with_oauth(publication, token_metadata=token_metadata)
+        if updated_token_metadata != token_metadata:
+            repository.store_osf_oauth_token(agent_id, updated_token_metadata)
+        if agent_id != primary_agent:
+            metadata["osf_auth_source"] = "oauth_default_agent_token"
+            metadata["osf_agent_id"] = agent_id
+        return metadata
+    return mint_publication_doi(publication)
+
+
 def backfill_missing_publication_dois(
     repository: Any,
     *,
@@ -554,13 +576,13 @@ def backfill_missing_publication_dois(
     }
     if not apply:
         for publication in candidates:
-            agent_id = str(publication.metadata.get("author_agent_id") or publication.metadata.get("authenticated_agent_id") or "").strip()
-            has_oauth = bool(agent_id and repository.get_osf_oauth_token(agent_id))
+            agent_ids = _publication_osf_agent_ids(publication)
+            has_oauth = next((agent_id for agent_id in agent_ids if repository.get_osf_oauth_token(agent_id)), None)
             summary["records"].append(
                 {
                     "publication_id": publication.id,
                     "title": publication.title,
-                    "agent_id": agent_id or None,
+                    "agent_id": agent_ids[0] if agent_ids else None,
                     "status": "dry_run",
                     "mint_source": "oauth_agent_token" if has_oauth else "service_token" if resolved_config else "not_configured",
                 }
@@ -570,15 +592,10 @@ def backfill_missing_publication_dois(
     for publication in candidates:
         record: dict[str, Any] = {"publication_id": publication.id, "title": publication.title}
         try:
-            agent_id = str(publication.metadata.get("author_agent_id") or publication.metadata.get("authenticated_agent_id") or "").strip()
-            token_metadata = repository.get_osf_oauth_token(agent_id) if agent_id else None
-            if token_metadata:
-                metadata, updated_token_metadata = mint_publication_doi_with_oauth(publication, token_metadata=token_metadata)
-                if updated_token_metadata != token_metadata:
-                    repository.store_osf_oauth_token(agent_id, updated_token_metadata)
-            elif resolved_config is not None:
+            metadata = mint_publication_doi_from_repository(repository, publication)
+            if not metadata and resolved_config is not None:
                 metadata = mint_fn(publication, config=resolved_config)
-            else:
+            if not metadata:
                 raise RuntimeError("osf_not_configured_for_agent")
             updated = repository.update_object_metadata(publication.id, {**publication.metadata, **metadata})
             if updated is None:

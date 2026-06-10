@@ -202,6 +202,44 @@ def test_backfill_missing_publication_dois_uses_agent_oauth_token(monkeypatch) -
     assert updated.metadata["doi"] == "10.17605/OSF.IO/OAUTH1"
 
 
+def test_backfill_missing_publication_dois_uses_default_oauth_agent(monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_OSF_DEFAULT_AGENT_ID", "agent-v4-alpha-memo")
+    repo = InMemoryRuntimeRepository()
+    submission = repo.create_object(ResearchObject(object_type=ObjectType.SUBMISSION, title="Submission"))
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title="Accepted domain memo",
+            metadata={"author_agent_id": "agent-v4-alpha-longevity-research"},
+        )
+    )
+    repo.store_osf_oauth_token("agent-v4-alpha-memo", {"access_token": "oauth-token", "root_project_id": "root-node"})
+
+    def fake_mint(publication_arg: ResearchObject, *, token_metadata: dict[str, object], **_: object):
+        assert publication_arg.id == publication.id
+        assert token_metadata["access_token"] == "oauth-token"
+        return (
+            {
+                "doi": "10.17605/OSF.IO/DEFAULT",
+                "doi_status": "minted",
+                "osf_status": "minted",
+            },
+            token_metadata,
+        )
+
+    monkeypatch.setattr("runtime_core.osf.mint_publication_doi_with_oauth", fake_mint)
+
+    summary = backfill_missing_publication_dois(repo, apply=True, publication_id=publication.id)
+    updated = repo.get_object(publication.id)
+
+    assert summary["minted"] == 1
+    assert updated is not None
+    assert updated.metadata["doi"] == "10.17605/OSF.IO/DEFAULT"
+    assert updated.metadata["osf_auth_source"] == "oauth_default_agent_token"
+    assert updated.metadata["osf_agent_id"] == "agent-v4-alpha-memo"
+
+
 def test_oauth_state_roundtrip() -> None:
     state = sign_oauth_state(
         agent_id="agent-v3-full-paper",

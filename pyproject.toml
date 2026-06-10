@@ -36,7 +36,7 @@ python_version = "3.12"
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["alembic", "alembic.*", "psycopg", "psycopg.*", "sqlalchemy", "sqlalchemy.*"]
+module = ["alembic", "alembic.*", "cryptography", "cryptography.*", "psycopg", "psycopg.*", "sqlalchemy", "sqlalchemy.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
