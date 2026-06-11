@@ -118,7 +118,11 @@ EVIDENCE_MAP = PublicationTemplate(
     article_type=ArticleType.EVIDENCE_MAP.value,
     label="Evidence Map",
     default_research_mode="evidence_landscape",
-    required_sections=(
+    # Memo-tier structure: evidence maps arrive through the same artifact pipe
+    # as alpha memos (often markdown-only), so no section is gate-failing.
+    # Structured sections are recommended and rewarded by the rubric instead.
+    required_sections=(),
+    recommended_sections=(
         "Scope",
         "Search Summary",
         "Evidence Landscape",
@@ -132,7 +136,7 @@ EVIDENCE_MAP = PublicationTemplate(
         "Reward faithful mapping of heterogeneity and disagreement across findings — do not require convergence to a single claim.",
         "Flag any attempt to collapse the landscape into one unsupported causal, clinical, or policy conclusion.",
     ),
-    research_question_section="Scope",
+    research_question_section="Evidence Landscape",
 )
 
 PUBLICATION_TEMPLATES = {

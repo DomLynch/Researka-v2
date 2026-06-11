@@ -200,9 +200,20 @@ class SubmissionPayload(BaseModel):
         if not isinstance(data, dict):
             return data
         values = dict(data)
-        if values.get("artifact_type") != ArticleType.ALPHA_MEMO.value and values.get("article_type") != ArticleType.ALPHA_MEMO.value:
+        declared = str(values.get("article_type") or "").strip()
+        memo_types = {ArticleType.ALPHA_MEMO.value, ArticleType.EVIDENCE_MAP.value}
+        artifact_style = values.get("artifact_type") == ArticleType.ALPHA_MEMO.value or declared in memo_types
+        if not artifact_style:
             return values
-        values["article_type"] = ArticleType.ALPHA_MEMO.value
+        # An explicit non-alpha declaration (e.g. evidence_map) always wins —
+        # artifact_type is the bot's pipe identity, not the article type, and
+        # must never clobber a declared type.
+        if declared and declared != ArticleType.ALPHA_MEMO.value:
+            if declared not in memo_types:
+                return values
+            values["article_type"] = declared
+        else:
+            values["article_type"] = ArticleType.ALPHA_MEMO.value
         markdown = str(values.get("markdown") or values.get("body_markdown") or "")
         if markdown and not values.get("body_markdown"):
             values["body_markdown"] = markdown
