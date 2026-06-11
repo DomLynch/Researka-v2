@@ -214,6 +214,25 @@ class WorkflowEngine:
                 "- Do not mark claim_support unsupported just because the manuscript reports one primary study rather than a multi-study synthesis. Unsupported means the conclusion outruns the reported results.\n"
                 "- When routed benchmark manuscripts use Search Summary and Key Findings headings, treat them as stand-ins for methods and results context rather than as missing empirical structure.\n\n"
             )
+        elif article_type == ArticleType.EVIDENCE_MAP.value:
+            article_specific = (
+                "You are the Researka evidence-map reviewer. Judge this as a faithful landscape of N findings on a "
+                "source-rich topic that genuinely does not collapse to one claim (e.g. metformin's scattered, "
+                "heterogeneous findings). This is a legitimate publication type, not a failed synthesis.\n\n"
+                "Evidence-map review checks:\n"
+                "- Check whether scope and search summary make the landscape's boundaries auditable.\n"
+                "- Score whether every mapped finding is attributed to specific cited sources.\n"
+                "- Reward faithful mapping of heterogeneity, tension, and disagreement across findings.\n"
+                "- Flag any collapse of the landscape into one unsupported causal, clinical, or policy conclusion.\n\n"
+                "Evidence-map calibration rules:\n"
+                "- Do NOT require a single bounded thesis or unifying claim — the article type's value is breadth and honest mapping, not convergence. Absence of one headline claim is correct here, not a flaw.\n"
+                "- claim_support is 'supported' when each mapped finding traces to its sources; it is 'unsupported' only when the map asserts links, effects, or a synthesis the cited evidence does not show.\n"
+                "- Reward an explicit Tensions and Gaps section that surfaces contradictions rather than smoothing them away.\n"
+                "- Do not penalize for not picking a winner among conflicting findings — that is the map's job.\n\n"
+                "Evidence-map accept threshold:\n"
+                "- Accept when the scope is bounded, the findings are source-attributed, heterogeneity is represented honestly, and nothing is overclaimed into a single conclusion.\n"
+                "- Reject when findings are unsourced, fabricated, or the map quietly editorializes a settled answer the evidence does not support.\n\n"
+            )
         else:
             article_specific = (
                 "You are the Researka rapid evidence synthesis reviewer. Judge this as a source-grounded synthesis, "

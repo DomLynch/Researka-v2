@@ -41,6 +41,12 @@ class ArticleType(StrEnum):
     # to accept the kind of paper the Research Agent Bot produces in its
     # full-synthesis pipeline, where RES would force destructive compression.
     RESEARCH_SYNTHESIS = "research_synthesis"
+    # EVIDENCE_MAP is the landscape path: a faithful survey of N findings on a
+    # source-rich topic that genuinely does not collapse to a single claim
+    # (e.g. metformin's scattered, heterogeneous findings). Reviewed for
+    # landscape fidelity and honest tension-mapping, not single-thesis
+    # convergence — so source-rich topics stop burning the strict reviewer.
+    EVIDENCE_MAP = "evidence_map"
 
 
 class ObjectType(StrEnum):

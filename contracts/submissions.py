@@ -53,6 +53,15 @@ _TYPE_THRESHOLDS: dict[str, dict[str, object]] = {
         "minimum_recency_ratio": 0.5,
         "minimum_research_question_words": 50,
     },
+    ArticleType.EVIDENCE_MAP.value: {
+        # An evidence map only earns its keep on source-rich topics — it must
+        # survey a real spread of findings, so it needs a meaningful citation
+        # floor. But it deliberately does not converge to one claim, so the
+        # research-question word budget is relaxed (the Scope section is short).
+        "minimum_citations": 10,
+        "minimum_recency_ratio": 0.3,
+        "minimum_research_question_words": 30,
+    },
     ArticleType.RESEARCH_SYNTHESIS.value: {
         # V3 full-paper lane keeps the live Researka source floor at 12.
         # Keep the original low body floor: 2-3k word papers may pass.

@@ -114,11 +114,33 @@ RESEARCH_SYNTHESIS = PublicationTemplate(
     minimum_body_word_count=2000,
 )
 
+EVIDENCE_MAP = PublicationTemplate(
+    article_type=ArticleType.EVIDENCE_MAP.value,
+    label="Evidence Map",
+    default_research_mode="evidence_landscape",
+    required_sections=(
+        "Scope",
+        "Search Summary",
+        "Evidence Landscape",
+        "Findings Map",
+        "Tensions and Gaps",
+        "Limitations",
+    ),
+    review_checks=(
+        "Check whether the scope and search summary make the landscape's boundaries auditable.",
+        "Score whether every mapped finding is attributed to specific cited sources.",
+        "Reward faithful mapping of heterogeneity and disagreement across findings — do not require convergence to a single claim.",
+        "Flag any attempt to collapse the landscape into one unsupported causal, clinical, or policy conclusion.",
+    ),
+    research_question_section="Scope",
+)
+
 PUBLICATION_TEMPLATES = {
     ALPHA_MEMO.article_type: ALPHA_MEMO,
     RAPID_EVIDENCE_SYNTHESIS.article_type: RAPID_EVIDENCE_SYNTHESIS,
     EMPIRICAL_STUDY.article_type: EMPIRICAL_STUDY,
     RESEARCH_SYNTHESIS.article_type: RESEARCH_SYNTHESIS,
+    EVIDENCE_MAP.article_type: EVIDENCE_MAP,
 }
 
 
