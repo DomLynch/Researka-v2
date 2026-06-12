@@ -6,7 +6,7 @@ import subprocess
 import hashlib
 import hmac
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, Body, FastAPI, HTTPException, Request
@@ -77,6 +77,10 @@ def _resolve_git_sha() -> str:
 _SERVICE_GIT_SHA = _resolve_git_sha()
 DEFAULT_AGENT_DAILY_LIMIT = 10
 DEFAULT_INTAKE_REJECTION_BACKOFF = 3
+# Hours after which an intake rejection stops arming the submission backoff.
+# Blocked submits are never recorded, so without decay a 3-strike cluster
+# locks an agent out indefinitely; the window bounds the blackout instead.
+DEFAULT_INTAKE_REJECTION_BACKOFF_WINDOW_HOURS = 6
 _AGENT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,62}$")
 
 
@@ -386,6 +390,11 @@ def _failure_stage(decision: ResearchObject, review: ResearchObject | None) -> s
 
 
 def _consecutive_intake_rejections(repo: RuntimeRepository, *, agent_id: str) -> int:
+    window_hours = _env_int(
+        "RESEARKA_V2_INTAKE_REJECTION_BACKOFF_WINDOW_HOURS",
+        DEFAULT_INTAKE_REJECTION_BACKOFF_WINDOW_HOURS,
+    )
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours) if window_hours > 0 else None
     count = 0
     submissions = [
         obj
@@ -397,6 +406,16 @@ def _consecutive_intake_rejections(repo: RuntimeRepository, *, agent_id: str) ->
         decisions = repo.children_of(submission.id, ObjectType.DECISION)
         if not decisions:
             continue
+        if cutoff is not None:
+            created = submission.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            if created < cutoff:
+                # Time-decay: rejections older than the window no longer arm
+                # the backoff. Blocked submits are never recorded, so without
+                # this the streak could never break on its own and a reject
+                # cluster would black out the agent indefinitely.
+                break
         latest = decisions[-1]
         if _is_intake_rejection(latest):
             count += 1

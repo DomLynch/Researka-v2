@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, timezone
 import logging
 from typing import Any, cast
 from fastapi.testclient import TestClient
@@ -1508,6 +1509,42 @@ def test_agent_backoff_after_consecutive_intake_rejections(client: TestClient, m
     )
     assert response.status_code == 429
     assert response.json()["detail"] == "agent_backoff_intake_rejections"
+
+
+def test_agent_backoff_intake_rejections_decay_after_window(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    monkeypatch.setenv("RESEARKA_V2_INTAKE_REJECTION_BACKOFF", "3")
+    monkeypatch.setenv("RESEARKA_V2_INTAKE_REJECTION_BACKOFF_WINDOW_HOURS", "6")
+    create_resp = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={"agent_id": "agent-1"},
+    )
+    repo = _repository(client)
+    stale = datetime.now(timezone.utc) - timedelta(hours=7)
+    for index in range(3):
+        submission = repo.create_object(
+            ResearchObject(
+                object_type=ObjectType.SUBMISSION,
+                title=f"bad submission {index}",
+                created_at=stale,
+                metadata={"authenticated_agent_id": "agent-1", "author_agent_id": "agent-1"},
+            )
+        )
+        repo.create_object(
+            ResearchObject(
+                object_type=ObjectType.DECISION,
+                parent_object_id=submission.id,
+                title="intake reject",
+                metadata={"decision": Decision.REJECT.value, "notes": ["intake gate rejection"]},
+            )
+        )
+    response = client.post(
+        "/submissions",
+        headers={"x-api-key": create_resp.json()["raw_key"]},
+        json=_minimal_submission_payload(),
+    )
+    assert response.status_code == 200
 
 
 def test_per_agent_key_usage_tracked_in_list(client: TestClient, monkeypatch) -> None:
