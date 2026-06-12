@@ -11,6 +11,7 @@ from runtime_core.providers import FallbackProvider, MimoProvider, MiniMaxProvid
 from runtime_core.reviewer_panel import ReviewerPanel, reviewer_from_env
 from runtime_core.repos import InMemoryRuntimeRepository
 from runtime_core.sanitizer import sanitize_source_ledger
+import runtime_core.workflow as workflow
 from runtime_core.workflow import (
     WorkflowEngine,
 )
@@ -171,7 +172,7 @@ def test_publish_uses_submission_body_when_metadata_body_missing() -> None:
     assert publication.body_markdown.startswith("# Full manuscript")
 
 
-def test_publish_preserves_submission_audit_hashes() -> None:
+def test_publish_preserves_submission_audit_hashes(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = InMemoryRuntimeRepository()
     submission = repo.create_object(ResearchObject(
         object_type=ObjectType.SUBMISSION,
@@ -192,6 +193,15 @@ def test_publish_preserves_submission_audit_hashes() -> None:
             "author_signature": "sha256:paper",
         },
     ))
+    monkeypatch.setattr(
+        workflow,
+        "_mint_publication_doi",
+        lambda repository, publication: {
+            "doi": "10.17605/OSF.IO/TEST1",
+            "doi_status": "minted",
+            "content_hash": "sha256:recomputed-provider-hash",
+        },
+    )
 
     result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
 
@@ -203,6 +213,7 @@ def test_publish_preserves_submission_audit_hashes() -> None:
     assert publication.metadata["submission_payload_hash"] == "sha256:payload"
     assert publication.metadata["source_citation_hash"] == "sha256:sources"
     assert publication.metadata["submission_identity_key"] == "sha256:identity"
+    assert publication.metadata["doi_status"] == "minted"
 
 
 def test_publish_dedupes_by_submission_identity_key() -> None:

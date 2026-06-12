@@ -89,6 +89,14 @@ def _publication_identity_metadata(submission_metadata: dict) -> dict:
     return metadata
 
 
+def _merge_publication_metadata(existing: dict, update: dict) -> dict:
+    metadata = {**existing, **update}
+    for key in PUBLICATION_DEDUPE_METADATA_KEYS:
+        if existing.get(key):
+            metadata[key] = existing[key]
+    return metadata
+
+
 def _publication_dedupe_markers(metadata: dict) -> set[str]:
     return {
         str(value).strip()
@@ -770,11 +778,16 @@ class WorkflowEngine:
         try:
             osf_metadata = _mint_publication_doi(repository, publication)
             if osf_metadata:
-                publication = repository.update_object_metadata(publication.id, {**publication.metadata, **osf_metadata}) or publication
+                publication = repository.update_object_metadata(
+                    publication.id, _merge_publication_metadata(publication.metadata, osf_metadata)
+                ) or publication
         except Exception as exc:
             publication = repository.update_object_metadata(
                 publication.id,
-                {**publication.metadata, "osf_status": "failed", "doi_status": "failed", "osf_error": str(exc)[:240]},
+                _merge_publication_metadata(
+                    publication.metadata,
+                    {"osf_status": "failed", "doi_status": "failed", "osf_error": str(exc)[:240]},
+                ),
             ) or publication
 
         try:
@@ -785,8 +798,13 @@ class WorkflowEngine:
                 decision=decision,
             )
             if dw_metadata:
-                publication = repository.update_object_metadata(publication.id, {**publication.metadata, **dw_metadata}) or publication
+                publication = repository.update_object_metadata(
+                    publication.id, _merge_publication_metadata(publication.metadata, dw_metadata)
+                ) or publication
         except Exception as exc:
-            repository.update_object_metadata(publication.id, {**publication.metadata, "dw_status": "failed", "dw_error": str(exc)[:240]})
+            repository.update_object_metadata(
+                publication.id,
+                _merge_publication_metadata(publication.metadata, {"dw_status": "failed", "dw_error": str(exc)[:240]}),
+            )
         index_integrity(_integrity_payload_from_publication(publication, submission))
         return {"publication_id": publication.id, "deduped": False}
