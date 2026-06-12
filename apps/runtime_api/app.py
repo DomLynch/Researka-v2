@@ -451,7 +451,9 @@ def _submission_metadata_for_agent(payload: SubmissionPayload, agent_id: str | N
 def _is_hidden_public_record(obj: ResearchObject | None) -> bool:
     if obj is None:
         return False
-    return str(obj.metadata.get("public_visibility") or "listed").strip().lower() == "hidden"
+    # "provisional" = published by a not-yet-trusted agent: quarantined from
+    # every public surface (listings AND direct fetch) until promoted via /ops.
+    return str(obj.metadata.get("public_visibility") or "listed").strip().lower() in {"hidden", "provisional"}
 
 
 def _is_publicly_listed(publication: ResearchObject) -> bool:
@@ -1387,6 +1389,20 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         daily_limit = _daily_limit_from_body(body)
         response = app.state.repository.create_api_key(agent_id, label=label, daily_limit=daily_limit)
         return response.model_dump(mode="json")
+
+    @app.post("/ops/publications/{publication_id}/visibility")
+    def set_publication_visibility(publication_id: str, request: Request, body: dict = Body(default_factory=dict)) -> dict:
+        _check_admin(request)
+        visibility = str(body.get("visibility") or "").strip().lower()
+        if visibility not in {"listed", "hidden", "provisional"}:
+            raise HTTPException(status_code=422, detail="visibility_must_be_listed_hidden_or_provisional")
+        publication = app.state.repository.get_object(publication_id)
+        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+            raise HTTPException(status_code=404, detail="publication_not_found")
+        updated = app.state.repository.update_object_metadata(
+            publication_id, {**publication.metadata, "public_visibility": visibility}
+        )
+        return {"id": publication_id, "public_visibility": visibility, "updated": updated is not None}
 
     @app.get("/ops/keys")
     def list_keys(request: Request) -> dict:

@@ -23,6 +23,12 @@ def disable_integrity_by_default(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def disable_doi_check_by_default(monkeypatch):
+    # Tests must never hit doi.org; gate tests re-enable with a mocked client.
+    monkeypatch.setenv("RESEARKA_DOI_CHECK_ENABLED", "0")
+
+
+@pytest.fixture(autouse=True)
 def isolate_rate_limit_db(monkeypatch, tmp_path):
     monkeypatch.setenv("RESEARKA_V2_RATE_LIMIT_DB_PATH", str(tmp_path / "rate_limits.db"))
 

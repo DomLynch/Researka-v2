@@ -9,6 +9,26 @@ from .models import ArticleType, GateResult
 from .templates import RAPID_EVIDENCE_SYNTHESIS, publication_template_for
 
 _DOI_PATTERN = re.compile(r"^10\.\d{4,}/\S+$")
+# Prose-citation patterns: identifiers an author cites inside section text.
+# Every one must be a member of the submitted source bundle — citing receipts
+# the bundle does not carry is the canonical fabrication/slip vector.
+_PROSE_DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[^\s\"\'\])}>,;]+", re.IGNORECASE)
+_PROSE_PMID_PATTERN = re.compile(r"\bPMID[:\s#-]*(\d{4,12})\b", re.IGNORECASE)
+
+
+def _clean_doi(value: str) -> str:
+    return value.strip().rstrip(".,;").lower()
+
+
+def _citation_membership_failures(sections: dict[str, str], source_bundle: list[dict]) -> list[str]:
+    prose = "\n".join(str(value) for value in sections.values())
+    bundle_dois = {_clean_doi(str(entry.get("doi") or "")) for entry in source_bundle}
+    bundle_pmids = {str(entry.get("pmid") or entry.get("id") or "").strip() for entry in source_bundle}
+    cited_dois = {_clean_doi(match) for match in _PROSE_DOI_PATTERN.findall(prose)}
+    cited_pmids = set(_PROSE_PMID_PATTERN.findall(prose))
+    missing = [f"doi:{doi}" for doi in sorted(cited_dois - bundle_dois)]
+    missing.extend(f"pmid:{pmid}" for pmid in sorted(cited_pmids - bundle_pmids))
+    return missing
 
 
 class SourceBundleEntry(BaseModel):
@@ -229,5 +249,17 @@ def run_submission_template_checks(
         results.append(
             GateResult(name="doi_sanity", passed=True, reason="all provided DOIs are syntactically valid")
         )
+
+    missing_citations = _citation_membership_failures(sections, source_bundle)
+    results.append(
+        GateResult(
+            name="citation_membership",
+            passed=not missing_citations,
+            reason=(
+                "every DOI/PMID cited in the manuscript must appear in the source bundle"
+                + (f"; missing: {', '.join(missing_citations[:10])}" if missing_citations else "")
+            ),
+        )
+    )
 
     return results

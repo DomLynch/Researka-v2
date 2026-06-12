@@ -475,6 +475,21 @@ def test_can_list_publications_after_processing(client: TestClient) -> None:
         },
     ).json()["submission"]
     _run_until_idle(client)
+    # Zero-trust publish tier: a first-time agent's publication lands
+    # provisional — verifiable but excluded from public lists until promoted.
+    created = [
+        pub
+        for pub in _repository(client).list_objects(ObjectType.PUBLICATION)
+        if pub.parent_object_id == submission["id"]
+    ]
+    assert created and created[0].metadata["public_visibility"] == "provisional"
+    assert client.get("/publications").json()["publications"] == []
+    promoted = client.post(
+        f"/ops/publications/{created[0].id}/visibility",
+        json={"visibility": "listed"},
+        headers={"x-api-key": "test-admin-key"},
+    )
+    assert promoted.status_code == 200
     publications = client.get("/publications")
     assert publications.status_code == 200
     publication = publications.json()["publications"][0]
