@@ -1006,7 +1006,10 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         return app.state.worker.run_once(target_object_id=target_object_id)
 
     @app.get("/jobs/queue")
-    def queue() -> dict:
+    def queue(request: Request) -> dict:
+        # Operator-only: queued jobs + the full event log expose other agents'
+        # payloads and pipeline internals — never public.
+        _check_admin(request)
         return {
             "queued": [job.model_dump(mode="json") for job in app.state.repository.queued_jobs()],
             "events": [event.model_dump(mode="json") for event in app.state.repository.list_events()],

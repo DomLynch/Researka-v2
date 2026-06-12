@@ -65,7 +65,7 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     assert submission_metadata["topic"] == "cellular_senescence"
 
     for _ in range(12):
-        queue = client.get("/jobs/queue").json()["queued"]
+        queue = client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]
         if not queue:
             break
         response = client.post("/jobs/run-once", headers=_worker_headers())
@@ -255,7 +255,7 @@ def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
     assert seed2.status_code == 200
 
     for _ in range(12):
-        queue = client.get("/jobs/queue").json()["queued"]
+        queue = client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]
         if not queue:
             break
         client.post("/jobs/run-once", headers=_worker_headers())
@@ -283,7 +283,7 @@ def test_end_to_end_publish_uses_full_body_when_present(client: TestClient) -> N
     seed = client.post("/submissions", json=payload)
     assert seed.status_code == 200
     for _ in range(12):
-        if not client.get("/jobs/queue").json()["queued"]:
+        if not client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]:
             break
         assert client.post("/jobs/run-once", headers=_worker_headers()).status_code == 200
     publication = _repository(client).list_objects("publication")[0]
@@ -337,7 +337,7 @@ def test_publication_mints_osf_doi_before_derivation_web_metadata(client: TestCl
     assert seed.status_code == 200
 
     for _ in range(12):
-        queue = client.get("/jobs/queue").json()["queued"]
+        queue = client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]
         if not queue:
             break
         assert client.post("/jobs/run-once", headers=_worker_headers()).status_code == 200
@@ -391,7 +391,7 @@ def test_publication_uses_connected_osf_oauth_token_before_service_token(client:
     assert seed.status_code == 200
 
     for _ in range(12):
-        queue = client.get("/jobs/queue").json()["queued"]
+        queue = client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]
         if not queue:
             break
         assert client.post("/jobs/run-once", headers=_worker_headers()).status_code == 200
@@ -440,7 +440,7 @@ def test_publication_uses_default_osf_oauth_agent_when_submitter_is_not_connecte
     assert seed.status_code == 200
 
     for _ in range(12):
-        queue = client.get("/jobs/queue").json()["queued"]
+        queue = client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]
         if not queue:
             break
         assert client.post("/jobs/run-once", headers=_worker_headers()).status_code == 200
@@ -481,7 +481,7 @@ def test_osf_failure_marks_publication_without_blocking_derivation_web(client: T
     assert seed.status_code == 200
 
     for _ in range(12):
-        queue = client.get("/jobs/queue").json()["queued"]
+        queue = client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]
         if not queue:
             break
         assert client.post("/jobs/run-once", headers=_worker_headers()).status_code == 200

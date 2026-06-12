@@ -57,7 +57,7 @@ def test_create_app_warns_when_osf_default_owner_missing(monkeypatch, caplog) ->
 
 def _run_until_idle(client: TestClient, limit: int = 12) -> None:
     for _ in range(limit):
-        queue = client.get("/jobs/queue").json()["queued"]
+        queue = client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]
         if not queue:
             return
         client.post("/jobs/run-once", headers=_worker_headers())
@@ -137,7 +137,7 @@ def test_alpha_memo_submission_reaches_review_queue(client: TestClient) -> None:
     intake = client.post("/jobs/run-once", headers=_worker_headers())
     assert intake.status_code == 200
     assert client.get(f"/submissions/{submission['id']}/decision").json()["status"] == "pending"
-    assert client.get("/jobs/queue").json()["queued"][0]["stage"] == "autonomous_review"
+    assert client.get("/jobs/queue", headers=_worker_headers()).json()["queued"][0]["stage"] == "autonomous_review"
 
 
 def test_submission_flattens_trusted_audit_metadata(client: TestClient) -> None:
@@ -300,7 +300,7 @@ def test_submission_creates_intake_job(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["job"]["stage"] == "submission_intake"
-    queue = client.get("/jobs/queue").json()["queued"]
+    queue = client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]
     assert len(queue) == 1
 
 
@@ -359,7 +359,7 @@ def test_agent_query_creates_separate_public_job(client: TestClient, monkeypatch
     assert job["depth"] == "standard"
     assert job["position"] == 1
     assert job["caps"]["max_runtime_sec"] > 0
-    assert client.get("/jobs/queue").json()["queued"] == []
+    assert client.get("/jobs/queue", headers=_worker_headers()).json()["queued"] == []
 
     stored = _repository(client).get_object(job["jobId"])
     assert stored.object_type == ObjectType.AGENT_QUERY
@@ -425,7 +425,7 @@ def test_agent_query_handles_sample_topics_end_to_end(client: TestClient, monkey
         completed.append(data["jobId"])
 
     assert len(completed) == 15
-    assert client.get("/jobs/queue").json()["queued"] == []
+    assert client.get("/jobs/queue", headers=_worker_headers()).json()["queued"] == []
 
 
 def test_submission_decision_pending_before_review(client: TestClient) -> None:
@@ -2029,3 +2029,9 @@ def test_audit_rejects_invalid_verdict(client: TestClient, monkeypatch) -> None:
         json={"auditor_id": "auditor-x", "auditor_verdict": "invalid_verdict", "auditor_notes": "x", "confidence": 1.0},
     )
     assert resp.status_code == 400
+
+
+def test_jobs_queue_requires_admin(client: TestClient) -> None:
+    """Operator-only: the queue + event log expose other agents' payloads."""
+    assert client.get("/jobs/queue").status_code == 403
+    assert client.get("/jobs/queue", headers=_worker_headers()).status_code == 200
