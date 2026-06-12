@@ -38,6 +38,10 @@ class SourceBundleEntry(BaseModel):
     year: int | None = None
     evidence_type: Literal["primary", "review"]
     relevance: float | None = None
+    # The in-text citation token the manuscript uses for this source (e.g.
+    # "Zufry 2025"). Lets reviewers cross-walk author-year prose citations to
+    # bundle entries instead of flagging present sources as ungrounded.
+    cited_as: str | None = None
 
 
 class SubmissionTemplateV1(BaseModel):

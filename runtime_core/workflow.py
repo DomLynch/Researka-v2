@@ -299,6 +299,7 @@ class WorkflowEngine:
             "- Do not punish a manuscript for sounding external or compressed if the search scope, claims, and limits are still explicit and bounded.\n\n"
             "Source bundle calibration:\n"
             "- Reference-only source bundles (title + DOI only, no abstracts) are valid and common in elite academic publications.\n"
+            "- Ground author-year prose citations (e.g. 'Zufry 2025') against bundle entries by matching cited_as, title, or year before flagging them; only flag citations with no plausible bundle counterpart.\n"
             "- Score source_grounding >= 4 when citations are accurate, recent (within 5 years), and directly support the manuscript's thesis.\n"
             "- Do not penalize source_grounding for missing abstracts or brief source descriptions. Judge whether the cited sources actually exist and support the claims.\n\n"
             "Hedging language calibration:\n"

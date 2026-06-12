@@ -224,6 +224,17 @@ def test_provisional_hidden_from_public_list_and_admin_promotes(client) -> None:
     assert publication.id in listed_ids
 
 
+def test_bundle_cited_as_is_first_class_and_reviewers_crosswalk() -> None:
+    from contracts.submissions import SourceBundleEntry
+
+    entry = SourceBundleEntry.model_validate(
+        {"title": "T2D RCT", "doi": "10.1000/x", "year": 2025, "evidence_type": "primary", "cited_as": "Zufry 2025"}
+    )
+    assert entry.model_dump()["cited_as"] == "Zufry 2025"
+    prompt = WorkflowEngine()._review_system_prompt(ArticleType.RESEARCH_SYNTHESIS.value)
+    assert "cited_as" in prompt and "author-year" in prompt
+
+
 # --- Gate 4: reviewer prompt fencing ----------------------------------------------
 
 
