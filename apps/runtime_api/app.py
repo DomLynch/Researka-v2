@@ -462,6 +462,14 @@ def _is_publicly_listed(publication: ResearchObject) -> bool:
     return True
 
 
+def _publication_response(publication: ResearchObject) -> dict:
+    payload = publication.model_dump(mode="json")
+    payload["doi"] = publication.metadata.get("doi")
+    payload["doi_status"] = publication.metadata.get("doi_status")
+    payload["osf_url"] = publication.metadata.get("osf_url")
+    return payload
+
+
 def _publication_submission(repo: RuntimeRepository, publication: ResearchObject) -> ResearchObject | None:
     submission = repo.get_object(publication.parent_object_id) if publication.parent_object_id else None
     if submission is None or submission.object_type != ObjectType.SUBMISSION:
@@ -1047,14 +1055,14 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     @app.get("/publications")
     def list_publications() -> dict:
         publications = app.state.repository.list_objects(ObjectType.PUBLICATION)
-        return {"publications": [publication.model_dump(mode="json") for publication in publications if _is_publicly_listed(publication)]}
+        return {"publications": [_publication_response(publication) for publication in publications if _is_publicly_listed(publication)]}
 
     @app.get("/publications/{publication_id}")
     def get_publication(publication_id: str) -> dict:
         publication = app.state.repository.get_object(publication_id)
         if publication is None or publication.object_type != ObjectType.PUBLICATION or _is_hidden_public_record(publication):
             raise HTTPException(status_code=404, detail="publication_not_found")
-        payload = publication.model_dump(mode="json")
+        payload = _publication_response(publication)
         payload["sidecars"] = sidecar_manifest(publication.id)
         payload["provenance_passport"] = _publication_passport(app.state.repository, publication)
         return payload

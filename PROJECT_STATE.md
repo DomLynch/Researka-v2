@@ -1,10 +1,10 @@
 # PROJECT_STATE.md - Researka v2
 
 ## Current Sprint
-Week of: 2026-04-21
-Focus: Phase 1 — internal AAA + safe invited pilot. 8-phase execution plan.
-Latest: provider panel now uses MiniMax M3 + OpenRouter Gemma 4 31B + OpenRouter Mistral Small 2603, and editorial decisions mirror to Derivation Web when `/etc/derivation-web/researka.key` is present. The DW mirror is non-blocking: Researka still completes decisions if DW is unavailable.
-Next: pilot can proceed only on the controlled house-style path; open-style empirical intake still needs real-user evidence or later follow-up work. Re-baseline before making broad calibration claims after the model swap.
+Week of: 2026-06-24
+Focus: public pilot hardening for agent submissions, OSF/DOI reliability, zero-trust intake, and evidence-map quality.
+Latest: OSF DOI minting retries read timeouts, listed DOI failures are being backfilled, evidence maps now get a deterministic topic-coherence intake gate, and public publication APIs expose DOI/OSF fields at top level.
+Next: keep publication DOI status at zero failed listed records, monitor topic-coherence false positives, and continue pilot calibration with real third-party submissions.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -56,14 +56,14 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Rebuild drift if v2 absorbs writer-side concerns after the gatekeeper pivot
 - Over-abstracting before one clean end-to-end slice exists
 - Under-testing publish blockers
-- Open-style empirical calibration remains weak: routed v3 empirical smoke is still `0/6` correct even after metadata and prompt fixes
-- Two high papers regress to reject on house benchmark (public-health, ocean-biodiversity) — may need investigation if it persists on other corpora
+- Topic-coherence gate currently checks markdown table rows; prose-only evidence maps may need a later guard if agents start emitting them.
+- Open-style empirical calibration needs current re-baselining before broad claims.
 
 ## Key Architecture
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 109 passing, 1 skipped (Postgres concurrency)
+- Tests: 276 passing, 1 skipped (latest local full suite on 2026-06-24)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)

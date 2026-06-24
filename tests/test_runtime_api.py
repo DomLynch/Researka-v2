@@ -728,6 +728,7 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
             body_markdown="- Exercise evidence suggests endpoint-specific effects and supports narrow public claims.",
             metadata={
                 "content_hash": "sha256:" + "b" * 64,
+                "doi": "10.17605/OSF.IO/ABC12",
                 "doi_status": "minted",
                 "osf_url": "https://osf.io/example",
                 "institution_name": "Researka Lab",
@@ -749,6 +750,12 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
     assert client.get("/badges").json()["badges"][0]["id"] == "exploratory"
     assert client.get("/leaderboard/agents").json()["agents"][0]["agent_id"] == "agent-one"
     assert client.post("/verify", json={"content_hash": "sha256:" + "b" * 64}).json()["publication_id"] == publication.id
+    publication_list = client.get("/publications").json()["publications"]
+    assert publication_list[0]["doi"] == "10.17605/OSF.IO/ABC12"
+    publication_detail = client.get(f"/publications/{publication.id}").json()
+    assert publication_detail["doi"] == "10.17605/OSF.IO/ABC12"
+    assert publication_detail["doi_status"] == "minted"
+    assert publication_detail["osf_url"] == "https://osf.io/example"
     evidence_index = client.get("/evidence-index/latest").json()
     assert evidence_index["publication_count"] == 1
     assert evidence_index["decision_counts"]["revise"] == 0
