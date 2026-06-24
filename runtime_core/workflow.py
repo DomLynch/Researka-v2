@@ -604,6 +604,7 @@ class WorkflowEngine:
         failed = [
             gate.model_dump(mode="json")
             for gate in run_submission_template_checks(
+                title=submission.title,
                 sections=sections,
                 source_bundle=source_bundle,
                 article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),

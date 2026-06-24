@@ -94,3 +94,74 @@ def test_valid_evidence_map_passes_template_checks() -> None:
 
     failed = [r.name for r in results if not r.passed]
     assert failed == [], failed
+
+
+def test_evidence_map_rejects_multiple_off_topic_rows() -> None:
+    sections = {
+        "Evidence Landscape": (
+            "Exercise evidence is mapped across populations, comparators, endpoints, source types, and effect "
+            "directions so readers can inspect heterogeneous findings without pretending the corpus converges "
+            "to one universal clinical or policy claim."
+        ),
+        "Findings Map": """
+| population | comparator | finding | source |
+|---|---|---|---|
+| older adults | control | exercise training improved fitness and strength | doi:10.1000/ex1 |
+| adults with obesity | placebo | average losses of 9.6-17.4% of initial body weight at week 68 | doi:10.1000/off1 |
+| aged adults | sham | this method is impractical and may reduce arterial compliance by about 20% | doi:10.1000/off2 |
+| colon-cancer risk adults | usual care | physical activity may prevent approximately 15% of colon cancers | doi:10.1000/ex2 |
+""",
+    }
+    results = run_submission_template_checks(
+        title="Exercise: evidence map - 18 findings across 18 sources",
+        sections=sections,
+        source_bundle=[
+            {
+                "title": f"Exercise source {i}",
+                "doi": f"10.1000/ex{i}",
+                "year": 2024,
+                "evidence_type": "primary",
+            }
+            for i in range(10)
+        ],
+        article_type=ArticleType.EVIDENCE_MAP.value,
+    )
+
+    gate = next(result for result in results if result.name == "topic_coherence")
+    assert not gate.passed
+    assert "doi:10.1000/off1" in gate.reason
+    assert "doi:10.1000/off2" in gate.reason
+
+
+def test_evidence_map_accepts_topic_synonyms() -> None:
+    sections = {
+        "Evidence Landscape": (
+            "Exercise evidence is mapped across populations, comparators, endpoints, source types, and effect "
+            "directions so readers can inspect heterogeneous findings without pretending the corpus converges "
+            "to one universal clinical or policy claim."
+        ),
+        "Findings Map": """
+| population | comparator | finding | source |
+|---|---|---|---|
+| older adults | control | physical activity improved functional capacity | doi:10.1000/ex1 |
+| adults | control | resistance training improved muscle strength | doi:10.1000/ex2 |
+| older adults | sham | aerobic training improved fitness | doi:10.1000/ex3 |
+""",
+    }
+    results = run_submission_template_checks(
+        title="Exercise: evidence map - 18 findings across 18 sources",
+        sections=sections,
+        source_bundle=[
+            {
+                "title": f"Exercise source {i}",
+                "doi": f"10.1000/ex{i}",
+                "year": 2024,
+                "evidence_type": "primary",
+            }
+            for i in range(10)
+        ],
+        article_type=ArticleType.EVIDENCE_MAP.value,
+    )
+
+    gate = next(result for result in results if result.name == "topic_coherence")
+    assert gate.passed, gate.reason

@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 DOI_CATEGORY = "doi"
 PUBLICATION_TAG_PREFIX = "researka-publication:"
 OSF_TRANSIENT_ERROR_MARKERS = (":404:", ":409:", ":429:", ":500:", ":502:", ":503:", ":504:")
+OSF_TRANSIENT_TEXT_MARKERS = ("timed out", "timeout", "temporarily unavailable", "connection reset")
 OSF_RETRY_DELAYS_SECONDS = (0.5, 1.0, 2.0)
 
 
@@ -260,6 +261,8 @@ class OSFClient:
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"osf_request_failed:{method}:{path}:{exc.code}:{detail}") from exc
+        except TimeoutError as exc:
+            raise RuntimeError(f"osf_timeout:{method}:{path}:{exc}") from exc
         except error.URLError as exc:
             raise RuntimeError(f"osf_unreachable:{path}:{exc.reason}") from exc
         if status not in ok_statuses:
@@ -377,8 +380,12 @@ def _find_publication_node(client: OSFClient, root_project_id: str, publication_
     return None
 
 
-def _is_transient_osf_error(exc: RuntimeError, *, method: str, path: str) -> bool:
+def _is_transient_osf_error(exc: Exception, *, method: str, path: str) -> bool:
     message = str(exc)
+    if any(marker in message.lower() for marker in OSF_TRANSIENT_TEXT_MARKERS):
+        return True
+    if message.startswith(f"osf_timeout:{method}:{path}:"):
+        return True
     if message.startswith(f"osf_request_failed:{method}:{path}:"):
         return any(marker in message for marker in OSF_TRANSIENT_ERROR_MARKERS)
     return message.startswith(f"osf_unreachable:{path}:")
@@ -393,7 +400,7 @@ def _list_identifiers_with_retry(client: OSFClient, node_id: str) -> list[dict[s
     for attempt in range(len(OSF_RETRY_DELAYS_SECONDS) + 1):
         try:
             return client.list_identifiers(node_id)
-        except RuntimeError as exc:
+        except (RuntimeError, OSError) as exc:
             if attempt == len(OSF_RETRY_DELAYS_SECONDS) or not _is_transient_osf_error(exc, method="GET", path=path):
                 raise
             _sleep_before_retry(attempt)
@@ -405,7 +412,7 @@ def _mint_doi_with_retry(client: OSFClient, node_id: str) -> dict[str, Any]:
     for attempt in range(len(OSF_RETRY_DELAYS_SECONDS) + 1):
         try:
             return client.mint_doi(node_id)
-        except RuntimeError as exc:
+        except (RuntimeError, OSError) as exc:
             if attempt == len(OSF_RETRY_DELAYS_SECONDS) or not _is_transient_osf_error(exc, method="POST", path=path):
                 raise
             _sleep_before_retry(attempt)

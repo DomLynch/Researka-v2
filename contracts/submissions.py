@@ -14,6 +14,40 @@ _DOI_PATTERN = re.compile(r"^10\.\d{4,}/\S+$")
 # the bundle does not carry is the canonical fabrication/slip vector.
 _PROSE_DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[^\s\"\'\])}>,;]+", re.IGNORECASE)
 _PROSE_PMID_PATTERN = re.compile(r"\bPMID[:\s#-]*(\d{4,12})\b", re.IGNORECASE)
+_TABLE_SEPARATOR_PATTERN = re.compile(r"^:?-{3,}:?$")
+_TOPIC_STOPWORDS = {
+    "across",
+    "brief",
+    "evidence",
+    "findings",
+    "full",
+    "generating",
+    "hypothesis",
+    "map",
+    "paper",
+    "research",
+    "review",
+    "scoping",
+    "signal",
+    "signals",
+    "sources",
+    "synthesis",
+}
+_TOPIC_ALIASES = {
+    "exercise": (
+        "physical activity",
+        "training",
+        "fitness",
+        "aerobic",
+        "resistance",
+        "sedentary",
+        "muscle",
+        "strength",
+        "imst",
+    ),
+    "ai": ("artificial intelligence", "llm", "language model", "model"),
+    "models": ("model",),
+}
 
 
 def _clean_doi(value: str) -> str:
@@ -29,6 +63,49 @@ def _citation_membership_failures(sections: dict[str, str], source_bundle: list[
     missing = [f"doi:{doi}" for doi in sorted(cited_dois - bundle_dois)]
     missing.extend(f"pmid:{pmid}" for pmid in sorted(cited_pmids - bundle_pmids))
     return missing
+
+
+def _topic_anchors(title: str) -> set[str]:
+    topic = re.split(r":|\s+[—-]\s+", title, maxsplit=1)[0].lower()
+    tokens = {token for token in re.findall(r"[a-z0-9]+", topic) if len(token) > 2 or token == "ai"}
+    anchors = {token for token in tokens if token not in _TOPIC_STOPWORDS}
+    for token in tuple(anchors):
+        anchors.update(_TOPIC_ALIASES.get(token, ()))
+    return anchors
+
+
+def _markdown_table_rows(sections: dict[str, str]) -> list[str]:
+    rows: list[str] = []
+    for section in sections.values():
+        for raw_line in str(section).splitlines():
+            line = raw_line.strip()
+            if not (line.startswith("|") and line.endswith("|")):
+                continue
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if len(cells) < 3 or all(_TABLE_SEPARATOR_PATTERN.fullmatch(cell) for cell in cells):
+                continue
+            lower = " ".join(cells).lower()
+            if "finding" in lower and ("source" in lower or "population" in lower):
+                continue
+            rows.append(" ".join(cell for cell in cells if cell))
+    return rows
+
+
+def _matches_topic(row: str, anchors: set[str]) -> bool:
+    normalized = " ".join(re.findall(r"[a-z0-9]+", row.lower()))
+    tokens = set(normalized.split())
+    return any(anchor in normalized if " " in anchor else anchor in tokens for anchor in anchors)
+
+
+def _topic_coherence_failures(*, title: str, sections: dict[str, str]) -> list[str]:
+    anchors = _topic_anchors(title)
+    rows = _markdown_table_rows(sections)
+    if not anchors or not rows:
+        return []
+    weak = [row[:160] for row in rows if not _matches_topic(row, anchors)]
+    if len(weak) >= 2 or (len(weak) / len(rows)) > 0.15:
+        return weak[:5]
+    return []
 
 
 class SourceBundleEntry(BaseModel):
@@ -158,6 +235,7 @@ def _alpha_source_exception(article_type: str, citation_count: int, evidence_bun
 
 def run_submission_template_checks(
     *,
+    title: str = "",
     sections: dict[str, str],
     source_bundle: list[dict],
     article_type: str = ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
@@ -265,5 +343,18 @@ def run_submission_template_checks(
             ),
         )
     )
+
+    if active_template.article_type == ArticleType.EVIDENCE_MAP.value:
+        weak_rows = _topic_coherence_failures(title=title, sections=sections)
+        results.append(
+            GateResult(
+                name="topic_coherence",
+                passed=not weak_rows,
+                reason=(
+                    "evidence-map rows must stay anchored to the title topic"
+                    + (f"; weak rows: {'; '.join(weak_rows)}" if weak_rows else "")
+                ),
+            )
+        )
 
     return results

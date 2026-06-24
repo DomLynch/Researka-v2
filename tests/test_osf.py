@@ -24,12 +24,14 @@ class FakeOSFClient:
         existing_doi: str | None = None,
         identifier_failures: int = 0,
         mint_failures: int = 0,
+        mint_timeouts: int = 0,
         doi_after_mint_failure: str | None = None,
     ) -> None:
         self.existing_node = existing_node
         self.existing_doi = existing_doi
         self.identifier_failures = identifier_failures
         self.mint_failures = mint_failures
+        self.mint_timeouts = mint_timeouts
         self.doi_after_mint_failure = doi_after_mint_failure
         self.created = 0
         self.updated: list[tuple[str, bool]] = []
@@ -65,6 +67,9 @@ class FakeOSFClient:
 
     def mint_doi(self, node_id: str) -> dict[str, Any]:
         self.minted += 1
+        if self.mint_timeouts:
+            self.mint_timeouts -= 1
+            raise TimeoutError("The read operation timed out")
         if self.mint_failures:
             self.mint_failures -= 1
             self.existing_doi = self.doi_after_mint_failure
@@ -166,6 +171,27 @@ def test_mint_publication_doi_rechecks_identifiers_after_transient_mint_failure(
 
     assert client.minted == 1
     assert metadata["doi"] == "10.17605/OSF.IO/EXIST"
+
+
+def test_mint_publication_doi_retries_read_timeout(monkeypatch) -> None:
+    monkeypatch.setattr("runtime_core.osf.time.sleep", lambda _: None)
+    publication = ResearchObject(
+        id="pub-1",
+        object_type=ObjectType.PUBLICATION,
+        parent_object_id="sub-1",
+        title="Accepted paper",
+        body_markdown="Body",
+    )
+    client = FakeOSFClient(mint_timeouts=1)
+
+    metadata = mint_publication_doi(
+        publication,
+        config=OSFConfig(api_base_url="https://api.osf.io/v2", token="test-token", root_project_id="root-node"),
+        client=client,  # type: ignore[arg-type]
+    )
+
+    assert client.minted == 2
+    assert metadata["doi"] == "10.17605/OSF.IO/NODE1"
 
 
 def test_backfill_missing_publication_dois_uses_agent_oauth_token(monkeypatch) -> None:
