@@ -165,3 +165,32 @@ def test_evidence_map_accepts_topic_synonyms() -> None:
 
     gate = next(result for result in results if result.name == "topic_coherence")
     assert gate.passed, gate.reason
+
+
+def test_evidence_map_accepts_generic_label_before_topic_title() -> None:
+    sections = {
+        "Evidence Landscape": """
+| Evidence domain | Corpus slice | Strongest signal | Directness | Main limitation |
+|---|---|---|---|---|
+| TORC1 inhibitor / Skeletal, Fracture, and Bone | n=3 | null | 3 review | bounded |
+| TORC1 inhibitor / Immune and Inflammation | n=2 | null | 2 review | bounded |
+| TORC1 inhibitor / Cardiometabolic | n=1 | unclear | 1 review | bounded |
+""",
+    }
+    results = run_submission_template_checks(
+        title="Adjacent Evidence Brief: TORC1 inhibitor — full paper",
+        sections=sections,
+        source_bundle=[
+            {
+                "title": f"TORC1 inhibitor source {i}",
+                "doi": f"10.1000/torc{i}",
+                "year": 2024,
+                "evidence_type": "primary",
+            }
+            for i in range(10)
+        ],
+        article_type=ArticleType.EVIDENCE_MAP.value,
+    )
+
+    gate = next(result for result in results if result.name == "topic_coherence")
+    assert gate.passed, gate.reason

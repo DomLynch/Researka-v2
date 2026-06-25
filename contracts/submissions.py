@@ -15,8 +15,21 @@ _DOI_PATTERN = re.compile(r"^10\.\d{4,}/\S+$")
 _PROSE_DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[^\s\"\'\])}>,;]+", re.IGNORECASE)
 _PROSE_PMID_PATTERN = re.compile(r"\bPMID[:\s#-]*(\d{4,12})\b", re.IGNORECASE)
 _TABLE_SEPARATOR_PATTERN = re.compile(r"^:?-{3,}:?$")
+_TABLE_HEADER_CELLS = {
+    "comparator",
+    "corpus slice",
+    "directness",
+    "evidence domain",
+    "finding",
+    "main limitation",
+    "outcome class",
+    "population",
+    "source",
+    "strongest signal",
+}
 _TOPIC_STOPWORDS = {
     "across",
+    "adjacent",
     "brief",
     "evidence",
     "findings",
@@ -24,6 +37,7 @@ _TOPIC_STOPWORDS = {
     "generating",
     "hypothesis",
     "map",
+    "mechanistic",
     "paper",
     "research",
     "review",
@@ -66,9 +80,15 @@ def _citation_membership_failures(sections: dict[str, str], source_bundle: list[
 
 
 def _topic_anchors(title: str) -> set[str]:
-    topic = re.split(r":|\s+[—-]\s+", title, maxsplit=1)[0].lower()
-    tokens = {token for token in re.findall(r"[a-z0-9]+", topic) if len(token) > 2 or token == "ai"}
-    anchors = {token for token in tokens if token not in _TOPIC_STOPWORDS}
+    anchors: set[str] = set()
+    for segment in re.split(r":|\s+[—-]\s+", title.lower()):
+        tokens = {
+            token for token in re.findall(r"[a-z0-9]+", segment)
+            if len(token) > 2 or token == "ai"
+        }
+        anchors = {token for token in tokens if token not in _TOPIC_STOPWORDS}
+        if anchors:
+            break
     for token in tuple(anchors):
         anchors.update(_TOPIC_ALIASES.get(token, ()))
     return anchors
@@ -83,6 +103,8 @@ def _markdown_table_rows(sections: dict[str, str]) -> list[str]:
                 continue
             cells = [cell.strip() for cell in line.strip("|").split("|")]
             if len(cells) < 3 or all(_TABLE_SEPARATOR_PATTERN.fullmatch(cell) for cell in cells):
+                continue
+            if sum(cell.lower() in _TABLE_HEADER_CELLS for cell in cells) >= 2:
                 continue
             lower = " ".join(cells).lower()
             if "finding" in lower and ("source" in lower or "population" in lower):
