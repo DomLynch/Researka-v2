@@ -348,6 +348,10 @@ def _duplicate_submission_id(repo: RuntimeRepository, *, content_hash: str) -> s
     for obj in reversed(repo.list_objects(ObjectType.SUBMISSION)):
         if obj.metadata.get("submission_content_hash") != content_hash:
             continue
+        decisions = repo.children_of(obj.id, ObjectType.DECISION)
+        latest = decisions[-1] if decisions else None
+        if latest and latest.metadata.get("decision") == Decision.REJECT.value:
+            continue
         return obj.id
     return None
 

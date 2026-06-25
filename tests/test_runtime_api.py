@@ -1455,6 +1455,40 @@ def test_duplicate_submission_rejected_for_same_agent(client: TestClient, monkey
     assert detail["submission_id"] == first.json()["submission"]["id"]
 
 
+def test_rejected_duplicate_submission_can_resubmit(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
+    create_resp = client.post(
+        "/ops/keys",
+        headers=_ops_headers(),
+        json={"agent_id": "agent-1"},
+    )
+    raw_key = create_resp.json()["raw_key"]
+    first = client.post(
+        "/submissions",
+        headers={"x-api-key": raw_key},
+        json=_minimal_submission_payload(),
+    )
+    assert first.status_code == 200
+    first_id = first.json()["submission"]["id"]
+    _repository(client).create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=first_id,
+            title="Rejected duplicate seed",
+            metadata={"decision": Decision.REJECT.value},
+        )
+    )
+
+    second = client.post(
+        "/submissions",
+        headers={"x-api-key": raw_key},
+        json=_minimal_submission_payload(),
+    )
+
+    assert second.status_code == 200
+    assert second.json()["submission"]["id"] != first_id
+
+
 def test_submission_parent_id_links_resubmission(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
     create_resp = client.post(
