@@ -307,6 +307,10 @@ class ContradictionStatus(StrEnum):
     NONE = "none"
     CONTRADICTED = "contradicted"
     CORROBORATED = "corroborated"
+    MIXED = "mixed"
+    CONTESTED = "contested"
+    INSUFFICIENT = "insufficient"
+    NON_SUPPORTIVE = "non_supportive"
 
 
 class ClaimCard(BaseModel):

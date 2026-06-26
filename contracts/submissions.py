@@ -62,6 +62,19 @@ _TOPIC_ALIASES = {
     "ai": ("artificial intelligence", "llm", "language model", "model"),
     "models": ("model",),
 }
+_ALPHA_NOVELTY_TERMS = {
+    "bound",
+    "bounded",
+    "boundary",
+    "context",
+    "falsifiable",
+    "gap",
+    "mixed",
+    "novel",
+    "receipt",
+    "signal",
+    "tension",
+}
 
 
 def _clean_doi(value: str) -> str:
@@ -128,6 +141,20 @@ def _topic_coherence_failures(*, title: str, sections: dict[str, str]) -> list[s
     if len(weak) >= 2 or (len(weak) / len(rows)) > 0.15:
         return weak[:5]
     return []
+
+
+def _alpha_title_novelty_failures(*, title: str, sections: dict[str, str]) -> list[str]:
+    clean_title = " ".join(str(title or "").split())
+    if not clean_title:
+        return []
+    tokens = re.findall(r"[a-z0-9]+", clean_title.lower())
+    failures: list[str] = []
+    if len(tokens) < 4 or ("/" in clean_title and len(tokens) <= 5):
+        failures.append("alpha memo title must be human-readable and specific, not a raw topic/query")
+    prose = " ".join(str(value or "").lower() for value in sections.values())
+    if not any(term in prose for term in _ALPHA_NOVELTY_TERMS):
+        failures.append("alpha memo must state a bounded signal, tension, gap, or falsifiable novelty angle")
+    return failures
 
 
 class SourceBundleEntry(BaseModel):
@@ -318,6 +345,16 @@ def run_submission_template_checks(
             reason=citation_reason,
         )
     )
+
+    if active_template.article_type == ArticleType.ALPHA_MEMO.value:
+        alpha_failures = _alpha_title_novelty_failures(title=title, sections=sections)
+        results.append(
+            GateResult(
+                name="alpha_title_novelty",
+                passed=not alpha_failures,
+                reason="; ".join(alpha_failures) or "alpha memo title and novelty signal are public-ready",
+            )
+        )
 
     recent_count = sum(
         1

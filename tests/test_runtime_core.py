@@ -420,6 +420,79 @@ def test_alpha_memo_single_source_cannot_use_structural_exception() -> None:
     assert "minimum_citations" in {gate.name for gate in results if not gate.passed}
 
 
+def test_alpha_memo_raw_title_fails_public_novelty_gate() -> None:
+    results = run_submission_template_checks(
+        title="desk",
+        sections={"Evidence Landscape": "This memo states one bounded receipt-backed signal with clear limits."},
+        source_bundle=[
+            {"title": f"Desk source {index}", "doi": f"10.1000/desk-{index}", "evidence_type": "primary"}
+            for index in range(1, 6)
+        ],
+        article_type=ArticleType.ALPHA_MEMO.value,
+    )
+
+    novelty_gate = next(gate for gate in results if gate.name == "alpha_title_novelty")
+
+    assert novelty_gate.passed is False
+    assert "human-readable" in novelty_gate.reason
+
+
+def test_alpha_memo_specific_title_passes_public_novelty_gate() -> None:
+    results = run_submission_template_checks(
+        title="Desk interventions split posture and productivity signals",
+        sections={"Evidence Landscape": "This memo states one bounded receipt-backed tension with a falsifiable gap."},
+        source_bundle=[
+            {"title": f"Desk source {index}", "doi": f"10.1000/desk-{index}", "evidence_type": "primary"}
+            for index in range(1, 6)
+        ],
+        article_type=ArticleType.ALPHA_MEMO.value,
+    )
+
+    novelty_gate = next(gate for gate in results if gate.name == "alpha_title_novelty")
+
+    assert novelty_gate.passed is True
+
+
+def test_publish_relabels_non_supportive_research_synthesis(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = InMemoryRuntimeRepository()
+    full_body = "\n\n".join(
+        [
+            "# Full manuscript",
+            "## Abstract\n\nEvidence-honesty note: 24/26 retained sources are coded as null or no extracted directional signal; this corpus is non-supportive for clinical efficacy claims and hypothesis-generating only.",
+            "## Methods\n\nThe methods describe source retrieval, screening, extraction, appraisal, synthesis, and verification in enough detail to audit the accepted manuscript.",
+            "## Results\n\nThe results preserve null and heterogeneous source-level findings without claiming broad clinical efficacy, separate direct findings from adjacent evidence, and report the corpus as hypothesis-generating rather than intervention-ready.",
+            "## Discussion\n\nThe discussion treats disagreement and indirect evidence as boundary conditions instead of a settled intervention claim.",
+            "## Limitations\n\nThe limitations identify corpus boundaries, uncertainty, scope restrictions, missing endpoints, and interpretation risks that constrain public claims.",
+            "## Conclusion\n\nThe conclusion states a bounded hypothesis-generating finding, avoids clinical guidance, and makes clear that the weak retained corpus supports classification discipline rather than a definitive research synthesis label.",
+            "## References\n\n- Example source. DOI: 10.1000/example.",
+        ]
+    )
+    submission = repo.create_object(ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Research Synthesis: Example intervention",
+        body_markdown=full_body,
+        metadata={
+            "abstract": "Evidence-honesty note: 24/26 retained sources are coded as null.",
+            "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
+            "sections": {},
+            "source_bundle": [
+                {"title": f"Source {index}", "year": 2024, "evidence_type": "review"}
+                for index in range(1, 27)
+            ],
+            "core_claims_resolved": True,
+        },
+    ))
+    monkeypatch.setattr(workflow, "_mint_publication_doi", lambda repository, publication: {})
+
+    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+
+    publication = repo.get_object(result["publication_id"])
+    assert publication is not None
+    assert publication.title == "Hypothesis-Generating Brief: Example intervention"
+    assert publication.metadata["publication_class"] == "hypothesis_generating_brief"
+    assert publication.metadata["evidence_profile"]["weak_evidence_ratio"] == 0.9231
+
+
 def test_compile_publication_preserves_full_manuscript_references() -> None:
     full_body = "\n\n".join(
         [

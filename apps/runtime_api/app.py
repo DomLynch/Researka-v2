@@ -18,6 +18,7 @@ from apps.worker.main import WorkerApp
 from contracts import AuditReview, AuditVerdict, ClaimCard, Decision, EventType, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
 from runtime_core.agent_query import fail_agent_query_job, run_agent_query_job
+from runtime_core.evidence_quality import contradiction_status_for_text, evidence_profile
 from runtime_core.osf import (
     backfill_missing_publication_dois,
     build_oauth_authorization_url,
@@ -468,6 +469,11 @@ def _is_publicly_listed(publication: ResearchObject) -> bool:
 
 def _publication_response(publication: ResearchObject) -> dict:
     payload = publication.model_dump(mode="json")
+    payload["artifact_type"] = _artifact_type_for_submission(publication)
+    payload["surface"] = _publication_surface(publication)
+    payload["publication_class"] = publication.metadata.get("publication_class")
+    payload["evidence_profile"] = publication.metadata.get("evidence_profile")
+    payload["integrity"] = publication.metadata.get("integrity")
     payload["doi"] = publication.metadata.get("doi")
     payload["doi_status"] = publication.metadata.get("doi_status")
     payload["osf_url"] = publication.metadata.get("osf_url")
@@ -495,6 +501,12 @@ def _derived_claim_cards(publication: ResearchObject, submission: ResearchObject
         if isinstance(trace, dict)
     } if isinstance(traces, dict) else {}
     nodes = graph.get("nodes", []) if isinstance(graph, dict) else []
+    raw_bundle = (submission.metadata if submission else {}).get("source_bundle", [])
+    source_bundle = raw_bundle if isinstance(raw_bundle, list) else []
+    profile = evidence_profile(
+        text=f"{publication.title}\n{publication.metadata.get('abstract') or ''}\n{publication.body_markdown or ''}",
+        source_bundle=[item for item in source_bundle if isinstance(item, dict)],
+    )
     cards: list[ClaimCard] = []
     for index, node in enumerate((n for n in nodes if isinstance(n, dict) and n.get("type") == "claim"), start=1):
         text = str(node.get("text") or "").strip()
@@ -511,6 +523,7 @@ def _derived_claim_cards(publication: ResearchObject, submission: ResearchObject
                 publication_id=publication.id,
                 claim_text=text,
                 citation_support=support,
+                contradiction_status=contradiction_status_for_text(text, profile),
                 source_ids=[str(item["source_id"]) for item in support],
                 dw_chain_url=publication.metadata.get("dw_chain_url") or publication.metadata.get("dw_chain"),
             )
@@ -670,6 +683,10 @@ def _artifact_type_for_submission(submission: ResearchObject | None) -> str:
     artifact_type = str((submission.metadata if submission else {}).get("artifact_type") or "")
     marker = f"{article_type} {artifact_type}".lower()
     return "alpha_memo" if "alpha_memo" in marker else "research_paper"
+
+
+def _publication_surface(publication: ResearchObject) -> str:
+    return "alpha" if _artifact_type_for_submission(publication) == "alpha_memo" else "papers"
 
 
 def _public_decision_record(
@@ -1057,8 +1074,13 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         return _submission_decision_response(repo=app.state.repository, submission_id=submission_id, decision=latest)
 
     @app.get("/publications")
-    def list_publications() -> dict:
+    def list_publications(surface: str | None = None) -> dict:
         publications = app.state.repository.list_objects(ObjectType.PUBLICATION)
+        if surface:
+            normalized = surface.strip().lower()
+            if normalized not in {"alpha", "papers"}:
+                raise HTTPException(status_code=400, detail="invalid_surface")
+            publications = [publication for publication in publications if _publication_surface(publication) == normalized]
         return {"publications": [_publication_response(publication) for publication in publications if _is_publicly_listed(publication)]}
 
     @app.get("/publications/{publication_id}")

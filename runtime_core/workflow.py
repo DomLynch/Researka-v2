@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from typing import Any
 
 from contracts import ArticleType, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, WorkflowContext, WorkflowOutcome, publication_template_for, run_submission_template_checks
@@ -9,6 +10,7 @@ from contracts import ArticleType, Decision, ObjectType, ResearchObject, Runtime
 from .compiler import compile_publication
 from .derivation_web import emit_decision_to_derivation_web, emit_publication_to_derivation_web
 from .doi_resolver import resolve_dois
+from .evidence_quality import classified_title, evidence_profile, publication_class
 from .integrity_client import check_integrity, index_integrity
 from .osf import mint_publication_doi_from_repository, osf_publication_metadata_from_env
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
@@ -150,6 +152,8 @@ def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -
     return {
         "recommendation": recommendation or integrity.get("recommendation") or "pass",
         "available": bool(integrity.get("available", True)),
+        "checked_at": integrity.get("checked_at") or datetime.now(timezone.utc).isoformat(),
+        "reason": str(integrity.get("reason") or "").strip() or None,
         "matched_publication_id": integrity.get("matched_publication_id"),
         "duplication_score": duplication_score,
         "similarity_score": similarity_score,
@@ -821,9 +825,13 @@ class WorkflowEngine:
         normalized_title = " ".join(str(submission.title or "").lower().split())
         submission_markers = _publication_dedupe_markers(submission.metadata)
         for pub in repository.list_objects(ObjectType.PUBLICATION):
+            pub_titles = {
+                " ".join(str(pub.title or "").lower().split()),
+                " ".join(str(pub.metadata.get("source_title") or "").lower().split()),
+            }
             if (
                 submission_markers & _publication_dedupe_markers(pub.metadata)
-                or " ".join(str(pub.title or "").lower().split()) == normalized_title
+                or normalized_title in pub_titles
             ):
                 return {"publication_id": pub.id, "deduped": True}
         artifact = compile_publication(
@@ -838,14 +846,28 @@ class WorkflowEngine:
         failed = [gate.name for gate in artifact.gates if not gate.passed]
         if failed:
             raise ValueError(f"publish_gates_failed:{','.join(failed)}")
+        raw_bundle = submission.metadata.get("source_bundle", [])
+        source_bundle = raw_bundle if isinstance(raw_bundle, list) else []
+        profile = evidence_profile(
+            text=f"{artifact.title}\n{artifact.abstract}\n{artifact.body_markdown}",
+            source_bundle=source_bundle,
+        )
+        pub_class = publication_class(
+            article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
+            title=artifact.title,
+            profile=profile,
+        )
         publication = ResearchObject(
             object_type=ObjectType.PUBLICATION,
             parent_object_id=submission.id,
-            title=artifact.title,
+            title=classified_title(artifact.title, pub_class),
             body_markdown=artifact.body_markdown,
             metadata={
                 "abstract": artifact.abstract,
+                "source_title": artifact.title,
                 "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                "publication_class": pub_class,
+                "evidence_profile": profile,
                 "counts": artifact.counts.model_dump(mode="json"),
                 "gates": [gate.model_dump(mode="json") for gate in artifact.gates],
                 "author_agent_id": submission.metadata.get("author_agent_id"),

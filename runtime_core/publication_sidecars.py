@@ -7,6 +7,8 @@ from typing import Any
 
 from contracts import ResearchObject
 
+from .evidence_quality import support_for_claim
+
 SIDECAR_NAMES = {
     "claim_graph.json",
     "citation_traces.json",
@@ -180,11 +182,11 @@ def build_sidecar(publication: ResearchObject, submission: ResearchObject | None
             "screening": screening_summary(publication),
         }, "application/json", sidecar_name
     if sidecar_name == "citation_traces.json":
-        first_sources = [{"study": row["study"], "doi": row["doi"], "url": row["url"]} for row in rows[:5]]
+        sources = [{**row, "source_id": f"source_{index}"} for index, row in enumerate(rows, start=1)]
         return {
             "publication_id": publication.id,
             "traces": [
-                {"claim_id": f"claim_{index}", "claim": claim, "candidate_sources": first_sources}
+                {"claim_id": f"claim_{index}", "claim": claim, "candidate_sources": support_for_claim(claim, sources)}
                 for index, claim in enumerate(claims, start=1)
             ],
         }, "application/json", sidecar_name

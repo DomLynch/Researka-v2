@@ -588,6 +588,45 @@ def test_get_publication_claims_derives_cards_from_sidecars(client: TestClient) 
     assert claim["id"].startswith("claim_")
     assert claim["evidence_grade"] == "exploratory"
     assert claim["citation_support"][0]["source_id"] == "source_1"
+    assert claim["citation_support"][0]["support_kind"] == "candidate_source_row"
+
+
+def test_get_publication_claims_labels_mixed_direct_source_support(client: TestClient) -> None:
+    repo = _repository(client)
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Caffeine submission",
+            metadata={
+                "source_bundle": [
+                    {
+                        "title": "Caffeine time-to-exhaustion trial",
+                        "doi": "10.1000/caffeine",
+                        "evidence_type": "primary",
+                        "endpoint": "time to exhaustion",
+                        "effect": "increased run distance",
+                    }
+                ]
+            },
+        )
+    )
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title="Caffeine endpoint memo",
+            body_markdown="- Mixed endpoint evidence suggests caffeine effects depend on trial design and DOI 10.1000/caffeine supports the time-to-exhaustion signal in the source row.",
+            metadata={"article_type": "alpha_memo"},
+        )
+    )
+
+    response = client.get(f"/publications/{publication.id}/claims")
+
+    assert response.status_code == 200
+    claim = response.json()["claims"][0]
+    assert claim["contradiction_status"] == "mixed"
+    assert claim["citation_support"][0]["support_kind"] == "direct_doi_match"
+    assert claim["citation_support"][0]["endpoint"] == "time to exhaustion"
 
 
 def test_get_publication_claims_returns_saved_cards_in_created_order(client: TestClient) -> None:
@@ -668,6 +707,34 @@ def test_get_claim_finds_public_claim(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json()["publication_id"] == publication.id
+
+
+def test_publications_surface_filter_splits_alpha_and_papers(client: TestClient) -> None:
+    repo = _repository(client)
+    paper = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Research paper",
+            metadata={"article_type": "research_synthesis", "publication_class": "research_synthesis"},
+        )
+    )
+    alpha = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Alpha memo",
+            metadata={"article_type": "alpha_memo", "publication_class": "alpha_memo"},
+        )
+    )
+
+    alpha_response = client.get("/publications?surface=alpha")
+    paper_response = client.get("/publications?surface=papers")
+    invalid_response = client.get("/publications?surface=reviews")
+
+    assert [item["id"] for item in alpha_response.json()["publications"]] == [alpha.id]
+    assert alpha_response.json()["publications"][0]["surface"] == "alpha"
+    assert alpha_response.json()["publications"][0]["publication_class"] == "alpha_memo"
+    assert [item["id"] for item in paper_response.json()["publications"]] == [paper.id]
+    assert invalid_response.status_code == 400
 
 
 def test_claims_list_and_agent_profile(client: TestClient) -> None:
