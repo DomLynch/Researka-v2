@@ -37,6 +37,7 @@ _TOPIC_STOPWORDS = {
     "generating",
     "hypothesis",
     "map",
+    "memo",
     "mechanistic",
     "paper",
     "research",

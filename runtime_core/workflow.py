@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -105,6 +106,67 @@ def _bundle_dois(source_bundle: list[dict]) -> list[str]:
         for entry in source_bundle
         if isinstance(entry, dict) and str(entry.get("doi") or "").strip()
     })
+
+
+_ALPHA_ANCHOR_STOPWORDS = {
+    "adaptation",
+    "adaptations",
+    "agent",
+    "agents",
+    "alpha",
+    "and",
+    "brief",
+    "context",
+    "deficit",
+    "effect",
+    "effects",
+    "evidence",
+    "exercise",
+    "memo",
+    "protection",
+    "research",
+    "signal",
+    "signals",
+    "the",
+    "training",
+    "under",
+    "versus",
+    "with",
+}
+
+
+def _alpha_anchor_terms(text: object) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", str(text or "").lower())
+        if len(token) > 2 and token not in _ALPHA_ANCHOR_STOPWORDS
+    }
+
+
+def _alpha_accept_guard_revisions(submission: ResearchObject, repository: RuntimeRepository) -> list[str]:
+    if submission.metadata.get("article_type") != ArticleType.ALPHA_MEMO.value:
+        return []
+    source_bundle = [entry for entry in submission.metadata.get("source_bundle", []) if isinstance(entry, dict)]
+    source_text = " ".join(str(entry.get("title") or "") for entry in source_bundle)
+    source_terms = _alpha_anchor_terms(source_text)
+    title_terms = _alpha_anchor_terms(f"{submission.title} {submission.metadata.get('topic', '')}")
+    missing = sorted(term for term in title_terms if term not in source_terms)
+    revisions: list[str] = []
+    if missing:
+        revisions.append(
+            "Align title/topic with receipt evidence; unsupported title anchors: "
+            + ", ".join(missing[:5])
+        )
+    doi_key = tuple(_bundle_dois(source_bundle))
+    if len(doi_key) >= 2:
+        for publication in repository.list_objects(ObjectType.PUBLICATION):
+            if publication.parent_object_id == submission.id or publication.metadata.get("article_type") != ArticleType.ALPHA_MEMO.value:
+                continue
+            parent = repository.get_object(str(publication.parent_object_id or ""))
+            if parent and tuple(_bundle_dois(list(parent.metadata.get("source_bundle", [])))) == doi_key:
+                revisions.append(f"Merge or differentiate from existing alpha memo using the same source DOI set: {publication.id}")
+                break
+    return revisions
 
 
 def _publication_visibility(repository: RuntimeRepository, author_agent_id: object) -> str:
@@ -215,6 +277,9 @@ class WorkflowEngine:
                 "Alpha-memo review checks:\n"
                 "- Check whether the memo makes one bounded, source-grounded research signal clear.\n"
                 "- Score whether novelty claims stay proportionate to the cited receipts.\n"
+                "- Check title/source alignment: named drugs, interventions, modalities, populations, and endpoints in the title/topic must match the cited receipts or be explicitly framed as a cross-compound/cross-modality contrast.\n"
+                "- Do not accept a memo whose title says one anchor but the evidence turns on another (for example, a metformin memo relying on a dapagliflozin receipt, or a resistance-training memo backed only by sprint/heat cycling receipts). Mark revise if a rename/reclassify fixes it; reject if the central claim needs a different source bundle.\n"
+                "- If the memo is a duplicate or merge-worthy variant of the same receipt pair, do not accept both; require merge or narrower differentiation.\n"
                 "- Flag unsupported clinical, policy, investment, or broad consensus claims.\n\n"
                 "Alpha-memo accept threshold:\n"
                 "- Accept can be based on a small source bundle when the claim is narrow, receipt-backed, and honest about limits.\n"
@@ -771,6 +836,11 @@ class WorkflowEngine:
                 overclaim=str(review.metadata.get("overclaim_verdict", "")).strip().lower(),
                 synthesis_quality=str(review.metadata.get("synthesis_quality_verdict", "")).strip().lower(),
             )
+        alpha_guard_revisions: list[str] = []
+        if recommendation == Decision.ACCEPT.value:
+            alpha_guard_revisions = _alpha_accept_guard_revisions(submission, repository)
+            if alpha_guard_revisions:
+                recommendation = Decision.REVISE.value
         decision = {
             "accept": Decision.ACCEPT,
             "revise": Decision.REVISE,
@@ -796,9 +866,22 @@ class WorkflowEngine:
                     **(
                         {
                             "original_recommendation": original_recommendation,
-                            "recommendation_calibration": "minor_issues_only_accept_contract",
+                            "recommendation_calibration": (
+                                "alpha_accept_guard" if alpha_guard_revisions else "minor_issues_only_accept_contract"
+                            ),
                         }
                         if original_recommendation != recommendation
+                        else {}
+                    ),
+                    **(
+                        {
+                            "alpha_accept_guard": alpha_guard_revisions,
+                            "required_revisions": [
+                                *[str(item) for item in review.metadata.get("required_revisions", []) if str(item).strip()],
+                                *alpha_guard_revisions,
+                            ],
+                        }
+                        if alpha_guard_revisions
                         else {}
                     ),
                     **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),

@@ -453,6 +453,144 @@ def test_alpha_memo_specific_title_passes_public_novelty_gate() -> None:
     assert novelty_gate.passed is True
 
 
+def test_memo_prefix_does_not_mask_title_topic_anchors() -> None:
+    results = run_submission_template_checks(
+        title="Memo: Desk interventions split posture and productivity signals",
+        sections={
+            "Evidence Landscape": (
+                "| Source | Finding | Endpoint |\n"
+                "| --- | --- | --- |\n"
+                "| Desk intervention study | One bounded signal | posture |\n"
+            )
+        },
+        source_bundle=[
+            {"title": f"Desk source {index}", "doi": f"10.1000/desk-{index}", "evidence_type": "primary"}
+            for index in range(1, 6)
+        ],
+        article_type=ArticleType.EVIDENCE_MAP.value,
+    )
+
+    coherence_gate = next(gate for gate in results if gate.name == "topic_coherence")
+
+    assert coherence_gate.passed is True
+
+
+def test_alpha_reviewer_prompt_requires_title_source_alignment() -> None:
+    prompt = WorkflowEngine()._review_system_prompt(ArticleType.ALPHA_MEMO.value)
+
+    assert "title/source alignment" in prompt
+    assert "metformin memo relying on a dapagliflozin receipt" in prompt
+    assert "resistance-training memo backed only by sprint/heat cycling receipts" in prompt
+    assert "require merge or narrower differentiation" in prompt
+
+
+def test_alpha_accept_with_unsupported_title_anchor_becomes_revise() -> None:
+    repo = InMemoryRuntimeRepository()
+    engine = WorkflowEngine()
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="cold water immersion resistance training adaptation",
+            metadata={
+                "article_type": ArticleType.ALPHA_MEMO.value,
+                "source_bundle": [
+                    {
+                        "title": "Cold-water immersion after sprint-interval training affects K+ transport proteins",
+                        "doi": "10.1152/japplphysiol.00259.2018",
+                        "evidence_type": "primary",
+                    },
+                    {
+                        "title": "Cold-water recovery during heat-based cycling training changes session load",
+                        "doi": "10.1123/ijspp.2019-0313",
+                        "evidence_type": "primary",
+                    },
+                ],
+            },
+        )
+    )
+    review = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.REVIEW,
+            parent_object_id=submission.id,
+            title="Review",
+            metadata={"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
+        )
+    )
+
+    outcome = engine.handle_job(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id}),
+        repo,
+    )
+    decision = repo.get_object(str(outcome["created_object_id"]))
+
+    assert outcome["terminal_decision"] == Decision.REVISE.value
+    assert outcome["next_jobs"] == 0
+    assert decision is not None
+    assert decision.metadata["decision"] == Decision.REVISE.value
+    assert "unsupported title anchors: resistance" in decision.metadata["alpha_accept_guard"][0]
+    assert decision.metadata["required_revisions"] == decision.metadata["alpha_accept_guard"]
+
+
+def test_alpha_accept_duplicate_source_pair_becomes_revise() -> None:
+    repo = InMemoryRuntimeRepository()
+    engine = WorkflowEngine()
+    source_bundle = [
+        {
+            "title": "Metformin exercise adaptation source",
+            "doi": "10.1000/metformin-exercise",
+            "evidence_type": "primary",
+        },
+        {
+            "title": "Exercise metformin adaptation replication",
+            "doi": "10.1000/metformin-replication",
+            "evidence_type": "primary",
+        },
+    ]
+    existing_submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="metformin exercise training adaptation",
+            metadata={"article_type": ArticleType.ALPHA_MEMO.value, "source_bundle": source_bundle},
+        )
+    )
+    existing_publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=existing_submission.id,
+            title="metformin exercise training adaptation",
+            metadata={"article_type": ArticleType.ALPHA_MEMO.value},
+        )
+    )
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="metformin exercise adaptation signal",
+            metadata={"article_type": ArticleType.ALPHA_MEMO.value, "source_bundle": source_bundle},
+        )
+    )
+    review = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.REVIEW,
+            parent_object_id=submission.id,
+            title="Review",
+            metadata={"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
+        )
+    )
+
+    outcome = engine.handle_job(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id}),
+        repo,
+    )
+    decision = repo.get_object(str(outcome["created_object_id"]))
+
+    assert outcome["terminal_decision"] == Decision.REVISE.value
+    assert outcome["next_jobs"] == 0
+    assert decision is not None
+    assert decision.metadata["decision"] == Decision.REVISE.value
+    assert existing_publication.id in decision.metadata["alpha_accept_guard"][0]
+    assert "same source DOI set" in decision.metadata["required_revisions"][0]
+
+
 def test_publish_relabels_non_supportive_research_synthesis(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = InMemoryRuntimeRepository()
     full_body = "\n\n".join(
