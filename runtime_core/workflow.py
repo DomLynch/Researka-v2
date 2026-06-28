@@ -149,7 +149,9 @@ def _alpha_accept_guard_revisions(submission: ResearchObject, repository: Runtim
     source_bundle = [entry for entry in submission.metadata.get("source_bundle", []) if isinstance(entry, dict)]
     source_text = " ".join(str(entry.get("title") or "") for entry in source_bundle)
     source_terms = _alpha_anchor_terms(source_text)
-    title_terms = _alpha_anchor_terms(f"{submission.title} {submission.metadata.get('topic', '')}")
+    topic = submission.metadata.get("topic")
+    topic_text = topic if isinstance(topic, str) else ""
+    title_terms = _alpha_anchor_terms(f"{submission.title} {topic_text}")
     missing = sorted(term for term in title_terms if term not in source_terms)
     revisions: list[str] = []
     if missing:

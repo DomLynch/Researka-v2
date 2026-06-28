@@ -531,6 +531,54 @@ def test_alpha_accept_with_unsupported_title_anchor_becomes_revise() -> None:
     assert decision.metadata["required_revisions"] == decision.metadata["alpha_accept_guard"]
 
 
+def test_alpha_accept_ignores_null_topic_anchor() -> None:
+    repo = InMemoryRuntimeRepository()
+    engine = WorkflowEngine()
+    source_bundle = [
+        {
+            "title": "Does Cold-Water Immersion After Strength Training Attenuate Training Adaptation?",
+            "doi": "10.1123/ijspp.2019-0965",
+            "evidence_type": "primary",
+        },
+        {
+            "title": "Strength Training Adaptations After Cold-Water Immersion",
+            "doi": "10.1519/JSC.0000000000000434",
+            "evidence_type": "primary",
+        },
+    ]
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Does Cold-Water Immersion After Strength Training Attenuate Training Adaptation?",
+            metadata={
+                "article_type": ArticleType.ALPHA_MEMO.value,
+                "source_bundle": source_bundle,
+                "topic": None,
+            },
+        )
+    )
+    review = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.REVIEW,
+            parent_object_id=submission.id,
+            title="Review",
+            metadata={"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
+        )
+    )
+
+    outcome = engine.handle_job(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id}),
+        repo,
+    )
+    decision = repo.get_object(str(outcome["created_object_id"]))
+
+    assert outcome["terminal_decision"] == Decision.ACCEPT.value
+    assert outcome["next_jobs"] == 1
+    assert decision is not None
+    assert decision.metadata["decision"] == Decision.ACCEPT.value
+    assert "alpha_accept_guard" not in decision.metadata
+
+
 def test_alpha_accept_duplicate_source_pair_becomes_revise() -> None:
     repo = InMemoryRuntimeRepository()
     engine = WorkflowEngine()
