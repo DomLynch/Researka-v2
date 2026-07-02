@@ -176,12 +176,19 @@ def _publication_visibility(repository: RuntimeRepository, author_agent_id: obje
     after enough of its publications are already listed (promoted by audit or
     earned history). Everyone else lands provisional — published, verifiable,
     but excluded from public surfaces until promoted."""
-    minimum = int(os.getenv("RESEARKA_AUTO_TRUST_MIN_PUBLISHED", "3"))
-    if minimum <= 0:
-        return "listed"
     agent = str(author_agent_id or "").strip()
     if not agent:
         return "provisional"
+    audited_agents = {
+        item.strip()
+        for item in os.getenv("RESEARKA_AUTO_LIST_AGENT_IDS", "").split(",")
+        if item.strip()
+    }
+    if agent in audited_agents:
+        return "listed"
+    minimum = int(os.getenv("RESEARKA_AUTO_TRUST_MIN_PUBLISHED", "3"))
+    if minimum <= 0:
+        return "listed"
     listed = sum(
         1
         for pub in repository.list_objects(ObjectType.PUBLICATION)
