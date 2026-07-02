@@ -679,6 +679,61 @@ def test_publish_relabels_non_supportive_research_synthesis(monkeypatch: pytest.
     assert publication.metadata["evidence_profile"]["weak_evidence_ratio"] == 0.9231
 
 
+def test_publish_preserves_research_synthesis_with_direct_clinical_core(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = InMemoryRuntimeRepository()
+    full_body = "\n\n".join(
+        [
+            "# Full manuscript",
+            "## Abstract\n\nEvidence-honesty note: 54/85 retained sources are indirect, review-level, adjacent, or mechanistic and are used only to bound interpretation. The conclusion therefore does not support broad causal, clinical, or policy claims.",
+            "## Introduction\n\nThe corpus contains 31 direct clinical sources, 53 adjacent, review, or context sources, and 1 mechanistic or model-system source.",
+            "## Methods\n\nThe methods describe source retrieval, screening, extraction, appraisal, synthesis, and verification in enough detail to audit the accepted manuscript.",
+            "## Results\n\nThe results preserve heterogeneous source-level findings, separate direct findings from adjacent evidence, and report contextual evidence without overstating clinical certainty.",
+            "## Discussion\n\nThe discussion treats disagreement, indirect evidence, and mechanistic evidence as boundary conditions instead of a settled universal intervention claim.",
+            "## Limitations\n\nThe limitations identify corpus boundaries, uncertainty, scope restrictions, missing endpoints, and interpretation risks that constrain public claims.",
+            "## Conclusion\n\nThe conclusion states a bounded research synthesis, avoids clinical guidance, and makes clear that contextual evidence does not replace the direct clinical core.",
+            "## References\n\n- Example source. DOI: 10.1000/example.",
+        ]
+    )
+    submission = repo.create_object(ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Research Synthesis: Resistance Training Effects — full paper",
+        body_markdown=full_body,
+        metadata={
+            "abstract": "Evidence-honesty note: 54/85 retained sources are indirect, review-level, adjacent, or mechanistic and are used only to bound interpretation.",
+            "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
+            "sections": {},
+            "source_bundle": [
+                {
+                    "title": f"Primary source {index}",
+                    "year": 2024,
+                    "evidence_type": "primary",
+                }
+                for index in range(1, 59)
+            ] + [
+                {
+                    "title": f"Review source {index}",
+                    "year": 2024,
+                    "evidence_type": "review",
+                }
+                for index in range(59, 86)
+            ],
+            "core_claims_resolved": True,
+        },
+    ))
+    monkeypatch.setattr(workflow, "_mint_publication_doi", lambda repository, publication: {})
+
+    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+
+    publication = repo.get_object(result["publication_id"])
+    assert publication is not None
+    assert publication.title == "Research Synthesis: Resistance Training Effects — full paper"
+    assert publication.metadata["publication_class"] == "research_synthesis"
+    assert publication.metadata["evidence_profile"]["weak_evidence_ratio"] == 0.6353
+    assert publication.metadata["evidence_profile"]["direct_clinical_sources"] == 31
+
+
 def test_compile_publication_preserves_full_manuscript_references() -> None:
     full_body = "\n\n".join(
         [
