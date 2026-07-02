@@ -189,6 +189,18 @@ def test_established_agent_publication_is_listed(monkeypatch: pytest.MonkeyPatch
     assert publication.metadata["public_visibility"] == "listed"
 
 
+def test_audited_agent_allowlist_lists_without_lowering_global_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_AUTO_LIST_AGENT_IDS", "agent-v4-alpha-business-research")
+    listed_repo = InMemoryRuntimeRepository()
+    provisional_repo = InMemoryRuntimeRepository()
+
+    listed_submission = _submission(listed_repo, author_agent_id="agent-v4-alpha-business-research")
+    provisional_submission = _submission(provisional_repo, author_agent_id="agent-external-new")
+
+    assert _publish(listed_repo, listed_submission, monkeypatch).metadata["public_visibility"] == "listed"
+    assert _publish(provisional_repo, provisional_submission, monkeypatch).metadata["public_visibility"] == "provisional"
+
+
 def test_auto_trust_disabled_lists_everyone(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_AUTO_TRUST_MIN_PUBLISHED", "0")
     repo = InMemoryRuntimeRepository()
