@@ -42,6 +42,12 @@ def publication_class(*, article_type: str, title: str, profile: dict[str, Any])
     low_direct = isinstance(direct_count, int) and direct_count <= 2
     if weak_ratio >= 0.80 or (low_direct and profile.get("non_supportive_signal")):
         return "hypothesis_generating_brief"
+    if (
+        title.lower().startswith("research synthesis:")
+        and isinstance(direct_count, int)
+        and direct_count > 2
+    ):
+        return "research_synthesis"
     if weak_ratio >= 0.60 or profile.get("indirect_signal"):
         return "adjacent_evidence_brief"
     if title.lower().startswith("research synthesis:"):
