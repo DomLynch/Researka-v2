@@ -579,6 +579,54 @@ def test_alpha_accept_ignores_null_topic_anchor() -> None:
     assert "alpha_accept_guard" not in decision.metadata
 
 
+def test_alpha_accept_guard_ignores_scaffold_title_terms() -> None:
+    repo = InMemoryRuntimeRepository()
+    engine = WorkflowEngine()
+    source_bundle = [
+        {
+            "title": "Fisetin senolytic pilot reports epigenetic age acceleration",
+            "doi": "10.1000/fisetin-pilot",
+            "evidence_type": "primary",
+        },
+        {
+            "title": "Fisetin pregnancy cohort measures epigenetic age acceleration",
+            "doi": "10.1000/fisetin-cohort",
+            "evidence_type": "primary",
+        },
+    ]
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="fisetin: one bounded, context-dependent signal across receipts",
+            metadata={
+                "article_type": ArticleType.ALPHA_MEMO.value,
+                "source_bundle": source_bundle,
+                "topic": "fisetin",
+            },
+        )
+    )
+    review = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.REVIEW,
+            parent_object_id=submission.id,
+            title="Review",
+            metadata={"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
+        )
+    )
+
+    outcome = engine.handle_job(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id}),
+        repo,
+    )
+    decision = repo.get_object(str(outcome["created_object_id"]))
+
+    assert outcome["terminal_decision"] == Decision.ACCEPT.value
+    assert outcome["next_jobs"] == 1
+    assert decision is not None
+    assert decision.metadata["decision"] == Decision.ACCEPT.value
+    assert "alpha_accept_guard" not in decision.metadata
+
+
 def test_alpha_accept_duplicate_source_pair_becomes_revise() -> None:
     repo = InMemoryRuntimeRepository()
     engine = WorkflowEngine()
