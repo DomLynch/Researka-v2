@@ -238,7 +238,19 @@ def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -
         "matched_sources": matched_sources[:5],
         "breakdown": integrity.get("breakdown") or {},
         "feedback_for_agent": str(integrity.get("feedback_for_agent") or "").strip() or None,
+        "attempts": integrity.get("attempts"),
     }
+
+
+def _integrity_unavailable(integrity: object) -> bool:
+    if not isinstance(integrity, dict):
+        return False
+    reason = str(integrity.get("reason") or "").lower()
+    return integrity.get("available") is False or "integrity_unavailable" in reason or "timed out" in reason
+
+
+def _integrity_publish_block(recommendation: str, integrity: dict[str, Any]) -> bool:
+    return integrity.get("available", True) is not False and recommendation in {Decision.REJECT.value, Decision.REVISE.value}
 
 
 def _mint_publication_doi(repository: RuntimeRepository, publication: ResearchObject) -> dict:
@@ -955,6 +967,17 @@ class WorkflowEngine:
             title=artifact.title,
             profile=profile,
         )
+        integrity_metadata = submission.metadata.get("integrity")
+        if _integrity_unavailable(integrity_metadata):
+            refreshed = check_integrity(_integrity_payload_from_submission(submission))
+            recommendation = str((refreshed or {}).get("recommendation") or "").strip().lower()
+            if refreshed:
+                submission = repository.update_object_metadata(
+                    submission.id,
+                    {**submission.metadata, "integrity": _integrity_signal_metadata(refreshed, recommendation or "pass")},
+                ) or submission
+                if _integrity_publish_block(recommendation, refreshed):
+                    raise ValueError(f"publish_blocked_by_integrity:{recommendation}")
         publication = ResearchObject(
             object_type=ObjectType.PUBLICATION,
             parent_object_id=submission.id,

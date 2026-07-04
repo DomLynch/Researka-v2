@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Any
 
 import httpx
@@ -24,6 +25,20 @@ def _timeout_s() -> float:
         return 3.0
 
 
+def _max_attempts() -> int:
+    try:
+        return max(1, int(os.getenv("RESEARKA_INTEGRITY_MAX_ATTEMPTS", "3")))
+    except ValueError:
+        return 3
+
+
+def _retry_backoff_s() -> float:
+    try:
+        return max(0.0, float(os.getenv("RESEARKA_INTEGRITY_RETRY_BACKOFF_S", "0.25")))
+    except ValueError:
+        return 0.25
+
+
 def _headers() -> dict[str, str]:
     api_key = os.getenv("RESEARKA_INTEGRITY_API_KEY")
     return {"x-api-key": api_key} if api_key else {}
@@ -39,21 +54,29 @@ def _unavailable_recommendation() -> str:
 def check_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
     if not _enabled():
         return None
-    try:
-        with httpx.Client(timeout=_timeout_s()) as client:
-            response = client.post(f"{_base_url()}/check", json=payload, headers=_headers())
-            response.raise_for_status()
-            result = response.json()
-            if isinstance(result, dict):
-                return result
-            raise ValueError("integrity service returned a non-object response")
-    except Exception as exc:
-        log.warning("integrity_check_unavailable", extra={"error": str(exc)})
-        return {
-            "available": False,
-            "recommendation": _unavailable_recommendation(),
-            "reason": f"integrity_unavailable: {exc}",
-        }
+    attempts = _max_attempts()
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with httpx.Client(timeout=_timeout_s()) as client:
+                response = client.post(f"{_base_url()}/check", json=payload, headers=_headers())
+                response.raise_for_status()
+                result = response.json()
+                if isinstance(result, dict):
+                    result.setdefault("attempts", attempt)
+                    return result
+                raise ValueError("integrity service returned a non-object response")
+        except Exception as exc:
+            last_exc = exc
+            if attempt < attempts:
+                time.sleep(_retry_backoff_s() * attempt)
+    log.warning("integrity_check_unavailable", extra={"error": str(last_exc), "attempts": attempts})
+    return {
+        "available": False,
+        "recommendation": _unavailable_recommendation(),
+        "reason": f"integrity_unavailable: {last_exc}",
+        "attempts": attempts,
+    }
 
 
 def index_integrity(payload: dict[str, Any]) -> None:

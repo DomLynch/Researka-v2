@@ -95,28 +95,76 @@ def _claim_next(repo: InMemoryRuntimeRepository) -> RuntimeJob:
 
 
 def test_integrity_service_down_returns_unavailable_signal(monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts = 0
+
     class BrokenClient:
         def __init__(self, timeout: float) -> None:
             self.timeout = timeout
 
         def __enter__(self) -> "BrokenClient":
+            nonlocal attempts
+            attempts += 1
             raise TimeoutError("integrity timeout")
 
         def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
             return None
 
     monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "1")
+    monkeypatch.setenv("RESEARKA_INTEGRITY_MAX_ATTEMPTS", "2")
+    monkeypatch.setattr("runtime_core.integrity_client.time.sleep", lambda seconds: None)
     monkeypatch.setattr("runtime_core.integrity_client.httpx.Client", BrokenClient)
 
     # No longer silently None: stamped available=False so the skipped gate is auditable.
     result = check_integrity({"submission_id": "sub-1"})
     assert result is not None and result["available"] is False
     assert result["recommendation"] == "pass"
+    assert result["attempts"] == 2
+    assert attempts == 2
 
     # Opt-in fail-closed holds the submission (revise) instead of letting it proceed.
     monkeypatch.setenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "1")
     held = check_integrity({"submission_id": "sub-1"})
     assert held is not None and held["recommendation"] == "revise"
+
+
+def test_integrity_retry_recovers_transient_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts = 0
+
+    class GoodResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return {"recommendation": "pass", "similarity_score": 0.02}
+
+    class FlakyClient:
+        def __init__(self, timeout: float) -> None:
+            self.timeout = timeout
+
+        def __enter__(self) -> "FlakyClient":
+            return self
+
+        def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+            return None
+
+        def post(self, url: str, *, json: dict[str, Any], headers: dict[str, str]) -> GoodResponse:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise TimeoutError("first timeout")
+            return GoodResponse()
+
+    monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "1")
+    monkeypatch.setenv("RESEARKA_INTEGRITY_MAX_ATTEMPTS", "3")
+    monkeypatch.setattr("runtime_core.integrity_client.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("runtime_core.integrity_client.httpx.Client", FlakyClient)
+
+    result = check_integrity({"submission_id": "sub-1"})
+
+    assert result is not None
+    assert result["recommendation"] == "pass"
+    assert result["similarity_score"] == 0.02
+    assert result["attempts"] == 2
 
 
 def test_integrity_malformed_json_returns_unavailable_signal(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -238,6 +286,74 @@ def test_integrity_indexes_once_after_accept(monkeypatch: pytest.MonkeyPatch) ->
     assert publication is not None
     assert publication.metadata["integrity"]["recommendation"] == "pass"
     assert publication.metadata["integrity"]["similarity_score"] == 0.08
+
+
+def test_publish_rechecks_unavailable_integrity_before_publication(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setenv("RESEARKA_V2_OSF_ENABLED", "0")
+
+    def fake_check(payload: dict[str, Any]) -> dict[str, Any]:
+        calls.append(payload)
+        if len(calls) == 1:
+            return {"available": False, "recommendation": "pass", "reason": "integrity_unavailable: timeout"}
+        return {"recommendation": "pass", "similarity_score": 0.01}
+
+    monkeypatch.setattr("runtime_core.workflow.check_integrity", fake_check)
+    monkeypatch.setattr("runtime_core.workflow.index_integrity", lambda payload: None)
+
+    engine = WorkflowEngine(provider=AcceptProvider())
+    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE))
+    engine.handle_job(intake_job, repo)
+    repo.complete_job(intake_job.id)
+    review_job = _claim_next(repo)
+    engine.handle_job(review_job, repo)
+    repo.complete_job(review_job.id)
+    editorial_job = _claim_next(repo)
+    engine.handle_job(editorial_job, repo)
+    repo.complete_job(editorial_job.id)
+    publish_job = _claim_next(repo)
+    publish_result = engine.handle_job(publish_job, repo)
+
+    publication = repo.get_object(publish_result["publication_id"])
+    assert publication is not None
+    assert len(calls) == 2
+    assert publication.metadata["integrity"]["available"] is True
+    assert publication.metadata["integrity"]["similarity_score"] == 0.01
+
+
+def test_publish_blocks_when_integrity_recheck_finds_duplicate(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    calls = 0
+    monkeypatch.setenv("RESEARKA_V2_OSF_ENABLED", "0")
+
+    def fake_check(payload: dict[str, Any]) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return {"available": False, "recommendation": "pass", "reason": "integrity_unavailable: timeout"}
+        return {"available": True, "recommendation": Decision.REJECT.value, "duplication_score": 0.99}
+
+    monkeypatch.setattr("runtime_core.workflow.check_integrity", fake_check)
+    monkeypatch.setattr("runtime_core.workflow.index_integrity", lambda payload: None)
+
+    engine = WorkflowEngine(provider=AcceptProvider())
+    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE))
+    engine.handle_job(intake_job, repo)
+    repo.complete_job(intake_job.id)
+    review_job = _claim_next(repo)
+    engine.handle_job(review_job, repo)
+    repo.complete_job(review_job.id)
+    editorial_job = _claim_next(repo)
+    engine.handle_job(editorial_job, repo)
+    repo.complete_job(editorial_job.id)
+    publish_job = _claim_next(repo)
+
+    with pytest.raises(ValueError, match="publish_blocked_by_integrity:reject"):
+        engine.handle_job(publish_job, repo)
+    assert repo.list_objects(ObjectType.PUBLICATION) == []
 
 
 def test_integrity_decisions_are_not_indexed(monkeypatch: pytest.MonkeyPatch) -> None:
