@@ -239,7 +239,49 @@ def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -
         "breakdown": integrity.get("breakdown") or {},
         "feedback_for_agent": str(integrity.get("feedback_for_agent") or "").strip() or None,
         "attempts": integrity.get("attempts"),
+        "self_match_ignored": bool(integrity.get("self_match_ignored")),
     }
+
+
+def _integrity_without_self_match(integrity: dict[str, Any], publication_id: str) -> dict[str, Any]:
+    if str(integrity.get("matched_publication_id") or "") != publication_id:
+        return integrity
+    normalized = dict(integrity)
+    raw_breakdown = normalized.get("breakdown")
+    breakdown = raw_breakdown if isinstance(raw_breakdown, dict) else {}
+    normalized.update(
+        {
+            "recommendation": "pass",
+            "matched_publication_id": None,
+            "duplication_score": None,
+            "similarity_score": breakdown.get("external_similarity", 0.0),
+            "plagiarism_flag": False,
+            "feedback_for_agent": None,
+            "reason": "integrity_self_match_ignored",
+            "self_match_ignored": True,
+        }
+    )
+    return normalized
+
+
+def refresh_publication_integrity(repository: RuntimeRepository, publication: ResearchObject) -> ResearchObject:
+    if publication.object_type != ObjectType.PUBLICATION:
+        raise ValueError("integrity_refresh_requires_publication")
+    submission = repository.get_object(str(publication.parent_object_id or publication.metadata.get("source_submission_id") or ""))
+    if submission is None:
+        return publication
+    integrity = check_integrity(_integrity_payload_from_publication(publication, submission))
+    if not integrity:
+        return publication
+    integrity = _integrity_without_self_match(integrity, publication.id)
+    recommendation = str(integrity.get("recommendation") or "").strip().lower() or "pass"
+    return (
+        repository.update_object_metadata(
+            publication.id,
+            {**publication.metadata, "integrity": _integrity_signal_metadata(integrity, recommendation)},
+        )
+        or publication
+    )
 
 
 def _integrity_unavailable(integrity: object) -> bool:

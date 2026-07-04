@@ -7,7 +7,7 @@ from contracts import ArticleType, Decision, ObjectType, ProviderUsage, Research
 from runtime_core.integrity_client import check_integrity
 from runtime_core.providers import ProviderRequest, ProviderResponse, ProviderResult
 from runtime_core.repos import InMemoryRuntimeRepository
-from runtime_core.workflow import WorkflowEngine
+from runtime_core.workflow import WorkflowEngine, refresh_publication_integrity
 
 
 def _sections() -> dict[str, str]:
@@ -354,6 +354,77 @@ def test_publish_blocks_when_integrity_recheck_finds_duplicate(monkeypatch: pyte
     with pytest.raises(ValueError, match="publish_blocked_by_integrity:reject"):
         engine.handle_job(publish_job, repo)
     assert repo.list_objects(ObjectType.PUBLICATION) == []
+
+
+def test_publication_integrity_refresh_ignores_self_match(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title=submission.title,
+            metadata={
+                "abstract": submission.metadata["abstract"],
+                "source_submission_id": submission.id,
+                "source_bundle": submission.metadata["source_bundle"],
+            },
+        )
+    )
+
+    monkeypatch.setattr(
+        "runtime_core.workflow.check_integrity",
+        lambda payload: {
+            "available": True,
+            "recommendation": Decision.REJECT.value,
+            "matched_publication_id": publication.id,
+            "duplication_score": 1.0,
+            "similarity_score": 1.0,
+            "plagiarism_flag": True,
+            "breakdown": {"semantic_similarity": 1.0, "external_similarity": 0.0},
+            "feedback_for_agent": f"Exact-content duplicate of publication {publication.id}.",
+        },
+    )
+
+    refreshed = refresh_publication_integrity(repo, publication)
+
+    integrity = refreshed.metadata["integrity"]
+    assert integrity["recommendation"] == "pass"
+    assert integrity["matched_publication_id"] is None
+    assert integrity["plagiarism_flag"] is False
+    assert integrity["self_match_ignored"] is True
+    assert integrity["similarity_score"] == 0.0
+
+
+def test_publication_integrity_refresh_keeps_real_duplicate(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title=submission.title,
+            metadata={"source_submission_id": submission.id},
+        )
+    )
+
+    monkeypatch.setattr(
+        "runtime_core.workflow.check_integrity",
+        lambda payload: {
+            "available": True,
+            "recommendation": Decision.REJECT.value,
+            "matched_publication_id": "other-publication",
+            "duplication_score": 0.97,
+            "plagiarism_flag": True,
+        },
+    )
+
+    refreshed = refresh_publication_integrity(repo, publication)
+
+    integrity = refreshed.metadata["integrity"]
+    assert integrity["recommendation"] == Decision.REJECT.value
+    assert integrity["matched_publication_id"] == "other-publication"
+    assert integrity["plagiarism_flag"] is True
 
 
 def test_integrity_decisions_are_not_indexed(monkeypatch: pytest.MonkeyPatch) -> None:
