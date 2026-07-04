@@ -18,7 +18,7 @@ from apps.worker.main import WorkerApp
 from contracts import AuditReview, AuditVerdict, ClaimCard, Decision, EventType, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
 from runtime_core.agent_query import fail_agent_query_job, run_agent_query_job
-from runtime_core.evidence_quality import contradiction_status_for_text, evidence_profile
+from runtime_core.evidence_quality import classified_title, contradiction_status_for_text, evidence_profile
 from runtime_core.osf import (
     backfill_missing_publication_dois,
     build_oauth_authorization_url,
@@ -467,13 +467,65 @@ def _is_publicly_listed(publication: ResearchObject) -> bool:
     return True
 
 
-def _publication_response(publication: ResearchObject) -> dict:
+def _public_integrity_signal(value: object) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    payload = dict(value)
+    reason = str(payload.get("reason") or "").lower()
+    unavailable = payload.get("available") is False or "integrity_unavailable" in reason or "timed out" in reason
+    if unavailable:
+        payload["available"] = False
+        payload["recommendation"] = "unavailable"
+        payload["status"] = "unavailable"
+    else:
+        payload["status"] = "checked" if payload.get("recommendation") else "unknown"
+    return payload
+
+
+def _support_row_is_exact(row: dict) -> bool:
+    if row.get("support_kind") == "direct_doi_match":
+        return True
+    if row.get("quote") or row.get("evidence_span") or row.get("dw_chain_ref"):
+        return True
+    extracted = [row.get("population"), row.get("endpoint"), row.get("effect")]
+    return any(str(value or "").strip().lower() not in {"", "not extracted", "unknown", "none"} for value in extracted)
+
+
+def _claims_are_scoping_only(cards: list[ClaimCard]) -> bool:
+    if not cards:
+        return False
+    weak_statuses = {"mixed", "contested", "insufficient", "non_supportive", "contradicted"}
+    exploratory = all(str(card.evidence_grade) == "exploratory" for card in cards)
+    weak = sum(1 for card in cards if str(card.contradiction_status) in weak_statuses)
+    exact = sum(1 for card in cards for row in card.citation_support if isinstance(row, dict) and _support_row_is_exact(row))
+    return exploratory and weak >= max(1, len(cards) // 2) and exact == 0
+
+
+def _public_publication_class(repo: RuntimeRepository, publication: ResearchObject) -> str | None:
+    stored = publication.metadata.get("publication_class")
+    pub_class = str(stored or "").strip() or None
+    article_type = str(publication.metadata.get("article_type") or "").strip()
+    if article_type == "evidence_map":
+        return "evidence_map"
+    if pub_class == "research_synthesis" and _claims_are_scoping_only(_publication_claim_cards(repo, publication)):
+        raw_profile = publication.metadata.get("evidence_profile")
+        profile = raw_profile if isinstance(raw_profile, dict) else {}
+        if profile.get("indirect_signal") or float(profile.get("weak_evidence_ratio") or 0) >= 0.6:
+            return "adjacent_evidence_brief"
+        return "evidence_map"
+    return pub_class
+
+
+def _publication_response(repo: RuntimeRepository, publication: ResearchObject) -> dict:
     payload = publication.model_dump(mode="json")
+    pub_class = _public_publication_class(repo, publication)
+    if pub_class:
+        payload["title"] = classified_title(publication.title, pub_class)
     payload["artifact_type"] = _artifact_type_for_submission(publication)
     payload["surface"] = _publication_surface(publication)
-    payload["publication_class"] = publication.metadata.get("publication_class")
+    payload["publication_class"] = pub_class
     payload["evidence_profile"] = publication.metadata.get("evidence_profile")
-    payload["integrity"] = publication.metadata.get("integrity")
+    payload["integrity"] = _public_integrity_signal(publication.metadata.get("integrity"))
     payload["doi"] = publication.metadata.get("doi")
     payload["doi_status"] = publication.metadata.get("doi_status")
     payload["osf_url"] = publication.metadata.get("osf_url")
@@ -567,7 +619,7 @@ def _publication_passport(repo: RuntimeRepository, publication: ResearchObject) 
             "ror_id": ror_id,
             "status": "supplied" if institution_name or ror_id else "not_supplied",
         },
-        "integrity": metadata.get("integrity") if isinstance(metadata.get("integrity"), dict) else None,
+        "integrity": _public_integrity_signal(metadata.get("integrity")),
         "provenance": {
             "dw_artifact_id": metadata.get("dw_artifact_id"),
             "dw_chain_url": metadata.get("dw_chain_url"),
@@ -1081,14 +1133,20 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             if normalized not in {"alpha", "papers"}:
                 raise HTTPException(status_code=400, detail="invalid_surface")
             publications = [publication for publication in publications if _publication_surface(publication) == normalized]
-        return {"publications": [_publication_response(publication) for publication in publications if _is_publicly_listed(publication)]}
+        return {
+            "publications": [
+                _publication_response(app.state.repository, publication)
+                for publication in publications
+                if _is_publicly_listed(publication)
+            ]
+        }
 
     @app.get("/publications/{publication_id}")
     def get_publication(publication_id: str) -> dict:
         publication = app.state.repository.get_object(publication_id)
         if publication is None or publication.object_type != ObjectType.PUBLICATION or _is_hidden_public_record(publication):
             raise HTTPException(status_code=404, detail="publication_not_found")
-        payload = _publication_response(publication)
+        payload = _publication_response(app.state.repository, publication)
         payload["sidecars"] = sidecar_manifest(publication.id)
         payload["provenance_passport"] = _publication_passport(app.state.repository, publication)
         return payload

@@ -782,6 +782,46 @@ def test_publish_preserves_research_synthesis_with_direct_clinical_core(
     assert publication.metadata["evidence_profile"]["direct_clinical_sources"] == 31
 
 
+def test_publish_labels_declared_evidence_map_as_evidence_map(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = InMemoryRuntimeRepository()
+    full_body = "\n\n".join(
+        [
+            "# Full manuscript",
+            "## Abstract\n\nThis evidence map catalogs heterogeneous source-level findings without collapsing them into a single causal thesis. It defines the topic boundary, preserves source-level disagreement, separates direct evidence from adjacent context, and frames every conclusion as exploratory rather than clinical guidance or policy advice.",
+            "## Methods\n\nThe methods describe source retrieval, screening, extraction, appraisal, synthesis, and verification in enough detail to audit the accepted manuscript.",
+            "## Results\n\nThe results preserve heterogeneous source-level findings and report contextual evidence without overstating clinical certainty.",
+            "## Limitations\n\nThe limitations identify corpus boundaries, uncertainty, scope restrictions, missing endpoints, and interpretation risks that constrain public claims.",
+            "## Conclusion\n\nThe conclusion states that the map is exploratory, bounded, and source-dependent. It does not support broad causal, clinical, or policy claims, and it directs future work toward better endpoint-specific replication rather than pretending that the current corpus has converged.",
+            "## References\n\n- Example source. DOI: 10.1000/example.",
+        ]
+    )
+    submission = repo.create_object(ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Research Synthesis: Tai Chi Exercise Effects — full paper",
+        body_markdown=full_body,
+        metadata={
+            "abstract": "This evidence map catalogs heterogeneous source-level findings.",
+            "article_type": ArticleType.EVIDENCE_MAP.value,
+            "sections": {},
+            "source_bundle": [
+                {"title": f"Source {index}", "year": 2024, "evidence_type": "primary"}
+                for index in range(1, 13)
+            ],
+            "core_claims_resolved": True,
+        },
+    ))
+    monkeypatch.setattr(workflow, "_mint_publication_doi", lambda repository, publication: {})
+
+    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+
+    publication = repo.get_object(result["publication_id"])
+    assert publication is not None
+    assert publication.title == "Evidence Map: Tai Chi Exercise Effects — full paper"
+    assert publication.metadata["publication_class"] == "evidence_map"
+
+
 def test_compile_publication_preserves_full_manuscript_references() -> None:
     full_body = "\n\n".join(
         [

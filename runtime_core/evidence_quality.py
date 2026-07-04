@@ -37,6 +37,8 @@ def evidence_profile(*, text: str, source_bundle: list[dict[str, Any]] | None = 
 def publication_class(*, article_type: str, title: str, profile: dict[str, Any]) -> str:
     if article_type == ArticleType.ALPHA_MEMO.value:
         return "alpha_memo"
+    if article_type == ArticleType.EVIDENCE_MAP.value:
+        return "evidence_map"
     weak_ratio = float(profile.get("weak_evidence_ratio") or 0.0)
     direct_count = profile.get("direct_clinical_sources")
     low_direct = isinstance(direct_count, int) and direct_count <= 2
@@ -57,6 +59,7 @@ def publication_class(*, article_type: str, title: str, profile: dict[str, Any])
 
 def classified_title(title: str, publication_class: str) -> str:
     prefixes = {
+        "evidence_map": "Evidence Map",
         "hypothesis_generating_brief": "Hypothesis-Generating Brief",
         "adjacent_evidence_brief": "Adjacent Evidence Brief",
         "research_synthesis": "Research Synthesis",
@@ -65,7 +68,7 @@ def classified_title(title: str, publication_class: str) -> str:
     if not prefix:
         return title
     body = re.sub(
-        r"^(Research Synthesis|Hypothesis-Generating Brief|Adjacent Evidence Brief):\s*",
+        r"^(Research Synthesis|Evidence Map|Hypothesis-Generating Brief|Adjacent Evidence Brief):\s*",
         "",
         title,
         flags=re.IGNORECASE,

@@ -737,6 +737,82 @@ def test_publications_surface_filter_splits_alpha_and_papers(client: TestClient)
     assert invalid_response.status_code == 400
 
 
+def test_publication_response_relabels_scoping_only_research_synthesis(client: TestClient) -> None:
+    repo = _repository(client)
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Tai Chi submission",
+            metadata={"source_bundle": _valid_source_bundle()},
+        )
+    )
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title="Research Synthesis: Tai Chi Exercise Effects — full paper",
+            metadata={
+                "article_type": "research_synthesis",
+                "publication_class": "research_synthesis",
+                "evidence_profile": {"weak_evidence_ratio": 0.76, "indirect_signal": True},
+            },
+        )
+    )
+    for claim_text, status in [
+        ("The corpus is non-supportive for broad clinical claims.", ContradictionStatus.NON_SUPPORTIVE),
+        ("Evidence is mixed and endpoint-dependent.", ContradictionStatus.MIXED),
+    ]:
+        repo.save_claim_card(
+            ClaimCard(
+                publication_id=publication.id,
+                claim_text=claim_text,
+                evidence_grade=EvidenceGrade.EXPLORATORY,
+                contradiction_status=status,
+                citation_support=[
+                    {
+                        "source_id": "source_1",
+                        "support_kind": "candidate_source_row",
+                        "population": "not extracted",
+                        "endpoint": "not extracted",
+                        "effect": "not extracted",
+                    }
+                ],
+            )
+        )
+
+    listed = client.get("/publications").json()["publications"][0]
+    detail = client.get(f"/publications/{publication.id}").json()
+
+    assert listed["publication_class"] == "adjacent_evidence_brief"
+    assert listed["title"] == "Adjacent Evidence Brief: Tai Chi Exercise Effects — full paper"
+    assert detail["publication_class"] == "adjacent_evidence_brief"
+
+
+def test_publication_response_preserves_verified_research_synthesis(client: TestClient) -> None:
+    repo = _repository(client)
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Research Synthesis: Resistance Training Effects — full paper",
+            metadata={"article_type": "research_synthesis", "publication_class": "research_synthesis"},
+        )
+    )
+    repo.save_claim_card(
+        ClaimCard(
+            publication_id=publication.id,
+            claim_text="Direct trials support improved endpoint-specific function.",
+            evidence_grade=EvidenceGrade.VERIFIED,
+            contradiction_status=ContradictionStatus.NONE,
+            citation_support=[{"source_id": "src-1", "support_kind": "direct_doi_match"}],
+        )
+    )
+
+    detail = client.get(f"/publications/{publication.id}").json()
+
+    assert detail["publication_class"] == "research_synthesis"
+    assert detail["title"] == "Research Synthesis: Resistance Training Effects — full paper"
+
+
 def test_claims_list_and_agent_profile(client: TestClient) -> None:
     repo = _repository(client)
     submission = repo.create_object(
@@ -833,6 +909,7 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
     assert passport["persistent_identifier_status"]["raid_id"] == "supplied"
     assert passport["institution"]["status"] == "supplied"
     assert passport["integrity"]["recommendation"] == "pass"
+    assert passport["integrity"]["status"] == "checked"
     crate = client.get(f"/publications/{publication.id}/ro-crate").json()
     assert crate["@type"] == "Dataset"
     assert crate["provenance_passport"]["content_hash"] == "sha256:" + "b" * 64
@@ -848,6 +925,30 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
     assert bare_passport["persistent_identifier_status"]["ror_id"] == "not_supplied"
     assert bare_passport["persistent_identifier_status"]["raid_id"] == "not_supplied"
     assert bare_passport["institution"]["status"] == "not_supplied"
+
+
+def test_integrity_unavailable_is_not_public_pass(client: TestClient) -> None:
+    repo = _repository(client)
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Timeout publication",
+            metadata={
+                "integrity": {
+                    "available": False,
+                    "recommendation": "pass",
+                    "reason": "integrity_unavailable: The read operation timed out",
+                }
+            },
+        )
+    )
+
+    detail = client.get(f"/publications/{publication.id}").json()
+    passport = client.get(f"/publications/{publication.id}/passport").json()
+
+    assert detail["integrity"]["recommendation"] == "unavailable"
+    assert detail["integrity"]["status"] == "unavailable"
+    assert passport["integrity"]["recommendation"] == "unavailable"
 
 
 def test_hidden_records_stay_off_public_trust_surfaces(client: TestClient) -> None:
