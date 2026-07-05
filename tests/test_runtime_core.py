@@ -627,6 +627,54 @@ def test_alpha_accept_guard_ignores_scaffold_title_terms() -> None:
     assert "alpha_accept_guard" not in decision.metadata
 
 
+def test_alpha_accept_guard_reads_structured_source_fact_terms() -> None:
+    repo = InMemoryRuntimeRepository()
+    engine = WorkflowEngine()
+    source_bundle = [
+        {
+            "title": "Digital transformation and firm performance source",
+            "doi": "10.1000/digital-transformation",
+            "evidence_type": "primary",
+            "source_fact": {
+                "population": "Banking firms",
+                "intervention": "Use of big data",
+                "endpoint": "Firm performance",
+            },
+        }
+    ]
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="digital transformation: big data in banking firms context",
+            metadata={
+                "article_type": ArticleType.ALPHA_MEMO.value,
+                "source_bundle": source_bundle,
+                "topic": "digital_transformation",
+            },
+        )
+    )
+    review = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.REVIEW,
+            parent_object_id=submission.id,
+            title="Review",
+            metadata={"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
+        )
+    )
+
+    outcome = engine.handle_job(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id}),
+        repo,
+    )
+    decision = repo.get_object(str(outcome["created_object_id"]))
+
+    assert outcome["terminal_decision"] == Decision.ACCEPT.value
+    assert outcome["next_jobs"] == 1
+    assert decision is not None
+    assert decision.metadata["decision"] == Decision.ACCEPT.value
+    assert "alpha_accept_guard" not in decision.metadata
+
+
 def test_alpha_accept_duplicate_source_pair_becomes_revise() -> None:
     repo = InMemoryRuntimeRepository()
     engine = WorkflowEngine()

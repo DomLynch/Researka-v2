@@ -111,6 +111,7 @@ def _bundle_dois(source_bundle: list[dict]) -> list[str]:
 _ALPHA_ANCHOR_STOPWORDS = {
     "adaptation",
     "adaptations",
+    "adjacent",
     "agent",
     "agents",
     "alpha",
@@ -125,6 +126,8 @@ _ALPHA_ANCHOR_STOPWORDS = {
     "effects",
     "evidence",
     "exercise",
+    "families",
+    "family",
     "memo",
     "one",
     "protection",
@@ -141,6 +144,37 @@ _ALPHA_ANCHOR_STOPWORDS = {
 }
 
 
+def _alpha_source_anchor_text(source_bundle: list[dict]) -> str:
+    anchor_fields = {
+        "abstract",
+        "canonical_phrase",
+        "comparator",
+        "endpoint",
+        "finding",
+        "intervention",
+        "metric",
+        "outcome",
+        "paper_title",
+        "population",
+        "setting",
+        "source_fact",
+        "source_facts",
+        "summary",
+        "title",
+    }
+
+    def collect(value: object) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list):
+            return [part for item in value for part in collect(item)]
+        if isinstance(value, dict):
+            return [part for key, item in value.items() if str(key) in anchor_fields for part in collect(item)]
+        return []
+
+    return " ".join(part for entry in source_bundle for part in collect(entry))
+
+
 def _alpha_anchor_terms(text: object) -> set[str]:
     return {
         token
@@ -153,8 +187,7 @@ def _alpha_accept_guard_revisions(submission: ResearchObject, repository: Runtim
     if submission.metadata.get("article_type") != ArticleType.ALPHA_MEMO.value:
         return []
     source_bundle = [entry for entry in submission.metadata.get("source_bundle", []) if isinstance(entry, dict)]
-    source_text = " ".join(str(entry.get("title") or "") for entry in source_bundle)
-    source_terms = _alpha_anchor_terms(source_text)
+    source_terms = _alpha_anchor_terms(_alpha_source_anchor_text(source_bundle))
     topic = submission.metadata.get("topic")
     topic_text = topic if isinstance(topic, str) else ""
     title_terms = _alpha_anchor_terms(f"{submission.title} {topic_text}")
