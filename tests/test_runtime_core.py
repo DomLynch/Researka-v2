@@ -579,7 +579,7 @@ def test_alpha_accept_ignores_null_topic_anchor() -> None:
     assert "alpha_accept_guard" not in decision.metadata
 
 
-def test_alpha_accept_guard_ignores_scaffold_title_terms() -> None:
+def test_alpha_accept_guard_ignores_named_program_scaffold_and_acronym_fragments() -> None:
     repo = InMemoryRuntimeRepository()
     engine = WorkflowEngine()
     source_bundle = [
@@ -597,7 +597,7 @@ def test_alpha_accept_guard_ignores_scaffold_title_terms() -> None:
     submission = repo.create_object(
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
-            title="fisetin: one bounded, context-dependent signal across receipts",
+            title="EX-MET Program: Endpoint-Specific Fisetin Findings",
             metadata={
                 "article_type": ArticleType.ALPHA_MEMO.value,
                 "source_bundle": source_bundle,
@@ -625,6 +625,11 @@ def test_alpha_accept_guard_ignores_scaffold_title_terms() -> None:
     assert decision is not None
     assert decision.metadata["decision"] == Decision.ACCEPT.value
     assert "alpha_accept_guard" not in decision.metadata
+
+
+def test_alpha_anchor_terms_keep_scientific_hyphenated_tokens() -> None:
+    assert "met" not in workflow._alpha_anchor_terms("EX-MET Program: Endpoint-Specific Findings")
+    assert "covid" in workflow._alpha_anchor_terms("COVID-19 intervention findings")
 
 
 def test_alpha_accept_guard_reads_structured_source_fact_terms() -> None:

@@ -1064,6 +1064,7 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
                 "decision": "reject",
                 "notes": ["editorial decision is terminal; external author must resubmit"],
                 "review_id": review.id,
+                "required_revisions": ["Align title/topic with receipt evidence."],
                 "gate_failures": [{"name": "minimum_citations", "passed": False, "reason": "expected at least 12 sources"}],
             },
         )
@@ -1087,7 +1088,10 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
     assert decision_payload["failure_stage"] == "reviewer_panel"
     assert decision_payload["failure_category"] == "minimum_citations"
     assert decision_payload["failed_checks"] == ["expected at least 12 sources"]
-    assert decision_payload["required_revisions"] == ["Clarify that all evidence comes from a single trial."]
+    assert decision_payload["required_revisions"] == [
+        "Align title/topic with receipt evidence.",
+        "Clarify that all evidence comes from a single trial.",
+    ]
     assert decision_payload["rubric_scores"]["source_grounding"] == 5
     assert decision_payload["claim_support_verdict"] == "supported"
     assert decision_payload["panel_route"] == "fallback_tiebreak"
@@ -1118,7 +1122,10 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
     assert record["failure_stage"] == "reviewer_panel"
     assert record["failed_checks"] == ["expected at least 12 sources"]
     assert record["rubric_scores"]["claim_evidence_alignment"] == 4
-    assert record["required_revisions"] == ["Clarify that all evidence comes from a single trial."]
+    assert record["required_revisions"] == [
+        "Align title/topic with receipt evidence.",
+        "Clarify that all evidence comes from a single trial.",
+    ]
     assert record["major_issues"] == []
     assert record["minor_issues"] == ["Tighten the limitations wording."]
     assert record["claim_support_verdict"] == "supported"

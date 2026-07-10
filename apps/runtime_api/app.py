@@ -754,7 +754,10 @@ def _public_decision_record(
     gate_failures = decision_metadata.get("gate_failures", [])
     failed_checks = _string_list(gate_failures) or _string_list(decision_metadata.get("failed_checks"))
     decision_value = str(decision_metadata.get("decision") or "").strip().lower()
-    required_revisions = _string_list(review_metadata.get("required_revisions"))
+    required_revisions = list(dict.fromkeys([
+        *_string_list(decision_metadata.get("required_revisions")),
+        *_string_list(review_metadata.get("required_revisions")),
+    ]))
     major_issues = _string_list(review_metadata.get("major_issues"))
     minor_issues = _string_list(review_metadata.get("minor_issues"))
     domain_slug = submission_metadata.get("domain_slug") or "general"

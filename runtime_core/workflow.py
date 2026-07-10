@@ -124,18 +124,25 @@ _ALPHA_ANCHOR_STOPWORDS = {
     "dependent",
     "effect",
     "effects",
+    "endpoint",
+    "endpoints",
     "evidence",
     "exercise",
     "families",
     "family",
+    "finding",
+    "findings",
     "memo",
     "one",
     "protection",
+    "program",
+    "programs",
     "receipt",
     "receipts",
     "research",
     "signal",
     "signals",
+    "specific",
     "the",
     "training",
     "under",
@@ -176,10 +183,19 @@ def _alpha_source_anchor_text(source_bundle: list[dict]) -> str:
 
 
 def _alpha_anchor_terms(text: object) -> set[str]:
+    raw = str(text or "")
+    named_program_fragments = {
+        fragment.lower()
+        for acronym in re.findall(
+            r"\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\s+(?:Program|Study)\b",
+            raw,
+        )
+        for fragment in acronym.split("-")
+    }
     return {
         token
-        for token in re.findall(r"[a-z0-9]+", str(text or "").lower())
-        if len(token) > 2 and token not in _ALPHA_ANCHOR_STOPWORDS
+        for token in re.findall(r"[a-z0-9]+", raw.lower())
+        if len(token) > 2 and token not in _ALPHA_ANCHOR_STOPWORDS and token not in named_program_fragments
     }
 
 
