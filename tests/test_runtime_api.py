@@ -788,6 +788,45 @@ def test_publication_response_relabels_scoping_only_research_synthesis(client: T
     assert detail["publication_class"] == "adjacent_evidence_brief"
 
 
+def test_publication_response_does_not_reclassify_from_derived_claim_cards(client: TestClient) -> None:
+    repo = _repository(client)
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Protein supplementation submission",
+            metadata={"source_bundle": _valid_source_bundle()},
+        )
+    )
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title="Research Synthesis: Protein supplementation — full paper",
+            body_markdown=(
+                "Indirect evidence suggests endpoint-specific effects while preserving the limits of "
+                "adjacent and mechanistic sources across the retained clinical corpus.\n\n"
+                "Mixed and null evidence constrains broad claims, but direct sources still support a "
+                "bounded research synthesis with explicit uncertainty."
+            ),
+            metadata={
+                "article_type": "research_synthesis",
+                "publication_class": "research_synthesis",
+                "evidence_profile": {
+                    "direct_clinical_sources": 11,
+                    "indirect_signal": True,
+                    "weak_evidence_ratio": 0.0,
+                },
+            },
+        )
+    )
+
+    assert repo.list_claim_cards(publication.id) == []
+    detail = client.get(f"/publications/{publication.id}").json()
+
+    assert detail["publication_class"] == "research_synthesis"
+    assert detail["title"] == "Research Synthesis: Protein supplementation — full paper"
+
+
 def test_publication_response_preserves_verified_research_synthesis(client: TestClient) -> None:
     repo = _repository(client)
     publication = repo.create_object(
