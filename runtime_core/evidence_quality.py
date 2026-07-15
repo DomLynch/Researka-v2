@@ -10,6 +10,20 @@ WEAK_PATTERN = re.compile(
     re.IGNORECASE,
 )
 DIRECT_PATTERN = re.compile(r"contains\s+(\d+)\s+direct clinical sources", re.IGNORECASE)
+BUNDLE_REFERENCE_PATTERN = re.compile(r"\[bundle:(\d+)\]", re.IGNORECASE)
+
+
+def claim_candidates(text: str) -> list[str]:
+    candidates = []
+    for line in text.splitlines():
+        clean = line.strip(" -*")
+        if len(clean) < 80:
+            continue
+        if any(marker in clean.lower() for marker in ("support", "suggest", "risk", "increase", "decrease", "null", "evidence")):
+            candidates.append(clean)
+    if not candidates:
+        candidates = [part.strip() for part in re.split(r"\n+|(?<=[.!?])\s+", text) if len(part.strip()) >= 80]
+    return candidates[:30]
 
 
 def evidence_profile(*, text: str, source_bundle: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -23,11 +37,16 @@ def evidence_profile(*, text: str, source_bundle: list[dict[str, Any]] | None = 
     selected_count = len(source_bundle)
     primary_count = sum(1 for item in source_bundle if item.get("evidence_type") == "primary")
     lower = text.lower()
+    claims = claim_candidates(text)
+    exact_traces = sum(1 for claim in claims if support_for_claim(claim, source_bundle))
     return {
         "weak_evidence_ratio": round(weak_ratio, 4),
         "direct_clinical_sources": direct_count,
         "source_count": selected_count,
         "primary_source_ratio": round(primary_count / selected_count, 4) if selected_count else None,
+        "claim_trace_count": len(claims),
+        "exact_claim_trace_count": exact_traces,
+        "exact_claim_trace_ratio": round(exact_traces / len(claims), 4) if claims else None,
         "mixed_signal": any(term in lower for term in ("mixed", "heterogeneous", "disagreement", "tension")),
         "non_supportive_signal": any(term in lower for term in ("non-supportive", "does not support", "null or no extracted")),
         "indirect_signal": any(term in lower for term in ("indirect", "adjacent", "mechanistic")),
@@ -44,6 +63,10 @@ def publication_class(*, article_type: str, title: str, profile: dict[str, Any])
     low_direct = isinstance(direct_count, int) and direct_count <= 2
     if weak_ratio >= 0.80 or (low_direct and profile.get("non_supportive_signal")):
         return "hypothesis_generating_brief"
+    trace_count = int(profile.get("claim_trace_count") or 0)
+    exact_traces = int(profile.get("exact_claim_trace_count") or 0)
+    if title.lower().startswith("research synthesis:") and trace_count and exact_traces / trace_count < 0.8:
+        return "adjacent_evidence_brief"
     if (
         title.lower().startswith("research synthesis:")
         and isinstance(direct_count, int)
@@ -97,21 +120,41 @@ def contradiction_status_for_text(text: str, profile: dict[str, Any]) -> Contrad
 
 def support_for_claim(text: str, sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
     claim = text.lower()
-    doi_hits = [
-        source for source in sources
+    bundle_indexes = {int(value) - 1 for value in BUNDLE_REFERENCE_PATTERN.findall(text)}
+    bundle_indexes = {index for index in bundle_indexes if 0 <= index < len(sources)}
+    doi_indexes = {
+        index
+        for index, source in enumerate(sources)
         if source.get("doi") and str(source["doi"]).lower().rstrip(".,") in claim
-    ]
-    selected = doi_hits or sources[:5]
+    }
+    span_indexes = {
+        index
+        for index, source in enumerate(sources)
+        if any(
+            len(span) >= 8 and span in claim
+            for span in (
+                str(source.get("quote") or "").strip().lower(),
+                str(source.get("evidence_span") or "").strip().lower(),
+            )
+        )
+    }
     support: list[dict[str, Any]] = []
-    for index, source in enumerate(selected, start=1):
+    for index in sorted(bundle_indexes | doi_indexes | span_indexes):
+        source = sources[index]
         row = {
-            "source_id": str(source.get("source_id") or f"source_{index}"),
+            "source_id": str(source.get("source_id") or f"source_{index + 1}"),
             "study": source.get("study") or source.get("title"),
             "doi": source.get("doi"),
             "url": source.get("url"),
-            "support_kind": "direct_doi_match" if source in doi_hits else "candidate_source_row",
+            "support_kind": (
+                "bundle_reference"
+                if index in bundle_indexes
+                else "direct_doi_match"
+                if index in doi_indexes
+                else "evidence_span_match"
+            ),
         }
-        for key in ("population", "endpoint", "effect", "directness"):
+        for key in ("population", "endpoint", "effect", "directness", "quote", "evidence_span", "dw_chain_ref"):
             if source.get(key):
                 row[key] = source[key]
         support.append(row)

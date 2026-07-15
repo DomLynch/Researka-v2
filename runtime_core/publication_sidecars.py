@@ -7,7 +7,7 @@ from typing import Any
 
 from contracts import ResearchObject
 
-from .evidence_quality import support_for_claim
+from .evidence_quality import claim_candidates, support_for_claim
 
 SIDECAR_NAMES = {
     "claim_graph.json",
@@ -68,42 +68,28 @@ def publication_sources(publication: ResearchObject, submission: ResearchObject 
     return _dedupe_sources(_source_bundle(submission) + _references_from_body(publication.body_markdown or ""))
 
 
-def _claim_candidates(publication: ResearchObject) -> list[str]:
-    body = publication.body_markdown or ""
-    candidates: list[str] = []
-    for line in body.splitlines():
-        clean = line.strip(" -*")
-        if len(clean) < 80:
-            continue
-        lowered = clean.lower()
-        if any(marker in lowered for marker in ("support", "suggest", "risk", "increase", "decrease", "null", "evidence")):
-            candidates.append(clean)
-    if not candidates:
-        abstract = str(publication.metadata.get("abstract") or "")
-        candidates = [part.strip() for part in re.split(r"\n+|(?<=[.!?])\s+", abstract) if len(part.strip()) >= 80]
-    return candidates[:30]
-
-
 def evidence_rows(publication: ResearchObject, submission: ResearchObject | None = None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for source in publication_sources(publication, submission):
         title = str(source.get("title") or "Untitled source")
         evidence_type = str(source.get("evidence_type") or "source").lower()
-        rows.append(
-            {
-                "study": title,
-                "year": source.get("year"),
-                "doi": source.get("doi"),
-                "url": source.get("url"),
-                "population": source.get("population") or source.get("cohort") or "not extracted",
-                "intervention_or_exposure": source.get("intervention") or source.get("exposure") or "not extracted",
-                "comparator": source.get("comparator") or "not extracted",
-                "endpoint": source.get("endpoint") or source.get("outcome") or "not extracted",
-                "effect": source.get("effect") or source.get("effect_size") or "not extracted",
-                "risk_of_bias": source.get("risk_of_bias") or "not appraised in public sidecar",
-                "directness": "review-level" if "review" in evidence_type else evidence_type or "source-traceable",
-            }
-        )
+        row = {
+            "study": title,
+            "year": source.get("year"),
+            "doi": source.get("doi"),
+            "url": source.get("url"),
+            "population": source.get("population") or source.get("cohort") or "not extracted",
+            "intervention_or_exposure": source.get("intervention") or source.get("exposure") or "not extracted",
+            "comparator": source.get("comparator") or "not extracted",
+            "endpoint": source.get("endpoint") or source.get("outcome") or "not extracted",
+            "effect": source.get("effect") or source.get("effect_size") or "not extracted",
+            "risk_of_bias": source.get("risk_of_bias") or "not appraised in public sidecar",
+            "directness": "review-level" if "review" in evidence_type else evidence_type or "source-traceable",
+        }
+        for key in ("quote", "evidence_span", "dw_chain_ref"):
+            if source.get(key):
+                row[key] = source[key]
+        rows.append(row)
     return rows
 
 
@@ -149,7 +135,9 @@ def build_sidecar(publication: ResearchObject, submission: ResearchObject | None
     if sidecar_name not in SIDECAR_NAMES:
         raise KeyError(sidecar_name)
     rows = evidence_rows(publication, submission)
-    claims = _claim_candidates(publication)
+    claims = claim_candidates(
+        f"{publication.title}\n{publication.metadata.get('abstract') or ''}\n{publication.body_markdown or ''}"
+    )
     if sidecar_name == "evidence_table.csv":
         output = io.StringIO()
         fieldnames = [
@@ -183,12 +171,22 @@ def build_sidecar(publication: ResearchObject, submission: ResearchObject | None
         }, "application/json", sidecar_name
     if sidecar_name == "citation_traces.json":
         sources = [{**row, "source_id": f"source_{index}"} for index, row in enumerate(rows, start=1)]
+        traces = []
+        for index, claim in enumerate(claims, start=1):
+            exact = support_for_claim(claim, sources)
+            traces.append(
+                {
+                    "claim_id": f"claim_{index}",
+                    "claim": claim,
+                    "citation_support": exact,
+                    "candidate_sources": [] if exact else [
+                        {**source, "support_kind": "candidate_source_row"} for source in sources[:5]
+                    ],
+                }
+            )
         return {
             "publication_id": publication.id,
-            "traces": [
-                {"claim_id": f"claim_{index}", "claim": claim, "candidate_sources": support_for_claim(claim, sources)}
-                for index, claim in enumerate(claims, start=1)
-            ],
+            "traces": traces,
         }, "application/json", sidecar_name
     if sidecar_name == "risk_of_bias.json":
         return {

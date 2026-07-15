@@ -69,7 +69,7 @@ def _accept_review() -> dict[str, Any]:
 
 
 class AcceptProvider:
-    provider = "accept-provider"
+    provider = "reviewer-panel"
     model = "accept-model"
 
     def __init__(self) -> None:
@@ -84,6 +84,7 @@ class AcceptProvider:
                 provider=self.provider,
                 model=self.model,
                 usage=ProviderUsage(input_tokens=5, output_tokens=4, cost_usd=0.01),
+                metadata={"accept_quorum_count": 2},
             ),
         )
 

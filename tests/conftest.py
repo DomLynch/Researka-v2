@@ -2,6 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apps.runtime_api.app import create_app
+from runtime_core.providers import DeterministicProvider
+from runtime_core.reviewer_panel import ReviewerPanel
 from runtime_core.repos import (
     InMemoryRuntimeRepository,
     PostgresRuntimeRepository,
@@ -31,6 +33,18 @@ def disable_doi_check_by_default(monkeypatch):
 @pytest.fixture(autouse=True)
 def isolate_rate_limit_db(monkeypatch, tmp_path):
     monkeypatch.setenv("RESEARKA_V2_RATE_LIMIT_DB_PATH", str(tmp_path / "rate_limits.db"))
+
+
+@pytest.fixture(autouse=True)
+def deterministic_review_panel(monkeypatch):
+    def factory():
+        return ReviewerPanel(
+            primary=DeterministicProvider(model="deterministic-primary"),
+            sparring=DeterministicProvider(model="deterministic-sparring"),
+            fallback=DeterministicProvider(model="deterministic-fallback"),
+        )
+
+    monkeypatch.setattr("runtime_core.workflow.reviewer_from_env", factory)
 
 
 @pytest.fixture

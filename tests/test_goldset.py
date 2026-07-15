@@ -20,6 +20,9 @@ def _empirical_sections() -> dict[str, str]:
 
 
 class RoutingProvider:
+    provider = "reviewer-panel"
+    model = "routing-model"
+
     def complete(self, request: ProviderRequest) -> ProviderResult:
         if "Empirical Study" in request.user_prompt and "empirical study reviewer" in request.system_prompt.lower():
             payload = {
@@ -63,9 +66,10 @@ class RoutingProvider:
             ok=True,
             response=ProviderResponse(
                 text=json.dumps(payload),
-                provider="routing-provider",
+                provider="reviewer-panel",
                 model="routing-model",
                 usage=ProviderUsage(input_tokens=12, output_tokens=8, cost_usd=0.05),
+                metadata={"accept_quorum_count": 2},
             ),
         )
 

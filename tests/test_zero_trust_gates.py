@@ -262,7 +262,7 @@ def test_review_user_prompt_fences_submission_data() -> None:
     captured: dict[str, str] = {}
 
     class CaptureProvider:
-        provider = "stub-provider"
+        provider = "reviewer-panel"
         model = "stub-model"
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
@@ -290,9 +290,10 @@ def test_review_user_prompt_fences_submission_data() -> None:
                             "review_markdown": "Bounded and grounded.",
                         }
                     ),
-                    provider="stub-provider",
-                    model="stub-model",
-                    usage=ProviderUsage(input_tokens=1, output_tokens=1, cost_usd=0.0),
+                        provider="reviewer-panel",
+                        model="stub-model",
+                        usage=ProviderUsage(input_tokens=1, output_tokens=1, cost_usd=0.0),
+                        metadata={"accept_quorum_count": 2},
                 ),
             )
 

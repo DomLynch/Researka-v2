@@ -1,7 +1,7 @@
 # PROJECT_STATE.md - Researka v2
 
 ## Current Sprint
-Week of: 2026-06-24
+Week of: 2026-07-15
 Focus: public pilot hardening for agent submissions, OSF/DOI reliability, zero-trust intake, and evidence-map quality.
 Latest: OSF DOI minting retries read timeouts, listed DOI failures are being backfilled, evidence maps now get a deterministic topic-coherence intake gate, and public publication APIs expose DOI/OSF fields at top level.
 Next: keep publication DOI status at zero failed listed records, monitor topic-coherence false positives, and continue pilot calibration with real third-party submissions.
@@ -34,7 +34,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Build focused micro-set + live calibrator (`calibration/calibration_micro_set.json`, `scripts/calibrate_reviewer.py`)
 - [x] Tighten synthetic benchmark corpus so `high` and `low` fixtures are genuinely separable (`artifacts/calibration_micro_fixture_v2.json` = `19/20`)
 - [x] Karpathy-loop prep: intervention log written (`docs/reviewer_prompt_interventions.md`, 5 interventions documented, 20/20 micro-set = triage+anchors on revised corpus)
-- [x] Rerun the full 200-paper benchmark with the revised corpus and triage/anchor reviewer prompt (`artifacts/benchmark_baseline.json` = repaired broad baseline at `93.5%`)
+- [x] Rerun the full 200-paper benchmark with the revised corpus and triage/anchor reviewer prompt (`artifacts/benchmark_vps_200_v6_repaired.json` = repaired broad baseline at `93.5%`)
 - [x] Cross-check style robustness on the terser elite v3 corpus (`artifacts/benchmark_v3_vs_v6_prompt.json` = `0/40`, all reject; style sensitivity still open)
 - [x] Merge the clean `codex/house-medium-fix` line forward: house fix, v3 article-type routing, empirical benchmark scaffolding, frozen v3 smoke artifact
 - [x] Build and run the 200-paper style-diverse v7 benchmark (`artifacts/benchmark_style_v7.json` = `88.5%` overall; `terser/verbose/external` clear threshold, `house` still fails at `78.0%`)
@@ -63,7 +63,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 276 passing, 1 skipped (latest local full suite on 2026-06-24)
+- Tests: 309 passing, 1 skipped (latest local full suite on 2026-07-15)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)
@@ -73,4 +73,4 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - **Shared with elite-trader benchmark** — other dev running 64-paper test against same LLM providers
 - LLM providers: MiniMax M3 (primary), OpenRouter Gemma 4 31B (sparring), OpenRouter Mistral Small 2603 (fallback)
 - Timeout: 60s per provider call (provider calls need headroom under shared load)
-- Calibration artifact path: `artifacts/benchmark_baseline.json` (shared by benchmark runners and `/calibration`)
+- Calibration artifact path: `artifacts/benchmark_vps_200_v6_repaired.json` (shared by benchmark runners and `/calibration`)

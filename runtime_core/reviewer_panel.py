@@ -23,7 +23,6 @@ from .review_contract import (
     REVIEW_RUBRIC_KEYS,
     SYNTHESIS_QUALITY_VERDICTS,
     accept_contract_failure,
-    accept_contract_satisfied,
 )
 
 
@@ -51,6 +50,8 @@ class ReviewerPanel:
             primary_rec = self._recommendation_from(primary)
             sparring_rec = self._recommendation_from(sparring)
             if primary_rec == sparring_rec:
+                if primary_rec == "accept" and self._accept_quorum_count(primary, sparring) < 2:
+                    return self._combined_error("panel_accept_quorum_unavailable", primary, sparring)
                 return self._panel_response(
                     winner=primary,
                     route="consensus",
@@ -58,6 +59,7 @@ class ReviewerPanel:
                     metadata={
                         "primary_recommendation": primary_rec,
                         "sparring_recommendation": sparring_rec,
+                        "accept_quorum_count": self._accept_quorum_count(primary, sparring),
                         "consensus": True,
                         **slot_flags,
                     },
@@ -73,6 +75,25 @@ class ReviewerPanel:
                     fallback_attempts=fallback_attempts,
                     slot_flags=slot_flags,
                 )
+            fallback_rec = self._recommendation_from(fallback)
+            if fallback_rec == "accept" and self._accept_quorum_count(primary, sparring, fallback) < 2:
+                severity = {"accept": 0, "revise": 1, "reject": 2}
+                winner = primary if severity[primary_rec] >= severity[sparring_rec] else sparring
+                return self._panel_response(
+                    winner=winner,
+                    route="fallback_accept_quorum_unmet_conservative",
+                    used=[primary, sparring, fallback],
+                    metadata={
+                        "primary_recommendation": primary_rec,
+                        "sparring_recommendation": sparring_rec,
+                        "fallback_recommendation": fallback_rec,
+                        "accept_quorum_count": 1,
+                        "consensus": False,
+                        "escalated_to_fallback": True,
+                        "fallback_tiebreak_attempts": fallback_attempts,
+                        **slot_flags,
+                    },
+                )
             return self._panel_response(
                 winner=fallback,
                 route="fallback_tiebreak",
@@ -80,6 +101,8 @@ class ReviewerPanel:
                 metadata={
                     "primary_recommendation": primary_rec,
                     "sparring_recommendation": sparring_rec,
+                    "fallback_recommendation": fallback_rec,
+                    "accept_quorum_count": self._accept_quorum_count(primary, sparring, fallback),
                     "consensus": False,
                     "escalated_to_fallback": True,
                     "fallback_tiebreak_attempts": fallback_attempts,
@@ -88,32 +111,30 @@ class ReviewerPanel:
             )
 
         if primary.ok and not sparring.ok:
-            return self._panel_response(
-                winner=primary,
+            return self._single_valid_response(
+                request,
+                valid=primary,
+                failed=sparring,
+                failed_slot="sparring",
                 route="sparring_failed_primary_used",
-                used=[primary],
-                metadata={
-                    "ops_flag": "sparring_failed",
-                    "sparring_error": self._error_text(sparring),
-                    **slot_flags,
-                },
+                slot_flags=slot_flags,
             )
 
         if sparring.ok and not primary.ok:
-            return self._panel_response(
-                winner=sparring,
+            return self._single_valid_response(
+                request,
+                valid=sparring,
+                failed=primary,
+                failed_slot="primary",
                 route="primary_failed_sparring_used",
-                used=[sparring],
-                metadata={
-                    "ops_flag": "primary_failed",
-                    "primary_error": self._error_text(primary),
-                    **slot_flags,
-                },
+                slot_flags=slot_flags,
             )
 
         fallback, fallback_attempts = self._validated_fallback(request)
         if not fallback.ok:
             return self._combined_error("panel_all_failed", primary, sparring, fallback)
+        if self._recommendation_from(fallback) == "accept":
+            return self._combined_error("panel_accept_quorum_unavailable", primary, sparring, fallback)
         return self._panel_response(
             winner=fallback,
             route="fallback_after_primary_and_sparring_failure",
@@ -137,6 +158,52 @@ class ReviewerPanel:
         last = self._validated_result(self.fallback.complete(request))
         attempts += 1
         return last, attempts
+
+    def _single_valid_response(
+        self,
+        request: ProviderRequest,
+        *,
+        valid: ProviderResult,
+        failed: ProviderResult,
+        failed_slot: str,
+        route: str,
+        slot_flags: dict[str, object],
+    ) -> ProviderResult:
+        recommendation = self._recommendation_from(valid)
+        metadata = {
+            "ops_flag": f"{failed_slot}_failed",
+            f"{failed_slot}_error": self._error_text(failed),
+            **slot_flags,
+        }
+        if recommendation != "accept":
+            return self._panel_response(winner=valid, route=route, used=[valid], metadata=metadata)
+        fallback, attempts = self._validated_fallback(request)
+        if not fallback.ok:
+            return self._combined_error("panel_accept_quorum_unavailable", valid, failed, fallback)
+        fallback_rec = self._recommendation_from(fallback)
+        quorum_count = self._accept_quorum_count(valid, fallback)
+        if fallback_rec == "accept" and quorum_count < 2:
+            return self._combined_error("panel_accept_quorum_unavailable", valid, failed, fallback)
+        return self._panel_response(
+            winner=valid if fallback_rec == "accept" else fallback,
+            route="single_reviewer_accept_quorum" if fallback_rec == "accept" else "single_reviewer_accept_overruled",
+            used=[valid, fallback],
+            metadata={
+                **metadata,
+                "surviving_recommendation": recommendation,
+                "fallback_recommendation": fallback_rec,
+                "accept_quorum_count": quorum_count,
+                "escalated_to_fallback": True,
+                "fallback_tiebreak_attempts": attempts,
+            },
+        )
+
+    def _accept_quorum_count(self, *results: ProviderResult) -> int:
+        return len({
+            result.response.model
+            for result in results
+            if result.ok and result.response is not None and self._recommendation_from(result) == "accept"
+        })
 
     def _conservative_disagreement_response(
         self,
@@ -343,22 +410,13 @@ class ReviewerPanel:
             )
             if failure:
                 raise ValueError(failure)
-        if (
-            recommendation == "revise"
-            and not required_revisions
-            and not accept_contract_satisfied(
-                normalized_scores,
-                major_issues=major_issues,
-                required_revisions=required_revisions,
-                claim_support=claim_support,
-                overclaim=overclaim,
-                synthesis_quality=synthesis_quality,
-            )
-        ):
+        if recommendation == "revise" and not required_revisions:
             raise ValueError("revise_missing_required_revisions")
 
     def _error_text(self, result: ProviderResult) -> str:
         if result.error is None:
+            if result.ok and result.response is not None:
+                return f"ok:{result.response.provider}:{result.response.model}"
             return "unknown"
         return f"{result.error.error_class.value}:{result.error.message}"
 

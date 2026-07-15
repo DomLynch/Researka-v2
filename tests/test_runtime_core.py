@@ -4,6 +4,7 @@ import urllib.error
 import pytest
 
 from runtime_core.compiler import canonical_bundle_facts, compile_publication
+from runtime_core.evidence_quality import support_for_claim
 from runtime_core.gates import run_publish_gates
 from runtime_core.failure_classifier import classify_failure_reason
 from runtime_core.prompts import REVIEWER_PROMPT_VERSION
@@ -46,6 +47,13 @@ def _valid_source_bundle() -> list[dict[str, object]]:
     ]
 
 
+def test_claim_support_requires_explicit_evidence_span() -> None:
+    source = {"title": "Trial", "evidence_span": "mortality was lower in the intervention group"}
+
+    assert support_for_claim("Mortality was lower in the intervention group.", [source])[0]["support_kind"] == "evidence_span_match"
+    assert support_for_claim("The intervention may improve outcomes.", [source]) == []
+
+
 def _review_payload(
     recommendation: str = "accept",
     **overrides: object,
@@ -53,6 +61,8 @@ def _review_payload(
     if recommendation == "accept":
         payload: dict[str, object] = {
             "recommendation": "accept",
+            "provider": "reviewer-panel",
+            "accept_quorum_count": 2,
             "rubric_scores": {
                 "research_question_quality": 5,
                 "synthesis_quality": 4,
@@ -787,13 +797,13 @@ def test_publish_preserves_research_synthesis_with_direct_clinical_core(
     full_body = "\n\n".join(
         [
             "# Full manuscript",
-            "## Abstract\n\nEvidence-honesty note: 54/85 retained sources are indirect, review-level, adjacent, or mechanistic and are used only to bound interpretation. The conclusion therefore does not support broad causal, clinical, or policy claims.",
+            "## Abstract\n\nEvidence-honesty note: 54/85 retained sources are indirect, review-level, adjacent, or mechanistic and are used only to bound interpretation. The conclusion therefore does not support broad causal, clinical, or policy claims [bundle:1].",
             "## Introduction\n\nThe corpus contains 31 direct clinical sources, 53 adjacent, review, or context sources, and 1 mechanistic or model-system source.",
             "## Methods\n\nThe methods describe source retrieval, screening, extraction, appraisal, synthesis, and verification in enough detail to audit the accepted manuscript.",
-            "## Results\n\nThe results preserve heterogeneous source-level findings, separate direct findings from adjacent evidence, and report contextual evidence without overstating clinical certainty.",
-            "## Discussion\n\nThe discussion treats disagreement, indirect evidence, and mechanistic evidence as boundary conditions instead of a settled universal intervention claim.",
-            "## Limitations\n\nThe limitations identify corpus boundaries, uncertainty, scope restrictions, missing endpoints, and interpretation risks that constrain public claims.",
-            "## Conclusion\n\nThe conclusion states a bounded research synthesis, avoids clinical guidance, and makes clear that contextual evidence does not replace the direct clinical core.",
+            "## Results\n\nThe results preserve heterogeneous source-level findings, separate direct findings from adjacent evidence, and report contextual evidence without overstating clinical certainty [bundle:1].",
+            "## Discussion\n\nThe discussion treats disagreement, indirect evidence, and mechanistic evidence as boundary conditions instead of a settled universal intervention claim [bundle:1].",
+            "## Limitations\n\nThe limitations identify corpus boundaries, uncertainty, scope restrictions, missing endpoints, and interpretation risks that constrain public claims [bundle:1].",
+            "## Conclusion\n\nThe conclusion states a bounded research synthesis, avoids clinical guidance, and makes clear that contextual evidence does not replace the direct clinical core [bundle:1].",
             "## References\n\n- Example source. DOI: 10.1000/example.",
         ]
     )
@@ -802,7 +812,7 @@ def test_publish_preserves_research_synthesis_with_direct_clinical_core(
         title="Research Synthesis: Resistance Training Effects — full paper",
         body_markdown=full_body,
         metadata={
-            "abstract": "Evidence-honesty note: 54/85 retained sources are indirect, review-level, adjacent, or mechanistic and are used only to bound interpretation.",
+            "abstract": "Evidence-honesty note: 54/85 retained sources are indirect, review-level, adjacent, or mechanistic and are used only to bound interpretation [bundle:1].",
             "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
             "sections": {},
             "source_bundle": [
@@ -944,9 +954,10 @@ def test_workflow_uses_provider_contract_for_trace_metadata() -> None:
                             "review_markdown": "The submission is structurally complete and sufficiently grounded for an MVP acceptance decision.",
                         }
                     ),
-                    provider="stub-provider",
+                    provider="reviewer-panel",
                     model="stub-model",
                     usage=ProviderUsage(input_tokens=11, output_tokens=7, cost_usd=0.42),
+                    metadata={"accept_quorum_count": 2},
                 ),
             )
 
@@ -981,7 +992,7 @@ def test_workflow_uses_provider_contract_for_trace_metadata() -> None:
     engine.handle_job(review_job, repo)
     review = repo.list_objects("review")[0]
     assert review.metadata["prompt_version"] == REVIEWER_PROMPT_VERSION
-    assert review.metadata["provider"] == "stub-provider"
+    assert review.metadata["provider"] == "reviewer-panel"
     assert review.metadata["model"] == "stub-model"
     assert review.metadata["tokens_in"] == 11
     assert review.metadata["tokens_out"] == 7
@@ -1018,9 +1029,10 @@ def test_workflow_marks_empirical_study_in_review_metadata() -> None:
                 ok=True,
                 response=ProviderResponse(
                     text=json.dumps(_review_payload("accept", review_markdown="Empirical manuscript accepted.")),
-                    provider="stub-provider",
+                    provider="reviewer-panel",
                     model="stub-model",
                     usage=ProviderUsage(input_tokens=9, output_tokens=6, cost_usd=0.21),
+                    metadata={"accept_quorum_count": 2},
                 ),
             )
 
@@ -1372,6 +1384,47 @@ def test_reviewer_panel_escalates_on_disagreement() -> None:
     assert result.response.usage.cost_usd == 0.3
 
 
+def test_reviewer_panel_cannot_create_accept_without_two_accept_votes() -> None:
+    class Provider:
+        def __init__(self, model: str, recommendation: str) -> None:
+            self.provider = "test"
+            self.model = model
+            self.recommendation = recommendation
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:  # noqa: ARG002
+            return ProviderResult(
+                ok=True,
+                response=ProviderResponse(
+                    text=json.dumps(_review_payload(self.recommendation)),
+                    provider=self.provider,
+                    model=self.model,
+                    usage=ProviderUsage(),
+                ),
+            )
+
+    request = ProviderRequest(system_prompt="system", user_prompt="user", prompt_version="reviewer-v1")
+    result = ReviewerPanel(
+        primary=Provider("primary", "revise"),
+        sparring=Provider("sparring", "reject"),
+        fallback=Provider("fallback", "accept"),
+    ).complete(request)
+
+    assert result.ok is True
+    assert result.response is not None
+    assert '"recommendation": "reject"' in result.response.text
+    assert result.response.metadata["route"] == "fallback_accept_quorum_unmet_conservative"
+    assert result.response.metadata["accept_quorum_count"] == 1
+
+    duplicate_model = ReviewerPanel(
+        primary=Provider("same-model", "accept"),
+        sparring=Provider("same-model", "accept"),
+        fallback=Provider("fallback", "accept"),
+    ).complete(request)
+    assert duplicate_model.ok is False
+    assert duplicate_model.error is not None
+    assert "panel_accept_quorum_unavailable" in duplicate_model.error.message
+
+
 def test_reviewer_panel_retries_malformed_tiebreaker_once() -> None:
     class Provider:
         def __init__(self, provider: str, model: str, payloads: list[dict[str, object]]) -> None:
@@ -1495,7 +1548,7 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
         fallback=BrokenProvider(
             "openrouter",
             "google/gemma-4-31b-it",
-            json.dumps(_review_payload("revise", review_markdown="Fallback revises.")),
+            json.dumps(_review_payload("accept", review_markdown="Fallback confirms acceptance.")),
         ),
     )
     result = panel.complete(
@@ -1509,7 +1562,8 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
     assert result.ok is True
     assert result.response is not None
     assert '"recommendation": "accept"' in result.response.text
-    assert result.response.metadata["route"] == "primary_failed_sparring_used"
+    assert result.response.metadata["route"] == "single_reviewer_accept_quorum"
+    assert result.response.metadata["accept_quorum_count"] == 2
     assert result.response.metadata["ops_flag"] == "primary_failed"
     assert "invalid_panel_response" in str(result.response.metadata["primary_error"])
 
@@ -1559,8 +1613,9 @@ def test_reviewer_panel_treats_missing_review_markdown_as_failure() -> None:
     )
     assert result.ok is True
     assert result.response is not None
-    assert '"recommendation": "accept"' in result.response.text
-    assert result.response.metadata["route"] == "primary_failed_sparring_used"
+    assert '"recommendation": "revise"' in result.response.text
+    assert result.response.metadata["route"] == "single_reviewer_accept_overruled"
+    assert result.response.metadata["accept_quorum_count"] == 1
     assert "missing_review_markdown" in str(result.response.metadata["primary_error"])
 
 
@@ -1690,9 +1745,9 @@ def test_reviewer_panel_rejects_non_actionable_revise_contract(required_revision
 
     assert result.ok is True
     assert result.response is not None
-    assert result.response.metadata["route"] == "primary_failed_sparring_used"
+    assert result.response.metadata["route"] == "single_reviewer_accept_overruled"
     assert expected_error in str(result.response.metadata["primary_error"])
-    assert '"recommendation": "accept"' in result.response.text
+    assert '"recommendation": "reject"' in result.response.text
 
 
 def test_workflow_stores_panel_route_metadata() -> None:
@@ -1732,6 +1787,7 @@ def test_workflow_stores_panel_route_metadata() -> None:
                         "winner_provider": "mimo",
                         "winner_model": "mimo-v2.5-pro",
                         "primary_recommendation": "accept",
+                        "accept_quorum_count": 2,
                         "sparring_recommendation": "accept",
                     },
                 ),
@@ -2086,7 +2142,7 @@ def test_calibration_revise_decision() -> None:
 
 def _rubric_accept_provider() -> object:
     class Provider:
-        provider = "calibration-accept"
+        provider = "reviewer-panel"
         model = "calibration-accept-model"
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
@@ -2116,6 +2172,7 @@ def _rubric_accept_provider() -> object:
                     provider=self.provider,
                     model=self.model,
                     usage=ProviderUsage(input_tokens=20, output_tokens=10, cost_usd=0.0),
+                    metadata={"accept_quorum_count": 2},
                 ),
             )
 
@@ -2294,10 +2351,33 @@ def test_calibration_accept_rubric_fields_stored() -> None:
     assert decision.metadata["decision"] == Decision.ACCEPT.value
 
 
+def test_single_provider_accept_cannot_bypass_panel_quorum() -> None:
+    class SingleProvider:
+        provider = "single-reviewer"
+        model = "single-model"
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:
+            return ProviderResult(
+                ok=True,
+                response=ProviderResponse(
+                    text=json.dumps(_review_payload("accept")),
+                    provider=self.provider,
+                    model=self.model,
+                    usage=ProviderUsage(input_tokens=1, output_tokens=1, cost_usd=0.0),
+                ),
+            )
+
+    submission = _calibration_submission(InMemoryRuntimeRepository(), recommendation="accept")
+    with pytest.raises(ValueError, match="accept_quorum_missing"):
+        WorkflowEngine(provider=SingleProvider())._review_submission(submission)
+
+
 def test_panel_accept_contract_matches_workflow_contract() -> None:
     class StaticReviewProvider:
         provider = "static-reviewer"
-        model = "static-reviewer-model"
+
+        def __init__(self, model: str) -> None:
+            self.model = model
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
             return ProviderResult(
@@ -2325,9 +2405,9 @@ def test_panel_accept_contract_matches_workflow_contract() -> None:
     repo = InMemoryRuntimeRepository()
     submission = _calibration_submission(repo, recommendation="accept")
     panel = ReviewerPanel(
-        primary=StaticReviewProvider(),
-        sparring=StaticReviewProvider(),
-        fallback=StaticReviewProvider(),
+        primary=StaticReviewProvider("static-primary"),
+        sparring=StaticReviewProvider("static-sparring"),
+        fallback=StaticReviewProvider("static-fallback"),
     )
     engine = WorkflowEngine(provider=panel)
 
@@ -2344,7 +2424,7 @@ def test_panel_accept_contract_matches_workflow_contract() -> None:
     assert review.metadata["rubric_scores"]["synthesis_quality"] == 3
 
 
-def test_minor_issues_only_revise_is_calibrated_to_accept() -> None:
+def test_minor_issues_only_revise_without_action_is_invalid() -> None:
     repo = InMemoryRuntimeRepository()
     submission = _calibration_submission(repo, recommendation="revise")
     engine = WorkflowEngine(provider=_minor_only_revise_provider())
@@ -2354,25 +2434,12 @@ def test_minor_issues_only_revise_is_calibrated_to_accept() -> None:
     repo.complete_job(intake_job.id)
 
     review_job = repo.claim_next_job()
-    engine.handle_job(review_job, repo)
-    repo.complete_job(review_job.id)
-
-    review = repo.list_objects(ObjectType.REVIEW)[0]
-    assert review.metadata["recommendation"] == Decision.ACCEPT.value
-    assert review.metadata["original_recommendation"] == Decision.REVISE.value
-    assert review.metadata["recommendation_calibration"] == "minor_issues_only_accept_contract"
-    assert review.metadata["minor_issues"] == ["Clarify one wording detail."]
-
-    editorial_job = repo.claim_next_job()
-    engine.handle_job(editorial_job, repo)
-    repo.complete_job(editorial_job.id)
-
-    decision = repo.list_objects(ObjectType.DECISION)[0]
-    assert decision.metadata["decision"] == Decision.ACCEPT.value
-    assert repo.queued_jobs()[0].stage == Stage.PUBLISH
+    with pytest.raises(ValueError, match="revise_missing_required_revisions"):
+        engine.handle_job(review_job, repo)
+    assert repo.list_objects(ObjectType.REVIEW) == []
 
 
-def test_existing_minor_issues_only_review_is_calibrated_by_editorial() -> None:
+def test_existing_minor_issues_only_review_remains_revise() -> None:
     repo = InMemoryRuntimeRepository()
     submission = _calibration_submission(repo, recommendation="revise")
     review = repo.create_object(
@@ -2410,11 +2477,10 @@ def test_existing_minor_issues_only_review_is_calibrated_by_editorial() -> None:
     result = engine.handle_job(editorial_job, repo)
 
     decision = repo.list_objects(ObjectType.DECISION)[0]
-    assert result["terminal_decision"] == Decision.ACCEPT.value
-    assert decision.metadata["decision"] == Decision.ACCEPT.value
-    assert decision.metadata["original_recommendation"] == Decision.REVISE.value
-    assert decision.metadata["recommendation_calibration"] == "minor_issues_only_accept_contract"
-    assert repo.queued_jobs()[0].stage == Stage.PUBLISH
+    assert result["terminal_decision"] == Decision.REVISE.value
+    assert decision.metadata["decision"] == Decision.REVISE.value
+    assert "recommendation_calibration" not in decision.metadata
+    assert repo.queued_jobs() == []
 
 
 def test_calibration_revise_rubric_fields_stored() -> None:

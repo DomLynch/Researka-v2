@@ -185,7 +185,7 @@ def _ok_review(recommendation: str) -> ProviderResult:
         },
         "major_issues": [],
         "minor_issues": [],
-        "required_revisions": [],
+        "required_revisions": ["Clarify the bounded claim."] if recommendation == "revise" else [],
         "claim_support_verdict": "supported",
         "overclaim_verdict": "none",
         "synthesis_quality_verdict": "strong",

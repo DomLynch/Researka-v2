@@ -43,22 +43,12 @@ def _resolve_git_sha() -> str:
     """Best-effort SHA resolution for the /version endpoint.
 
     Order:
-    1. RESEARKA_GIT_SHA env var (set by deploy script — most reliable)
-    2. /etc/researka/git_sha file (alternative deploy hook)
-    3. Subprocess `git rev-parse HEAD` from package root (dev mode)
+    1. Subprocess `git rev-parse HEAD` from package root
+    2. RESEARKA_GIT_SHA env var (packaged deployments without Git)
+    3. /etc/researka/git_sha file (packaged deployments without Git)
     4. "unknown"
     """
-    env_sha = os.environ.get("RESEARKA_GIT_SHA", "").strip()
-    if env_sha:
-        return env_sha
-    sha_file = Path("/etc/researka/git_sha")
-    if sha_file.exists():
-        try:
-            return sha_file.read_text().strip() or "unknown"
-        except OSError:
-            pass
     try:
-        # Anchor on the package directory so the lookup works regardless of cwd.
         repo_root = Path(__file__).resolve().parents[2]
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -72,6 +62,15 @@ def _resolve_git_sha() -> str:
             return result.stdout.strip()
     except (OSError, subprocess.SubprocessError):
         pass
+    env_sha = os.environ.get("RESEARKA_GIT_SHA", "").strip()
+    if env_sha:
+        return env_sha
+    sha_file = Path("/etc/researka/git_sha")
+    if sha_file.exists():
+        try:
+            return sha_file.read_text().strip() or "unknown"
+        except OSError:
+            pass
     return "unknown"
 
 
@@ -140,6 +139,7 @@ def _normalize_benchmark(raw: dict) -> dict:
         "summary": {
             "overall": {
                 **aggregates,
+                "total": len(papers),
                 "correct": correct,
                 "accuracy": accuracy,
             },
@@ -156,17 +156,53 @@ def _load_calibration_data() -> dict:
     global _calibration_cache, _calibration_path
     default_path = os.environ.get(
         "RESEARKA_V2_CALIBRATION_PATH",
-        str(Path(__file__).resolve().parents[2] / "artifacts" / "benchmark_baseline.json"),
+        str(Path(__file__).resolve().parents[2] / "artifacts" / "benchmark_vps_200_v6_repaired.json"),
     )
     if _calibration_cache is not None and _calibration_path == default_path:
+        _calibration_cache["receipt"] = _refresh_calibration_receipt(_calibration_cache["receipt"])
         return _calibration_cache
     path = Path(default_path)
     if not path.exists():
-        return {"summary": {}, "results": []}
+        return {"summary": {}, "results": [], "receipt": {"status": "missing", "valid": False}}
     raw = json.loads(path.read_text())
     _calibration_cache = _normalize_benchmark(raw)
+    run_meta = raw.get("run_meta", {}) if isinstance(raw, dict) else {}
+    generated_at = str(run_meta.get("repaired_at") or run_meta.get("timestamp") or "")
+    results = _calibration_cache.get("results", [])
+    case_count = len(results) if isinstance(results, list) else 0
+    _calibration_cache["receipt"] = _refresh_calibration_receipt({
+        "artifact": path.name,
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "provider": run_meta.get("provider"),
+        "generated_at": generated_at or None,
+        "case_count": case_count,
+    })
     _calibration_path = default_path
     return _calibration_cache
+
+
+def _refresh_calibration_receipt(receipt: dict) -> dict:
+    generated_at = str(receipt.get("generated_at") or "")
+    try:
+        generated = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        if generated.tzinfo is None:
+            generated = generated.replace(tzinfo=timezone.utc)
+        age_days = max(0, (datetime.now(timezone.utc) - generated).days)
+    except (TypeError, ValueError):
+        age_days = None
+    case_count = int(receipt.get("case_count") or 0)
+    max_age_days = _bounded_env_int("RESEARKA_V2_CALIBRATION_MAX_AGE_DAYS", 90, floor=1, ceiling=365)
+    minimum_cases = _bounded_env_int("RESEARKA_V2_CALIBRATION_MIN_CASES", 100, floor=1, ceiling=10000)
+    fresh = age_days is not None and age_days <= max_age_days
+    return {
+        **receipt,
+        "status": "current" if fresh and case_count >= minimum_cases else "stale_or_insufficient",
+        "valid": fresh and case_count >= minimum_cases,
+        "age_days": age_days,
+        "max_age_days": max_age_days,
+        "case_count": case_count,
+        "minimum_cases": minimum_cases,
+    }
 
 
 def _check_api_key(repo: RuntimeRepository, request: Request) -> str | None:
@@ -483,12 +519,11 @@ def _public_integrity_signal(value: object) -> dict | None:
 
 
 def _support_row_is_exact(row: dict) -> bool:
-    if row.get("support_kind") == "direct_doi_match":
+    if row.get("support_kind") in {"direct_doi_match", "bundle_reference"}:
         return True
     if row.get("quote") or row.get("evidence_span") or row.get("dw_chain_ref"):
         return True
-    extracted = [row.get("population"), row.get("endpoint"), row.get("effect")]
-    return any(str(value or "").strip().lower() not in {"", "not extracted", "unknown", "none"} for value in extracted)
+    return False
 
 
 def _claims_are_scoping_only(cards: list[ClaimCard]) -> bool:
@@ -508,8 +543,8 @@ def _public_publication_class(repo: RuntimeRepository, publication: ResearchObje
     if article_type == "evidence_map":
         return "evidence_map"
     if pub_class == "research_synthesis":
-        saved_cards = repo.list_claim_cards(publication.id)
-        if not saved_cards or not _claims_are_scoping_only(saved_cards):
+        cards = _publication_claim_cards(repo, publication)
+        if not _claims_are_scoping_only(cards):
             return pub_class
         raw_profile = publication.metadata.get("evidence_profile")
         profile = raw_profile if isinstance(raw_profile, dict) else {}
@@ -551,7 +586,7 @@ def _derived_claim_cards(publication: ResearchObject, submission: ResearchObject
     graph, _, _ = build_sidecar(publication, submission, "claim_graph.json")
     traces, _, _ = build_sidecar(publication, submission, "citation_traces.json")
     trace_by_claim = {
-        str(trace.get("claim_id")): trace.get("candidate_sources") or []
+        str(trace.get("claim_id")): trace.get("citation_support") or []
         for trace in traces.get("traces", [])
         if isinstance(trace, dict)
     } if isinstance(traces, dict) else {}
@@ -567,11 +602,7 @@ def _derived_claim_cards(publication: ResearchObject, submission: ResearchObject
         text = str(node.get("text") or "").strip()
         if not text:
             continue
-        support = [
-            {"source_id": f"source_{source_index}", **source}
-            for source_index, source in enumerate(trace_by_claim.get(str(node.get("id")), [])[:5], start=1)
-            if isinstance(source, dict)
-        ]
+        support = [dict(source) for source in trace_by_claim.get(str(node.get("id")), [])[:5] if isinstance(source, dict)]
         cards.append(
             ClaimCard(
                 id=_stable_claim_id(publication.id, index, text),
@@ -1527,6 +1558,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         summary = data.get("summary", {})
         mismatches = summary.get("mismatches", [])
         return {
+            "receipt": data.get("receipt", {}),
             "overall": summary.get("overall", {}),
             "by_category": summary.get("by_category", {}),
             "gate_failures": summary.get("gate_failures", {}),

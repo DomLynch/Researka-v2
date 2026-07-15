@@ -85,6 +85,23 @@ def test_version_returns_sha_and_start_time(client: TestClient) -> None:
     assert "T" in data["started_at"] and data["started_at"].endswith("+00:00")
 
 
+def test_resolve_git_sha_prefers_live_checkout_to_stale_file(monkeypatch) -> None:
+    import apps.runtime_api.app as app_module
+
+    class GitResult:
+        returncode = 0
+        stdout = "b" * 40
+
+    monkeypatch.setenv("RESEARKA_GIT_SHA", "a" * 40)
+    monkeypatch.setattr(app_module.subprocess, "run", lambda *args, **kwargs: GitResult())
+    monkeypatch.setattr(app_module.Path, "read_text", lambda self: (_ for _ in ()).throw(AssertionError("stale SHA read")))
+
+    assert app_module._resolve_git_sha() == "b" * 40
+
+    GitResult.returncode = 1
+    assert app_module._resolve_git_sha() == "a" * 40
+
+
 def test_architecture(client: TestClient) -> None:
     response = client.get("/architecture")
     assert response.status_code == 200
@@ -587,8 +604,10 @@ def test_get_publication_claims_derives_cards_from_sidecars(client: TestClient) 
     claim = response.json()["claims"][0]
     assert claim["id"].startswith("claim_")
     assert claim["evidence_grade"] == "exploratory"
-    assert claim["citation_support"][0]["source_id"] == "source_1"
-    assert claim["citation_support"][0]["support_kind"] == "candidate_source_row"
+    assert claim["citation_support"] == []
+    trace = client.get(f"/publications/{publication.id}/sidecars/citation_traces.json").json()["traces"][0]
+    assert trace["citation_support"] == []
+    assert trace["candidate_sources"][0]["support_kind"] == "candidate_source_row"
 
 
 def test_get_publication_claims_labels_mixed_direct_source_support(client: TestClient) -> None:
@@ -627,6 +646,37 @@ def test_get_publication_claims_labels_mixed_direct_source_support(client: TestC
     assert claim["contradiction_status"] == "mixed"
     assert claim["citation_support"][0]["support_kind"] == "direct_doi_match"
     assert claim["citation_support"][0]["endpoint"] == "time to exhaustion"
+
+
+def test_get_publication_claims_resolves_explicit_bundle_reference(client: TestClient) -> None:
+    repo = _repository(client)
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Bundle-linked submission",
+            metadata={"source_bundle": _valid_source_bundle()},
+        )
+    )
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title="Bundle-linked publication",
+            body_markdown="## Methods\n\nSources were retained using the declared protocol.",
+            metadata={
+                "article_type": "research_synthesis",
+                "abstract": (
+                    "The bounded evidence supports an endpoint-specific finding without a broad causal claim "
+                    "and maps directly to the first submitted source [bundle:1]."
+                ),
+            },
+        )
+    )
+
+    claim = client.get(f"/publications/{publication.id}/claims").json()["claims"][0]
+
+    assert claim["citation_support"][0]["support_kind"] == "bundle_reference"
+    assert claim["citation_support"][0]["study"] == "Review source 1"
 
 
 def test_get_publication_claims_returns_saved_cards_in_created_order(client: TestClient) -> None:
@@ -788,7 +838,7 @@ def test_publication_response_relabels_scoping_only_research_synthesis(client: T
     assert detail["publication_class"] == "adjacent_evidence_brief"
 
 
-def test_publication_response_does_not_reclassify_from_derived_claim_cards(client: TestClient) -> None:
+def test_publication_response_reclassifies_untraced_derived_claim_cards(client: TestClient) -> None:
     repo = _repository(client)
     submission = repo.create_object(
         ResearchObject(
@@ -823,8 +873,8 @@ def test_publication_response_does_not_reclassify_from_derived_claim_cards(clien
     assert repo.list_claim_cards(publication.id) == []
     detail = client.get(f"/publications/{publication.id}").json()
 
-    assert detail["publication_class"] == "research_synthesis"
-    assert detail["title"] == "Research Synthesis: Protein supplementation — full paper"
+    assert detail["publication_class"] == "adjacent_evidence_brief"
+    assert detail["title"] == "Adjacent Evidence Brief: Protein supplementation — full paper"
 
 
 def test_publication_response_preserves_verified_research_synthesis(client: TestClient) -> None:
@@ -2034,6 +2084,7 @@ def test_calibration_no_file(client: TestClient, tmp_path, monkeypatch) -> None:
     assert data["by_category"] == {}
     assert data["gate_failures"] == {}
     assert data["mismatch_count"] == 0
+    assert data["receipt"] == {"status": "missing", "valid": False}
 
 
 def test_calibration_summary(client: TestClient, tmp_path, monkeypatch) -> None:
@@ -2116,6 +2167,21 @@ def test_calibration_no_auth_required(client: TestClient) -> None:
     assert resp.status_code == 200
 
 
+def test_default_calibration_receipt_uses_verified_200_case_artifact(client: TestClient, monkeypatch) -> None:
+    from apps.runtime_api.app import reset_calibration_cache
+
+    reset_calibration_cache()
+    monkeypatch.delenv("RESEARKA_V2_CALIBRATION_PATH", raising=False)
+    monkeypatch.setenv("RESEARKA_V2_CALIBRATION_MAX_AGE_DAYS", "365")
+
+    receipt = client.get("/calibration").json()["receipt"]
+
+    assert receipt["artifact"] == "benchmark_vps_200_v6_repaired.json"
+    assert receipt["provider"] == "judge_panel"
+    assert receipt["case_count"] == 200
+    assert receipt["valid"] is True
+
+
 def test_calibration_mismatches(client: TestClient, tmp_path, monkeypatch) -> None:
     from apps.runtime_api.app import reset_calibration_cache
 
@@ -2168,9 +2234,14 @@ def test_calibration_benchmark_format(client: TestClient, tmp_path, monkeypatch)
 
     reset_calibration_cache()
     benchmark_data = {
-        "run_meta": {"run_id": "test-1", "papers": 4},
+        "run_meta": {
+            "run_id": "test-1",
+            "provider": "judge_panel",
+            "paper_count": 4,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
         "aggregates": {
-            "total": 4,
+            "total": 999,
             "completed": 4,
             "correct": 3,
             "accuracy": 0.75,
@@ -2215,6 +2286,18 @@ def test_calibration_benchmark_format(client: TestClient, tmp_path, monkeypatch)
     assert data["gate_failures"] == {"review": [4]}
     # Paper 3: medium quality, expected revise, actual accept → mismatch
     assert data["mismatch_count"] == 1
+    assert data["receipt"]["artifact"] == "benchmark_baseline.json"
+    assert data["receipt"]["provider"] == "judge_panel"
+    assert data["receipt"]["case_count"] == 4
+    assert data["receipt"]["minimum_cases"] == 100
+    assert data["receipt"]["valid"] is False
+    assert len(data["receipt"]["sha256"]) == 64
+
+    import apps.runtime_api.app as app_module
+
+    assert app_module._calibration_cache is not None
+    app_module._calibration_cache["receipt"]["generated_at"] = "2020-01-01T00:00:00"
+    assert client.get("/calibration").json()["receipt"]["status"] == "stale_or_insufficient"
 
     resp2 = client.get("/calibration/mismatches")
     assert resp2.status_code == 200

@@ -22,7 +22,6 @@ from .review_contract import (
     REVIEW_RUBRIC_KEYS,
     SYNTHESIS_QUALITY_VERDICTS,
     accept_contract_failure,
-    accept_contract_satisfied,
 )
 from .reviewer_panel import reviewer_from_env
 from .repos import RuntimeRepository
@@ -42,28 +41,6 @@ PUBLICATION_DEDUPE_METADATA_KEYS = (
 # be able to steer the judge panel.
 SUBMISSION_DATA_START = "SUBMISSION_DATA_START"
 SUBMISSION_DATA_END = "SUBMISSION_DATA_END"
-
-
-def _calibrated_recommendation(
-    recommendation: str,
-    rubric_scores: dict[str, int],
-    *,
-    major_issues: list[str],
-    required_revisions: list[str],
-    claim_support: str,
-    overclaim: str,
-    synthesis_quality: str,
-) -> str:
-    if recommendation == "revise" and accept_contract_satisfied(
-        rubric_scores,
-        major_issues=major_issues,
-        required_revisions=required_revisions,
-        claim_support=claim_support,
-        overclaim=overclaim,
-        synthesis_quality=synthesis_quality,
-    ):
-        return "accept"
-    return recommendation
 
 
 def _publication_identity_metadata(submission_metadata: dict) -> dict:
@@ -605,16 +582,6 @@ class WorkflowEngine:
             payload,
             recommendation=recommendation,
         )
-        original_recommendation = recommendation
-        recommendation = _calibrated_recommendation(
-            recommendation,
-            rubric_scores,
-            major_issues=major_issues,
-            required_revisions=required_revisions,
-            claim_support=claim_support,
-            overclaim=overclaim,
-            synthesis_quality=synthesis_quality,
-        )
         metadata = {
             "prompt_version": REVIEWER_PROMPT_VERSION,
             "provider": result.response.provider,
@@ -632,9 +599,10 @@ class WorkflowEngine:
             "overclaim_verdict": overclaim,
             "synthesis_quality_verdict": synthesis_quality,
         }
-        if original_recommendation != recommendation:
-            metadata["original_recommendation"] = original_recommendation
-            metadata["recommendation_calibration"] = "minor_issues_only_accept_contract"
+        if recommendation == "accept":
+            quorum = result.response.metadata.get("accept_quorum_count")
+            if result.response.provider != "reviewer-panel" or not isinstance(quorum, int) or quorum < 2:
+                raise ValueError("provider_error:bad_request:accept_quorum_missing")
         return recommendation, review_markdown, metadata
 
     def _integrity_decision_metadata(self, submission: ResearchObject, integrity: dict[str, Any], recommendation: str) -> dict[str, object]:
@@ -698,14 +666,7 @@ class WorkflowEngine:
             )
             if failure:
                 raise ValueError(f"provider_error:bad_request:{failure}")
-        if recommendation == "revise" and not required_revisions and not accept_contract_satisfied(
-            normalized_scores,
-            major_issues=major_issues,
-            required_revisions=required_revisions,
-            claim_support=claim_support,
-            overclaim=overclaim,
-            synthesis_quality=synthesis_quality,
-        ):
+        if recommendation == "revise" and not required_revisions:
             raise ValueError("provider_error:bad_request:revise_missing_required_revisions")
 
         return normalized_scores, major_issues, minor_issues, required_revisions, claim_support, overclaim, synthesis_quality
@@ -943,17 +904,9 @@ class WorkflowEngine:
         if recommendation not in {"accept", "revise", "reject"}:
             raise ValueError(f"invalid_review_recommendation:{recommendation}")
         original_recommendation = recommendation
-        rubric_scores = review.metadata.get("rubric_scores")
-        if isinstance(rubric_scores, dict):
-            recommendation = _calibrated_recommendation(
-                recommendation,
-                {str(key): int(value) for key, value in rubric_scores.items() if isinstance(value, int)},
-                major_issues=[str(item) for item in review.metadata.get("major_issues", []) if str(item).strip()],
-                required_revisions=[str(item) for item in review.metadata.get("required_revisions", []) if str(item).strip()],
-                claim_support=str(review.metadata.get("claim_support_verdict", "")).strip().lower(),
-                overclaim=str(review.metadata.get("overclaim_verdict", "")).strip().lower(),
-                synthesis_quality=str(review.metadata.get("synthesis_quality_verdict", "")).strip().lower(),
-            )
+        if recommendation == Decision.ACCEPT.value:
+            if review.metadata.get("provider") != "reviewer-panel" or int(review.metadata.get("accept_quorum_count") or 0) < 2:
+                raise ValueError("accept_quorum_missing")
         alpha_guard_revisions: list[str] = []
         if recommendation == Decision.ACCEPT.value:
             alpha_guard_revisions = _alpha_accept_guard_revisions(submission, repository)
@@ -984,9 +937,7 @@ class WorkflowEngine:
                     **(
                         {
                             "original_recommendation": original_recommendation,
-                            "recommendation_calibration": (
-                                "alpha_accept_guard" if alpha_guard_revisions else "minor_issues_only_accept_contract"
-                            ),
+                            "recommendation_calibration": "alpha_accept_guard",
                         }
                         if original_recommendation != recommendation
                         else {}
