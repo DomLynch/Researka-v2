@@ -135,10 +135,11 @@ def _normalize_benchmark(raw: dict) -> dict:
         correct = len(papers) - len(mismatches)
     if accuracy is None:
         accuracy = round(correct / len(papers), 3) if papers else 0.0
+    public_aggregates = {key: value for key, value in aggregates.items() if key != "mismatches"}
     return {
         "summary": {
             "overall": {
-                **aggregates,
+                **public_aggregates,
                 "total": len(papers),
                 "correct": correct,
                 "accuracy": accuracy,

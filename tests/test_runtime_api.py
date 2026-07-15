@@ -2280,6 +2280,7 @@ def test_calibration_benchmark_format(client: TestClient, tmp_path, monkeypatch)
     assert data["overall"]["total"] == 4
     assert data["overall"]["correct"] == 3
     assert data["overall"]["accept_rate"] == 0.75
+    assert "mismatches" not in data["overall"]
     assert data["confusion_matrix"]["revise"]["accept"] == 1
     assert "high" in data["by_category"]
     # Paper 4 has error, counted as gate failure
