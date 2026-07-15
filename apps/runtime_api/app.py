@@ -507,7 +507,10 @@ def _public_publication_class(repo: RuntimeRepository, publication: ResearchObje
     article_type = str(publication.metadata.get("article_type") or "").strip()
     if article_type == "evidence_map":
         return "evidence_map"
-    if pub_class == "research_synthesis" and _claims_are_scoping_only(_publication_claim_cards(repo, publication)):
+    if pub_class == "research_synthesis":
+        saved_cards = repo.list_claim_cards(publication.id)
+        if not saved_cards or not _claims_are_scoping_only(saved_cards):
+            return pub_class
         raw_profile = publication.metadata.get("evidence_profile")
         profile = raw_profile if isinstance(raw_profile, dict) else {}
         if profile.get("indirect_signal") or float(profile.get("weak_evidence_ratio") or 0) >= 0.6:
