@@ -2167,7 +2167,7 @@ def test_calibration_no_auth_required(client: TestClient) -> None:
     assert resp.status_code == 200
 
 
-def test_default_calibration_receipt_uses_verified_200_case_artifact(client: TestClient, monkeypatch) -> None:
+def test_default_calibration_receipt_uses_tracked_200_case_artifact(client: TestClient, monkeypatch) -> None:
     from apps.runtime_api.app import reset_calibration_cache
 
     reset_calibration_cache()
@@ -2176,7 +2176,7 @@ def test_default_calibration_receipt_uses_verified_200_case_artifact(client: Tes
 
     receipt = client.get("/calibration").json()["receipt"]
 
-    assert receipt["artifact"] == "benchmark_vps_200_v6_repaired.json"
+    assert receipt["artifact"] == "benchmark_style_v7.json"
     assert receipt["provider"] == "judge_panel"
     assert receipt["case_count"] == 200
     assert receipt["valid"] is True

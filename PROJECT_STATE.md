@@ -73,4 +73,4 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - **Shared with elite-trader benchmark** — other dev running 64-paper test against same LLM providers
 - LLM providers: MiniMax M3 (primary), OpenRouter Gemma 4 31B (sparring), OpenRouter Mistral Small 2603 (fallback)
 - Timeout: 60s per provider call (provider calls need headroom under shared load)
-- Calibration artifact path: `artifacts/benchmark_vps_200_v6_repaired.json` (shared by benchmark runners and `/calibration`)
+- Calibration artifact path: `artifacts/benchmark_style_v7.json` (style-diverse 200-case receipt exposed by `/calibration`)

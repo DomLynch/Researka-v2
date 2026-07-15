@@ -156,7 +156,7 @@ def _load_calibration_data() -> dict:
     global _calibration_cache, _calibration_path
     default_path = os.environ.get(
         "RESEARKA_V2_CALIBRATION_PATH",
-        str(Path(__file__).resolve().parents[2] / "artifacts" / "benchmark_vps_200_v6_repaired.json"),
+        str(Path(__file__).resolve().parents[2] / "artifacts" / "benchmark_style_v7.json"),
     )
     if _calibration_cache is not None and _calibration_path == default_path:
         _calibration_cache["receipt"] = _refresh_calibration_receipt(_calibration_cache["receipt"])
