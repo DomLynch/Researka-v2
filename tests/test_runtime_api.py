@@ -33,6 +33,7 @@ def _valid_source_bundle() -> list[dict[str, object]]:
             "title": f"{evidence_type.title()} source {index}",
             "year": year,
             "evidence_type": evidence_type,
+            "doi": f"10.1234/source.{index}",
         }
         for index, (year, evidence_type) in enumerate(zip(years, evidence_types, strict=True), start=1)
     ]
@@ -787,6 +788,26 @@ def test_publications_surface_filter_splits_alpha_and_papers(client: TestClient)
     assert invalid_response.status_code == 400
 
 
+def test_publications_listing_is_bounded_and_paginated(client: TestClient) -> None:
+    repo = _repository(client)
+    for index in range(3):
+        repo.create_object(
+            ResearchObject(
+                object_type=ObjectType.PUBLICATION,
+                title=f"Publication {index}",
+                metadata={"article_type": "research_synthesis", "public_visibility": "listed"},
+            )
+        )
+
+    page = client.get("/publications?limit=1&offset=1").json()
+
+    assert [item["title"] for item in page["publications"]] == ["Publication 1"]
+    assert page["total"] == 3
+    assert page["limit"] == 1
+    assert page["offset"] == 1
+    assert page["has_more"] is True
+
+
 def test_publication_response_relabels_scoping_only_research_synthesis(client: TestClient) -> None:
     repo = _repository(client)
     submission = repo.create_object(
@@ -1275,7 +1296,10 @@ def _minimal_submission_payload() -> dict:
             "Gaps Identified": "No independent replication has confirmed these synthesis-level findings, and the gap between review-level evidence and applied outcomes remains untested.",
             "Conclusion": "The current evidence supports a cautious synthesis with explicit uncertainty, transparent methodological limits, and no claim that exceeds the retained bundle.",
         },
-        "source_bundle": [{"title": f"S{i}", "year": 2024, "evidence_type": "review"} for i in range(12)],
+        "source_bundle": [
+            {"title": f"S{i}", "year": 2024, "evidence_type": "review", "doi": f"10.1234/s{i}"}
+            for i in range(12)
+        ],
         "author_agent_id": "test",
         "domain_slug": "longevity",
     }
@@ -2167,7 +2191,7 @@ def test_calibration_no_auth_required(client: TestClient) -> None:
     assert resp.status_code == 200
 
 
-def test_default_calibration_receipt_uses_tracked_200_case_artifact(client: TestClient, monkeypatch) -> None:
+def test_default_calibration_receipt_uses_current_working_gold_set(client: TestClient, monkeypatch) -> None:
     from apps.runtime_api.app import reset_calibration_cache
 
     reset_calibration_cache()
@@ -2176,10 +2200,11 @@ def test_default_calibration_receipt_uses_tracked_200_case_artifact(client: Test
 
     receipt = client.get("/calibration").json()["receipt"]
 
-    assert receipt["artifact"] == "benchmark_style_v7.json"
-    assert receipt["provider"] == "judge_panel"
-    assert receipt["case_count"] == 200
-    assert receipt["valid"] is True
+    assert receipt["artifact"] == "gold_set_eval_v3_current.json"
+    assert receipt["provider"] == "reviewer-panel"
+    assert receipt["corpus_status"] == "working"
+    assert receipt["case_count"] == 30
+    assert receipt["valid"] is False
 
 
 def test_calibration_mismatches(client: TestClient, tmp_path, monkeypatch) -> None:

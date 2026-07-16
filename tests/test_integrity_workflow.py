@@ -24,7 +24,12 @@ def _sections() -> dict[str, str]:
 
 def _source_bundle() -> list[dict[str, object]]:
     return [
-        {"title": f"Integrity source {index}", "year": 2024 - (index % 5), "evidence_type": "review" if index <= 6 else "primary"}
+        {
+            "title": f"Integrity source {index}",
+            "doi": f"10.1234/integrity.{index}",
+            "year": 2024 - (index % 5),
+            "evidence_type": "review" if index <= 6 else "primary",
+        }
         for index in range(1, 13)
     ]
 
@@ -71,6 +76,7 @@ def _accept_review() -> dict[str, Any]:
 class AcceptProvider:
     provider = "reviewer-panel"
     model = "accept-model"
+    enforces_accept_quorum = True
 
     def __init__(self) -> None:
         self.calls = 0
@@ -84,7 +90,7 @@ class AcceptProvider:
                 provider=self.provider,
                 model=self.model,
                 usage=ProviderUsage(input_tokens=5, output_tokens=4, cost_usd=0.01),
-                metadata={"accept_quorum_count": 2},
+                metadata={"accept_quorum_count": 2, "accept_quorum_models": ["accept-a", "accept-b"]},
             ),
         )
 

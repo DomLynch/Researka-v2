@@ -13,6 +13,20 @@ OVERCLAIM_VERDICTS = {"none", "mild", "significant"}
 SYNTHESIS_QUALITY_VERDICTS = {"strong", "adequate", "weak", "empty"}
 
 
+def accept_quorum_satisfied(metadata: dict, *, provider: str | None = None) -> bool:
+    models = metadata.get("accept_quorum_models")
+    distinct_models = {model.strip() for model in models if isinstance(model, str) and model.strip()} if isinstance(models, list) else set()
+    try:
+        count = int(metadata.get("accept_quorum_count") or 0)
+    except (TypeError, ValueError):
+        return False
+    return (
+        (provider or metadata.get("provider")) == "reviewer-panel"
+        and count >= 2
+        and len(distinct_models) >= 2
+    )
+
+
 def accept_contract_failure(
     rubric_scores: dict[str, int],
     *,
@@ -24,11 +38,8 @@ def accept_contract_failure(
 ) -> str | None:
     if set(rubric_scores) != set(REVIEW_RUBRIC_KEYS):
         return "accept_rubric_too_weak"
-    weak_scores = sum(1 for score in rubric_scores.values() if score < 4)
-    if weak_scores > 1:
+    if min(rubric_scores.values()) < 4:
         return "accept_rubric_too_weak"
-    if min(rubric_scores.values()) < 3:
-        return "accept_rubric_score_below_floor"
     if major_issues:
         return "accept_has_major_issues"
     if required_revisions:

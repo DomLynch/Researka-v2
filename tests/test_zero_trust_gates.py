@@ -6,11 +6,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import httpx
 import pytest
 
 import runtime_core.workflow as workflow
 from contracts import ArticleType, Decision, ObjectType, ProviderUsage, ResearchObject, RuntimeJob, Stage, run_submission_template_checks
 from runtime_core.providers import ProviderRequest, ProviderResponse, ProviderResult
+from runtime_core.doi_resolver import UnsafeSourceLocator, _require_public_source
 from runtime_core.repos import InMemoryRuntimeRepository
 from runtime_core.workflow import SUBMISSION_DATA_END, SUBMISSION_DATA_START, WorkflowEngine
 
@@ -78,6 +80,69 @@ def test_citation_membership_accepts_receipts_present_in_bundle() -> None:
     assert gate.passed, gate.reason
 
 
+def test_source_identity_requires_a_stable_locator() -> None:
+    bundle = _bundle()
+    bundle[0].pop("doi")
+
+    gate = next(
+        result
+        for result in run_submission_template_checks(sections=_sections(), source_bundle=bundle)
+        if result.name == "source_identity"
+    )
+
+    assert not gate.passed
+    assert "indices [0]" in gate.reason
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("pmid", "not-a-pmid"), ("openalex_id", "not-openalex"), ("registry_id", "bad id")],
+)
+def test_source_identity_rejects_malformed_identifiers(field: str, value: str) -> None:
+    bundle = _bundle()
+    bundle[0].pop("doi")
+    bundle[0][field] = value
+
+    gate = next(
+        result
+        for result in run_submission_template_checks(sections=_sections(), source_bundle=bundle)
+        if result.name == "source_identity"
+    )
+
+    assert not gate.passed
+
+
+def test_source_resolution_blocks_private_destinations() -> None:
+    with pytest.raises(UnsafeSourceLocator, match="non-public"):
+        _require_public_source(httpx.Request("GET", "http://127.0.0.1/source"))
+
+
+@pytest.mark.parametrize("title", ["Correction: trial report", "Retraction of trial report", "Study protocol for trial"])
+def test_non_evidence_records_cannot_be_primary_sources(title: str) -> None:
+    bundle = _bundle()
+    bundle[0] = {
+        "title": title,
+        "url": "https://openalex.org/W123456789",
+        "year": 2025,
+        "evidence_type": "primary",
+    }
+
+    results = run_submission_template_checks(sections=_sections(), source_bundle=bundle)
+
+    assert not next(result for result in results if result.name == "source_role").passed
+    assert not next(result for result in results if result.name == "minimum_citations").passed
+
+
+def test_scientific_correction_term_does_not_change_source_role() -> None:
+    bundle = _bundle()
+    bundle[0]["title"] = "Bias correction improves treatment-effect estimates"
+    bundle[0]["evidence_type"] = "primary"
+
+    results = run_submission_template_checks(sections=_sections(), source_bundle=bundle)
+
+    assert next(result for result in results if result.name == "source_role").passed
+
+
 # --- Gate 2: DOI existence --------------------------------------------------------
 
 
@@ -107,6 +172,11 @@ class _HandleClient:
 class _DownClient:
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         raise OSError("resolver unreachable")
+
+
+class _LocatorClient(_HandleClient):
+    def get(self, url: str, **kwargs: Any) -> Any:
+        return super().get(url)
 
 
 def test_intake_rejects_fabricated_doi(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -154,6 +224,41 @@ def test_intake_proceeds_with_stamp_when_resolver_down_fail_open(monkeypatch: py
     stored = repo.get_object(submission.id)
     assert stored is not None
     assert stored.metadata["doi_resolution"]["available"] is False  # stamped, never silent
+
+
+def test_intake_rejects_unresolvable_non_doi_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_DOI_CHECK_ENABLED", "1")
+    monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", _LocatorClient)
+    repo = InMemoryRuntimeRepository()
+    bundle = _bundle()
+    bundle[0].pop("doi")
+    bundle[0]["url"] = "https://openalex.org/ghost"
+    submission = _submission(repo, source_bundle=bundle)
+
+    result = WorkflowEngine()._run_intake(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
+
+    assert result["terminal_decision"] == Decision.REJECT.value
+    decision = repo.get_object(result["created_object_id"])
+    assert decision is not None
+    assert decision.metadata["gate_failures"][0]["name"] == "source_exists"
+
+
+def test_non_doi_source_resolver_can_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_DOI_CHECK_ENABLED", "1")
+    monkeypatch.setenv("RESEARKA_DOI_CHECK_FAIL_CLOSED", "1")
+    monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", _DownClient)
+    repo = InMemoryRuntimeRepository()
+    bundle = _bundle(with_dois=False)
+    for index, source in enumerate(bundle, start=1):
+        source["url"] = f"https://openalex.org/W{index}"
+    submission = _submission(repo, source_bundle=bundle)
+
+    result = WorkflowEngine()._run_intake(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
+
+    assert result["terminal_decision"] == Decision.REVISE.value
+    stored = repo.get_object(submission.id)
+    assert stored is not None
+    assert stored.metadata["source_resolution"]["available"] is False
 
 
 # --- Gate 3: provisional publish tiers --------------------------------------------
@@ -264,6 +369,7 @@ def test_review_user_prompt_fences_submission_data() -> None:
     class CaptureProvider:
         provider = "reviewer-panel"
         model = "stub-model"
+        enforces_accept_quorum = True
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
             captured["user_prompt"] = request.user_prompt
@@ -293,7 +399,10 @@ def test_review_user_prompt_fences_submission_data() -> None:
                         provider="reviewer-panel",
                         model="stub-model",
                         usage=ProviderUsage(input_tokens=1, output_tokens=1, cost_usd=0.0),
-                        metadata={"accept_quorum_count": 2},
+                        metadata={
+                            "accept_quorum_count": 2,
+                            "accept_quorum_models": ["stub-primary", "stub-sparring"],
+                        },
                 ),
             )
 

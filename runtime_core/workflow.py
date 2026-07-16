@@ -10,7 +10,7 @@ from contracts import ArticleType, Decision, ObjectType, ResearchObject, Runtime
 
 from .compiler import compile_publication
 from .derivation_web import emit_decision_to_derivation_web, emit_publication_to_derivation_web
-from .doi_resolver import resolve_dois
+from .doi_resolver import resolve_dois, resolve_source_locators
 from .evidence_quality import classified_title, evidence_profile, publication_class
 from .integrity_client import check_integrity, index_integrity
 from .osf import mint_publication_doi_from_repository, osf_publication_metadata_from_env
@@ -22,6 +22,7 @@ from .review_contract import (
     REVIEW_RUBRIC_KEYS,
     SYNTHESIS_QUALITY_VERDICTS,
     accept_contract_failure,
+    accept_quorum_satisfied,
 )
 from .reviewer_panel import reviewer_from_env
 from .repos import RuntimeRepository
@@ -83,6 +84,18 @@ def _bundle_dois(source_bundle: list[dict]) -> list[str]:
         for entry in source_bundle
         if isinstance(entry, dict) and str(entry.get("doi") or "").strip()
     })
+
+
+def _bundle_source_ids(source_bundle: list[dict]) -> tuple[str, ...]:
+    identities = []
+    for entry in source_bundle:
+        if not isinstance(entry, dict):
+            continue
+        for field in ("doi", "pmid", "openalex_id", "registry_id", "url"):
+            if value := str(entry.get(field) or "").strip().lower():
+                identities.append(f"{field}:{value}")
+                break
+    return tuple(sorted(set(identities)))
 
 
 _ALPHA_ANCHOR_STOPWORDS = {
@@ -191,16 +204,55 @@ def _alpha_accept_guard_revisions(submission: ResearchObject, repository: Runtim
             "Align title/topic with receipt evidence; unsupported title anchors: "
             + ", ".join(missing[:5])
         )
-    doi_key = tuple(_bundle_dois(source_bundle))
-    if len(doi_key) >= 2:
+    source_key = _bundle_source_ids(source_bundle)
+    if len(source_key) >= 2:
         for publication in repository.list_objects(ObjectType.PUBLICATION):
             if publication.parent_object_id == submission.id or publication.metadata.get("article_type") != ArticleType.ALPHA_MEMO.value:
                 continue
             parent = repository.get_object(str(publication.parent_object_id or ""))
-            if parent and tuple(_bundle_dois(list(parent.metadata.get("source_bundle", [])))) == doi_key:
-                revisions.append(f"Merge or differentiate from existing alpha memo using the same source DOI set: {publication.id}")
+            if parent and _bundle_source_ids(list(parent.metadata.get("source_bundle", []))) == source_key:
+                revisions.append(f"Merge or differentiate from existing alpha memo using the same stable source set: {publication.id}")
                 break
     return revisions
+
+
+def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
+    article_type = str(submission.metadata.get("article_type") or "")
+    if article_type not in {
+        ArticleType.ALPHA_MEMO.value,
+        ArticleType.EVIDENCE_MAP.value,
+        ArticleType.RESEARCH_SYNTHESIS.value,
+    }:
+        return []
+    sections = submission.metadata.get("sections")
+    section_map = sections if isinstance(sections, dict) else {}
+    if article_type == ArticleType.ALPHA_MEMO.value:
+        prose = "\n".join(
+            [str(submission.metadata.get("abstract") or ""), *map(str, section_map.values())]
+        )
+        minimum_ratio = 1.0
+    else:
+        major_sections = [
+            str(value)
+            for name, value in section_map.items()
+            if str(name).strip().lower() in {"key findings", "findings", "results", "conclusion"}
+        ]
+        prose = "\n".join([str(submission.metadata.get("abstract") or ""), *major_sections])
+        minimum_ratio = 0.8
+    raw_bundle = submission.metadata.get("source_bundle")
+    bundle = [item for item in raw_bundle if isinstance(item, dict)] if isinstance(raw_bundle, list) else []
+    profile = evidence_profile(text=prose, source_bundle=bundle)
+    count = int(profile.get("claim_trace_count") or 0)
+    exact = int(profile.get("exact_claim_trace_count") or 0)
+    if not count:
+        return []  # Structural/reviewer gates own missing-content failures.
+    required = max(1, int(count * minimum_ratio + 0.999))
+    if count and exact >= required:
+        return []
+    return [
+        f"Add exact source tokens, DOI/PMID links, or evidence spans to major claims; "
+        f"{exact}/{count} claims are exactly traceable (required {required})."
+    ]
 
 
 def _publication_visibility(repository: RuntimeRepository, author_agent_id: object) -> str:
@@ -228,6 +280,21 @@ def _publication_visibility(repository: RuntimeRepository, author_agent_id: obje
         and str(pub.metadata.get("public_visibility") or "listed").strip().lower() == "listed"
     )
     return "listed" if listed >= minimum else "provisional"
+
+
+def _alpha_exception_trusted(submission: ResearchObject) -> bool:
+    agent = str(submission.metadata.get("authenticated_agent_id") or "").strip()
+    trusted = {
+        item.strip()
+        for item in os.getenv("RESEARKA_ALPHA_EXCEPTION_AGENT_IDS", "").split(",")
+        if item.strip()
+    }
+    return bool(
+        agent
+        and submission.metadata.get("identity_source") == "api_key"
+        and agent == str(submission.metadata.get("author_agent_id") or "").strip()
+        and agent in trusted
+    )
 
 
 def _merge_publication_metadata(existing: dict, update: dict) -> dict:
@@ -455,7 +522,7 @@ class WorkflowEngine:
             "Calibration triage:\n"
             "- First make a forced triage call: elite-tier accept, competent-but-fixable revise, or fundamentally flawed reject.\n"
             "- Do not use revise as a safe default for unclear cases. Decide whether the paper is closer to accept or closer to reject.\n"
-            "- But when the manuscript is credible yet explicitly incomplete — mixed findings, sparse human data, heterogeneous evidence, or no broad population-level proof — revise is the correct answer, not accept.\n"
+            "- Revise when missing evidence or analysis prevents the manuscript from supporting its own bounded conclusion; mixed or heterogeneous findings are acceptable when the article type maps them honestly.\n"
             "- Reserve revise for papers that are mostly correct and fixable with bounded edits. If the paper needs a scope reset or its claims are materially unsupported, reject instead.\n\n"
             "Style invariance rules:\n"
             "- Judge substance, not house style. Terseness, verbosity, passive voice, or different academic cadence are not defects by themselves.\n"
@@ -482,8 +549,8 @@ class WorkflowEngine:
             "- Do not count style differences, hedging, or terse prose as major issues.\n\n"
             "Exact statistics calibration for reference-only bundles:\n"
             "- When source bundles are reference-only (title + DOI, no abstracts), you cannot verify exact statistics from bundle titles.\n"
-            "- In reference-only cases, default to assuming exact statistics (percentages, CIs, p-values) reported in the manuscript are accurately drawn from the cited sources, unless the numbers are internally contradictory or obviously implausible.\n"
-            "- Do not penalize source_grounding or claim_evidence_alignment for reporting exact statistics that you cannot cross-check against bundle titles.\n"
+            "- Never assume unverifiable percentages, confidence intervals, p-values, or effect sizes are accurate.\n"
+            "- Accept exact statistics only when the claim carries an exact bundle token, DOI/PMID, or submitted evidence span; otherwise require revision.\n"
             "- When source bundles DO contain abstracts or full text, evaluate normally — exact statistics must match the source material.\n\n"
             "Decision anchors:\n"
             "- Anchor A (accept): bounded manuscript, claims directly supported, no major issues, no required revisions, claim_support=supported, overclaim=none, recommendation=accept.\n"
@@ -491,7 +558,7 @@ class WorkflowEngine:
             "- Anchor C (reject): manuscript is structurally broken, needs a scope reset, or makes materially unsupported claims that require more than bounded edits, recommendation=reject.\n\n"
             "Style exemplars:\n"
             "- House-style accept: seven clean sections, direct sentences, explicit search scope, bounded conclusion, recommendation=accept.\n"
-            "- House-style revise: seven clean sections and confident direct prose are still revise when the manuscript itself says findings are mixed, human data are sparse, heterogeneity limits aggregation, or broad population benefit remains unproven.\n"
+            "- House-style revise: seven clean sections still need revision when the stated conclusion outruns the direct evidence or required claim traces are missing.\n"
             "- Terser-style accept: shorter sections and clipped sentences are acceptable when the cited bundle directly supports the bounded claim, recommendation=accept.\n"
             "- Verbose-style accept: longer narrative prose is acceptable when every paragraph still maps back to the evidence bundle and does not overclaim, recommendation=accept.\n"
             "- External-style accept: academic phrasing, passive voice, or different sentence rhythm are acceptable when the manuscript still answers the question directly and stays within the evidence, recommendation=accept.\n\n"
@@ -509,7 +576,7 @@ class WorkflowEngine:
             "- gaps_quality: are next-step gaps or unresolved uncertainties real and relevant? Score 1 if absent, 3 if present but generic, 5 if specific and actionable.\n"
             "- source_grounding: do citations or reported results actually support the thesis? Score 1 if sources do not support thesis, 3 if sources partially support, 5 if sources directly and comprehensively support.\n\n"
             "accept = all scores >= 4, zero major_issues, claim_support=supported, overclaim=none. Rare. "
-            "Accept is invalid when the manuscript explicitly says evidence is mixed, human data are sparse, broad benefit remains unproven, or the conclusion is only mechanistically credible.\n"
+            "Accept is invalid when the manuscript's conclusion outruns its direct evidence, exact claim traces are missing, or unresolved major issues remain.\n"
             "If any score is below 4 or major_issues is non-empty, recommendation must be revise or reject, never accept.\n"
             "revise = at least one score < 4 or non-empty major_issues, but the manuscript is still salvageable with bounded edits and required_revisions lists concrete fixes.\n"
             "Do not label accept-quality papers as revise for minor wording polish only; put polish in minor_issues and recommend accept.\n"
@@ -600,8 +667,10 @@ class WorkflowEngine:
             "synthesis_quality_verdict": synthesis_quality,
         }
         if recommendation == "accept":
-            quorum = result.response.metadata.get("accept_quorum_count")
-            if result.response.provider != "reviewer-panel" or not isinstance(quorum, int) or quorum < 2:
+            if (
+                not getattr(self.provider, "enforces_accept_quorum", False)
+                or not accept_quorum_satisfied(result.response.metadata, provider=result.response.provider)
+            ):
                 raise ValueError("provider_error:bad_request:accept_quorum_missing")
         return recommendation, review_markdown, metadata
 
@@ -757,6 +826,7 @@ class WorkflowEngine:
                 source_bundle=source_bundle,
                 article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
                 evidence_bundle=submission.metadata.get("evidence_bundle", {}),
+                alpha_exception_trusted=_alpha_exception_trusted(submission),
             )
             if not gate.passed
         ]
@@ -817,6 +887,43 @@ class WorkflowEngine:
                 },
                 terminal=Decision.REVISE.value,
             )
+        source_resolution = resolve_source_locators(source_bundle) if not failed else None
+        if source_resolution:
+            submission = repository.update_object_metadata(
+                submission.id, {**submission.metadata, "source_resolution": source_resolution}
+            ) or submission
+            if source_resolution.get("missing"):
+                return self._terminal_intake_decision(
+                    repository,
+                    submission,
+                    body_markdown="Source resolution failed: reject",
+                    metadata={
+                        "decision": Decision.REJECT.value,
+                        "notes": ["source locator does not resolve"],
+                        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                        "gate_failures": [{
+                            "name": "source_exists",
+                            "passed": False,
+                            "reason": "Source locators do not resolve: " + ", ".join(source_resolution["missing"][:10]),
+                        }],
+                        **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+                    },
+                    terminal=Decision.REJECT.value,
+                )
+            if not source_resolution.get("available") and source_resolution.get("recommendation") == Decision.REVISE.value:
+                return self._terminal_intake_decision(
+                    repository,
+                    submission,
+                    body_markdown="Source resolution unavailable: revise",
+                    metadata={
+                        "decision": Decision.REVISE.value,
+                        "notes": ["source resolver unavailable (fail-closed)"],
+                        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                        "source_resolution": source_resolution,
+                        **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+                    },
+                    terminal=Decision.REVISE.value,
+                )
         integrity = check_integrity(_integrity_payload_from_submission(submission))
         recommendation = str(integrity.get("recommendation") or "").strip().lower() if integrity else ""
         if integrity:
@@ -905,12 +1012,14 @@ class WorkflowEngine:
             raise ValueError(f"invalid_review_recommendation:{recommendation}")
         original_recommendation = recommendation
         if recommendation == Decision.ACCEPT.value:
-            if review.metadata.get("provider") != "reviewer-panel" or int(review.metadata.get("accept_quorum_count") or 0) < 2:
+            if not accept_quorum_satisfied(review.metadata):
                 raise ValueError("accept_quorum_missing")
         alpha_guard_revisions: list[str] = []
+        trace_guard_revisions: list[str] = []
         if recommendation == Decision.ACCEPT.value:
             alpha_guard_revisions = _alpha_accept_guard_revisions(submission, repository)
-            if alpha_guard_revisions:
+            trace_guard_revisions = _claim_trace_guard_revisions(submission)
+            if alpha_guard_revisions or trace_guard_revisions:
                 recommendation = Decision.REVISE.value
         decision = {
             "accept": Decision.ACCEPT,
@@ -937,7 +1046,7 @@ class WorkflowEngine:
                     **(
                         {
                             "original_recommendation": original_recommendation,
-                            "recommendation_calibration": "alpha_accept_guard",
+                            "recommendation_calibration": "deterministic_accept_guard",
                         }
                         if original_recommendation != recommendation
                         else {}
@@ -951,6 +1060,18 @@ class WorkflowEngine:
                             ],
                         }
                         if alpha_guard_revisions
+                        else {}
+                    ),
+                    **(
+                        {
+                            "claim_trace_guard": trace_guard_revisions,
+                            "required_revisions": [
+                                *[str(item) for item in review.metadata.get("required_revisions", []) if str(item).strip()],
+                                *alpha_guard_revisions,
+                                *trace_guard_revisions,
+                            ],
+                        }
+                        if trace_guard_revisions
                         else {}
                     ),
                     **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),

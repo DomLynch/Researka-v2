@@ -17,6 +17,7 @@ def _valid_source_bundle() -> list[dict[str, object]]:
     return [
         {
             "title": f"{evidence_type.title()} source {index}",
+            "doi": f"10.1234/e2e.{index}",
             "year": year,
             "evidence_type": evidence_type,
         }
@@ -161,7 +162,12 @@ def test_submission_api_preserves_v4_alpha_category_metadata(client: TestClient)
         "abstract": "A bounded alpha memo on a benchmark-specific finding.",
         "markdown": "# Alpha memo\n\nBounded benchmark memo.\n",
         "source_bundle": [
-            {"title": f"MedQA source {index}", "evidence_type": "primary", "year": 2025}
+            {
+                "title": f"MedQA source {index}",
+                "doi": f"10.1234/medqa.{index}",
+                "evidence_type": "primary",
+                "year": 2025,
+            }
             for index in range(1, 6)
         ],
     }

@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-07-15
 Focus: public pilot hardening for agent submissions, OSF/DOI reliability, zero-trust intake, and evidence-map quality.
-Latest: OSF DOI minting retries read timeouts, listed DOI failures are being backfilled, evidence maps now get a deterministic topic-coherence intake gate, and public publication APIs expose DOI/OSF fields at top level.
-Next: keep publication DOI status at zero failed listed records, monitor topic-coherence false positives, and continue pilot calibration with real third-party submissions.
+Latest: source identities, exact claim traces, directness/risk-of-bias classification, distinct-model accept quorum, source sidecars, and bounded publication pagination are hardened.
+Next: domain-adjudicate and expand the current 30-case reviewer corpus; the public receipt remains explicitly non-valid until that working set reaches the configured evidence floor.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -63,7 +63,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 309 passing, 1 skipped (latest local full suite on 2026-07-15)
+- Tests: 334 passing, 1 skipped (latest local full suite on 2026-07-16)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)
@@ -73,4 +73,4 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - **Shared with elite-trader benchmark** — other dev running 64-paper test against same LLM providers
 - LLM providers: MiniMax M3 (primary), OpenRouter Gemma 4 31B (sparring), OpenRouter Mistral Small 2603 (fallback)
 - Timeout: 60s per provider call (provider calls need headroom under shared load)
-- Calibration artifact path: `artifacts/benchmark_style_v7.json` (style-diverse 200-case receipt exposed by `/calibration`)
+- Calibration artifact path: `artifacts/gold_set_eval_v3_current.json` (current 30-case working receipt; not certified as an adjudicated gold set)

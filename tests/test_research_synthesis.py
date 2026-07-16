@@ -35,6 +35,7 @@ def _valid_synthesis_bundle(n: int = 12) -> list[dict[str, object]]:
         bundle.append(
             {
                 "title": f"Synthesis source {i + 1}",
+                "doi": f"10.1000/synthesis-{i + 1}",
                 # Half recent (>=2020), half foundational (<2020) → meets the
                 # 0.5 recency ratio comfortably.
                 "year": 2024 if i % 2 == 0 else 2018,

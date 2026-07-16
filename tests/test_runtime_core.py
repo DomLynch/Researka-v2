@@ -4,11 +4,13 @@ import urllib.error
 import pytest
 
 from runtime_core.compiler import canonical_bundle_facts, compile_publication
-from runtime_core.evidence_quality import support_for_claim
+from runtime_core.evidence_quality import evidence_profile, publication_class, support_for_claim
 from runtime_core.gates import run_publish_gates
 from runtime_core.failure_classifier import classify_failure_reason
 from runtime_core.prompts import REVIEWER_PROMPT_VERSION
 from runtime_core.providers import FallbackProvider, MimoProvider, MiniMaxProvider, OpenRouterProvider, ProviderRequest, ProviderResponse, ProviderResult
+from runtime_core.publication_sidecars import publication_sources
+from runtime_core.review_contract import accept_quorum_satisfied
 from runtime_core.reviewer_panel import ReviewerPanel, reviewer_from_env
 from runtime_core.repos import InMemoryRuntimeRepository
 from runtime_core.sanitizer import sanitize_source_ledger
@@ -42,6 +44,7 @@ def _valid_source_bundle() -> list[dict[str, object]]:
             "title": f"{evidence_type.title()} source {index}",
             "year": year,
             "evidence_type": evidence_type,
+            "doi": f"10.1234/source.{index}",
         }
         for index, (year, evidence_type) in enumerate(zip(years, evidence_types, strict=True), start=1)
     ]
@@ -54,6 +57,37 @@ def test_claim_support_requires_explicit_evidence_span() -> None:
     assert support_for_claim("The intervention may improve outcomes.", [source]) == []
 
 
+def test_claim_support_resolves_submitted_citation_token() -> None:
+    source = {"title": "Trial", "cited_as": "Lynch et al. 2026", "doi": "10.1234/trial"}
+
+    support = support_for_claim(
+        "The bounded evidence suggests a context-specific effect (Lynch et al. 2026).",
+        [source],
+    )
+
+    assert support[0]["support_kind"] == "cited_as_match"
+    assert support[0]["doi"] == "10.1234/trial"
+
+
+def test_publication_sources_prefer_bundle_and_parse_only_reference_receipts() -> None:
+    publication = ResearchObject(
+        object_type=ObjectType.PUBLICATION,
+        title="Sidecar source test",
+        body_markdown=(
+            "## Methods\n\n- **Not a citation.** Ordinary method bullet.\n\n"
+            "## References\n\n- **Legacy trial.** 2025. DOI: 10.1234/legacy."
+        ),
+    )
+    submission = ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Submitted source test",
+        metadata={"source_bundle": [{"title": "Submitted trial", "doi": "10.1234/submitted"}]},
+    )
+
+    assert [row["doi"] for row in publication_sources(publication, submission)] == ["10.1234/submitted"]
+    assert [row["doi"] for row in publication_sources(publication)] == ["10.1234/legacy"]
+
+
 def _review_payload(
     recommendation: str = "accept",
     **overrides: object,
@@ -63,6 +97,7 @@ def _review_payload(
             "recommendation": "accept",
             "provider": "reviewer-panel",
             "accept_quorum_count": 2,
+            "accept_quorum_models": ["reviewer-a", "reviewer-b"],
             "rubric_scores": {
                 "research_question_quality": 5,
                 "synthesis_quality": 4,
@@ -404,11 +439,34 @@ def test_alpha_memo_with_four_sources_can_use_structural_exception() -> None:
                 },
             },
         },
+        alpha_exception_trusted=True,
     )
 
     failures = {gate.name for gate in results if not gate.passed}
 
     assert "minimum_citations" not in failures
+
+
+def test_alpha_source_exception_requires_server_authenticated_agent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESEARKA_ALPHA_EXCEPTION_AGENT_IDS", "agent-v4,agent-v6")
+    submission = ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Authenticated alpha submission",
+        metadata={
+            "author_agent_id": "agent-v4",
+            "authenticated_agent_id": "agent-v4",
+            "identity_source": "api_key",
+        },
+    )
+
+    assert workflow._alpha_exception_trusted(submission)
+    submission.metadata["authenticated_agent_id"] = "agent-attacker"
+    assert not workflow._alpha_exception_trusted(submission)
+    submission.metadata["authenticated_agent_id"] = "agent-v4"
+    submission.metadata["identity_source"] = "payload"
+    assert not workflow._alpha_exception_trusted(submission)
 
 
 def test_alpha_memo_single_source_cannot_use_structural_exception() -> None:
@@ -492,6 +550,101 @@ def test_alpha_reviewer_prompt_requires_title_source_alignment() -> None:
     assert "metformin memo relying on a dapagliflozin receipt" in prompt
     assert "resistance-training memo backed only by sprint/heat cycling receipts" in prompt
     assert "require merge or narrower differentiation" in prompt
+
+
+def test_alpha_claim_trace_guard_requires_exact_source_token() -> None:
+    submission = ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Metformin longevity signal",
+        metadata={
+            "article_type": ArticleType.ALPHA_MEMO.value,
+            "abstract": (
+                "The bounded evidence suggests a context-specific metformin longevity signal, but the result remains "
+                "hypothesis-generating and does not establish clinical benefit across populations or endpoints."
+            ),
+            "source_bundle": [
+                {"title": "Metformin trial", "doi": "10.1234/metformin", "cited_as": "Lynch 2026"}
+            ],
+        },
+    )
+
+    assert workflow._claim_trace_guard_revisions(submission)
+    submission.metadata["abstract"] += " (Lynch 2026)."
+    assert workflow._claim_trace_guard_revisions(submission) == []
+
+
+def test_research_synthesis_trace_guard_requires_eighty_percent_exact() -> None:
+    submission = ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Research Synthesis: bounded outcomes",
+        metadata={
+            "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
+            "abstract": "\n".join(
+                [
+                    "The evidence supports a bounded endpoint-specific improvement while preserving uncertainty and population limits (Alpha 2026).",
+                    "The evidence also suggests a second outcome remains context-dependent and does not justify a broad clinical recommendation.",
+                ]
+            ),
+            "source_bundle": [
+                {"title": "Alpha trial", "doi": "10.1234/alpha", "cited_as": "Alpha 2026"},
+                {"title": "Beta trial", "doi": "10.1234/beta", "cited_as": "Beta 2026"},
+            ],
+        },
+    )
+
+    assert workflow._claim_trace_guard_revisions(submission)
+    submission.metadata["abstract"] += " (Beta 2026)."
+    assert workflow._claim_trace_guard_revisions(submission) == []
+
+
+def test_research_synthesis_class_requires_directness_and_risk_appraisal() -> None:
+    sources = [
+        {
+            "title": f"Direct trial {index}",
+            "evidence_type": "primary",
+            "directness": "direct clinical",
+            "risk_of_bias": "low" if index < 4 else "not appraised",
+        }
+        for index in range(5)
+    ]
+    profile = evidence_profile(
+        text="The evidence supports a bounded effect [bundle:1].",
+        source_bundle=sources,
+    )
+
+    assert profile["directness_coverage"] == 1.0
+    assert profile["risk_of_bias_coverage"] == 0.8
+    assert publication_class(
+        article_type=ArticleType.RESEARCH_SYNTHESIS.value,
+        title="Research Synthesis: bounded effect",
+        profile=profile,
+    ) == "research_synthesis"
+
+    sources[-2]["risk_of_bias"] = "not appraised"
+    profile = evidence_profile(text="The evidence supports a bounded effect [bundle:1].", source_bundle=sources)
+    assert publication_class(
+        article_type=ArticleType.RESEARCH_SYNTHESIS.value,
+        title="Research Synthesis: bounded effect",
+        profile=profile,
+    ) == "adjacent_evidence_brief"
+
+    sources[-2]["risk_of_bias"] = "low"
+    sources[-1]["directness"] = "unknown"
+    profile = evidence_profile(text="The evidence supports a bounded effect [bundle:1].", source_bundle=sources)
+    assert profile["directness_coverage"] == 0.8
+    assert publication_class(
+        article_type=ArticleType.RESEARCH_SYNTHESIS.value,
+        title="Research Synthesis: bounded effect",
+        profile=profile,
+    ) == "research_synthesis"
+
+    sources[-2]["directness"] = "not extracted"
+    profile = evidence_profile(text="The evidence supports a bounded effect [bundle:1].", source_bundle=sources)
+    assert publication_class(
+        article_type=ArticleType.RESEARCH_SYNTHESIS.value,
+        title="Research Synthesis: bounded effect",
+        profile=profile,
+    ) == "adjacent_evidence_brief"
 
 
 def test_alpha_accept_with_unsupported_title_anchor_becomes_revise() -> None:
@@ -696,12 +849,12 @@ def test_alpha_accept_duplicate_source_pair_becomes_revise() -> None:
     source_bundle = [
         {
             "title": "Metformin exercise adaptation source",
-            "doi": "10.1000/metformin-exercise",
+            "pmid": "12345678",
             "evidence_type": "primary",
         },
         {
             "title": "Exercise metformin adaptation replication",
-            "doi": "10.1000/metformin-replication",
+            "pmid": "23456789",
             "evidence_type": "primary",
         },
     ]
@@ -747,7 +900,7 @@ def test_alpha_accept_duplicate_source_pair_becomes_revise() -> None:
     assert decision is not None
     assert decision.metadata["decision"] == Decision.REVISE.value
     assert existing_publication.id in decision.metadata["alpha_accept_guard"][0]
-    assert "same source DOI set" in decision.metadata["required_revisions"][0]
+    assert "same stable source set" in decision.metadata["required_revisions"][0]
 
 
 def test_publish_relabels_non_supportive_research_synthesis(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -817,16 +970,19 @@ def test_publish_preserves_research_synthesis_with_direct_clinical_core(
             "sections": {},
             "source_bundle": [
                 {
-                    "title": f"Primary source {index}",
-                    "year": 2024,
-                    "evidence_type": "primary",
+                        "title": f"Primary source {index}",
+                        "year": 2024,
+                        "evidence_type": "primary",
+                        "directness": "direct clinical",
+                        "risk_of_bias": "low",
                 }
                 for index in range(1, 59)
             ] + [
                 {
-                    "title": f"Review source {index}",
-                    "year": 2024,
-                    "evidence_type": "review",
+                        "title": f"Review source {index}",
+                        "year": 2024,
+                        "evidence_type": "review",
+                        "directness": "review level",
                 }
                 for index in range(59, 86)
             ],
@@ -930,6 +1086,8 @@ def test_unresolved_core_claims_fail_publish_gate() -> None:
 
 def test_workflow_uses_provider_contract_for_trace_metadata() -> None:
     class StubProvider:
+        enforces_accept_quorum = True
+
         def complete(self, request: ProviderRequest) -> ProviderResult:
             return ProviderResult(
                 ok=True,
@@ -957,7 +1115,10 @@ def test_workflow_uses_provider_contract_for_trace_metadata() -> None:
                     provider="reviewer-panel",
                     model="stub-model",
                     usage=ProviderUsage(input_tokens=11, output_tokens=7, cost_usd=0.42),
-                    metadata={"accept_quorum_count": 2},
+                    metadata={
+                        "accept_quorum_count": 2,
+                        "accept_quorum_models": ["stub-primary", "stub-sparring"],
+                    },
                 ),
             )
 
@@ -1004,13 +1165,13 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
     assert "rapid evidence synthesis reviewer" in prompt.lower()
     assert "forced triage call" in prompt
     assert "Do not use revise as a safe default" in prompt
-    assert "mixed findings, sparse human data" in prompt
+    assert "mixed or heterogeneous findings are acceptable" in prompt
     assert "Judge substance, not house style" in prompt
     assert "House-style revise" in prompt
     assert "Terser-style accept" in prompt
     assert "External-style accept" in prompt
     assert "accept = all scores >= 4" in prompt
-    assert "Accept is invalid when the manuscript explicitly says evidence is mixed" in prompt
+    assert "Never assume unverifiable percentages" in prompt
     assert "required_revisions lists concrete fixes" in prompt
     assert "Do not label accept-quality papers as revise for minor wording polish only" in prompt
     assert "reject = structurally broken" in prompt
@@ -1023,6 +1184,8 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
 
 def test_workflow_marks_empirical_study_in_review_metadata() -> None:
     class EmpiricalProvider:
+        enforces_accept_quorum = True
+
         def complete(self, request: ProviderRequest) -> ProviderResult:
             assert "empirical study reviewer" in request.system_prompt.lower()
             return ProviderResult(
@@ -1032,7 +1195,10 @@ def test_workflow_marks_empirical_study_in_review_metadata() -> None:
                     provider="reviewer-panel",
                     model="stub-model",
                     usage=ProviderUsage(input_tokens=9, output_tokens=6, cost_usd=0.21),
-                    metadata={"accept_quorum_count": 2},
+                    metadata={
+                        "accept_quorum_count": 2,
+                        "accept_quorum_models": ["empirical-primary", "empirical-sparring"],
+                    },
                 ),
             )
 
@@ -1424,6 +1590,15 @@ def test_reviewer_panel_cannot_create_accept_without_two_accept_votes() -> None:
     assert duplicate_model.error is not None
     assert "panel_accept_quorum_unavailable" in duplicate_model.error.message
 
+    blank_model = ReviewerPanel(
+        primary=Provider("", "accept"),
+        sparring=Provider("sparring", "accept"),
+        fallback=Provider("fallback", "accept"),
+    ).complete(request)
+    assert blank_model.ok is False
+    assert blank_model.error is not None
+    assert "panel_accept_quorum_unavailable" in blank_model.error.message
+
 
 def test_reviewer_panel_retries_malformed_tiebreaker_once() -> None:
     class Provider:
@@ -1754,6 +1929,7 @@ def test_workflow_stores_panel_route_metadata() -> None:
     class PanelProvider:
         provider = "reviewer-panel"
         model = "mimo-v2.5-pro|google/gemma-4-31b-it|mistralai/mistral-small-2603"
+        enforces_accept_quorum = True
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
             return ProviderResult(
@@ -1788,6 +1964,7 @@ def test_workflow_stores_panel_route_metadata() -> None:
                         "winner_model": "mimo-v2.5-pro",
                         "primary_recommendation": "accept",
                         "accept_quorum_count": 2,
+                        "accept_quorum_models": ["mimo-v2.5-pro", "google/gemma-4-31b-it"],
                         "sparring_recommendation": "accept",
                     },
                 ),
@@ -2144,6 +2321,7 @@ def _rubric_accept_provider() -> object:
     class Provider:
         provider = "reviewer-panel"
         model = "calibration-accept-model"
+        enforces_accept_quorum = True
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
             return ProviderResult(
@@ -2172,7 +2350,10 @@ def _rubric_accept_provider() -> object:
                     provider=self.provider,
                     model=self.model,
                     usage=ProviderUsage(input_tokens=20, output_tokens=10, cost_usd=0.0),
-                    metadata={"accept_quorum_count": 2},
+                    metadata={
+                        "accept_quorum_count": 2,
+                        "accept_quorum_models": ["calibration-primary", "calibration-sparring"],
+                    },
                 ),
             )
 
@@ -2372,7 +2553,44 @@ def test_single_provider_accept_cannot_bypass_panel_quorum() -> None:
         WorkflowEngine(provider=SingleProvider())._review_submission(submission)
 
 
-def test_panel_accept_contract_matches_workflow_contract() -> None:
+def test_duplicate_reviewer_models_cannot_forge_accept_quorum() -> None:
+    class ForgedPanel:
+        provider = "reviewer-panel"
+        model = "same-model"
+        enforces_accept_quorum = True
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:
+            return ProviderResult(
+                ok=True,
+                response=ProviderResponse(
+                    text=json.dumps(_review_payload("accept")),
+                    provider=self.provider,
+                    model=self.model,
+                    usage=ProviderUsage(),
+                    metadata={
+                        "accept_quorum_count": 2,
+                        "accept_quorum_models": ["same-model", "same-model"],
+                    },
+                ),
+            )
+
+    submission = _calibration_submission(InMemoryRuntimeRepository(), recommendation="accept")
+    with pytest.raises(ValueError, match="accept_quorum_missing"):
+        WorkflowEngine(provider=ForgedPanel())._review_submission(submission)
+
+
+@pytest.mark.parametrize("count", ["invalid", [], {}])
+def test_malformed_or_blank_accept_quorum_fails_closed(count: object) -> None:
+    assert not accept_quorum_satisfied(
+        {
+            "provider": "reviewer-panel",
+            "accept_quorum_count": count,
+            "accept_quorum_models": ["reviewer-a", "", None],
+        }
+    )
+
+
+def test_panel_and_workflow_reject_score_below_accept_floor() -> None:
     class StaticReviewProvider:
         provider = "static-reviewer"
 
@@ -2416,12 +2634,9 @@ def test_panel_accept_contract_matches_workflow_contract() -> None:
     repo.complete_job(intake_job.id)
 
     review_job = repo.claim_next_job()
-    engine.handle_job(review_job, repo)
-    repo.complete_job(review_job.id)
-
-    review = repo.list_objects(ObjectType.REVIEW)[0]
-    assert review.metadata["recommendation"] == Decision.ACCEPT.value
-    assert review.metadata["rubric_scores"]["synthesis_quality"] == 3
+    with pytest.raises(ValueError, match="accept_rubric_too_weak"):
+        engine.handle_job(review_job, repo)
+    assert repo.list_objects(ObjectType.REVIEW) == []
 
 
 def test_minor_issues_only_revise_without_action_is_invalid() -> None:

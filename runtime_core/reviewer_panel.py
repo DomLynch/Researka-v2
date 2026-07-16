@@ -28,6 +28,7 @@ from .review_contract import (
 
 class ReviewerPanel:
     provider = "reviewer-panel"
+    enforces_accept_quorum = True
 
     def __init__(
         self,
@@ -199,10 +200,16 @@ class ReviewerPanel:
         )
 
     def _accept_quorum_count(self, *results: ProviderResult) -> int:
-        return len({
+        return len(self._accept_quorum_models(*results))
+
+    def _accept_quorum_models(self, *results: ProviderResult) -> list[str]:
+        return sorted({
             result.response.model
             for result in results
-            if result.ok and result.response is not None and self._recommendation_from(result) == "accept"
+            if result.ok
+            and result.response is not None
+            and result.response.model.strip()
+            and self._recommendation_from(result) == "accept"
         })
 
     def _conservative_disagreement_response(
@@ -271,6 +278,7 @@ class ReviewerPanel:
             "route": route,
             "winner_provider": winner.response.provider,
             "winner_model": winner.response.model,
+            "accept_quorum_models": self._accept_quorum_models(*used),
             **metadata,
         }
         return ProviderResult(

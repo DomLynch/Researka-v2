@@ -84,7 +84,7 @@ def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float 
 
     # 2. Drain jobs (up to 3 per paper: intake, review, editorial)
     #    target_object_id filter ensures we only claim this submission's jobs.
-    stages_completed = []
+    stages_completed: list[str] = []
     drain_loops = 0
     max_drain_loops = 30     # 3 real stages + empty-retry buffer
     consecutive_empty = 0

@@ -162,13 +162,21 @@ class SourceBundleEntry(BaseModel):
     title: str
     url: str | None = None
     doi: str | None = None
+    pmid: str | None = None
+    openalex_id: str | None = None
+    registry_id: str | None = None
     year: int | None = None
     evidence_type: Literal["primary", "review"]
+    publication_type: str | None = None
     relevance: float | None = None
     # The in-text citation token the manuscript uses for this source (e.g.
     # "Zufry 2025"). Lets reviewers cross-walk author-year prose citations to
     # bundle entries instead of flagging present sources as ungrounded.
     cited_as: str | None = None
+    directness: str | None = None
+    risk_of_bias: str | None = None
+    quote: str | None = None
+    evidence_span: str | None = None
 
 
 class SubmissionTemplateV1(BaseModel):
@@ -254,6 +262,37 @@ def _normalize_source_bundle(source_bundle: list[dict]) -> list[SourceBundleEntr
     return normalized
 
 
+_NON_LOAD_BEARING_PUBLICATION_TYPE = re.compile(
+    r"\b(?:correction|corrigendum|erratum|retraction|withdrawn|expression of concern|study protocol|protocol for)\b",
+    re.IGNORECASE,
+)
+_NON_LOAD_BEARING_TITLE = re.compile(
+    r"^\s*(?:\[(?:retracted|withdrawn)\]\s*)?(?:(?:correction|corrigendum|erratum|retraction|withdrawal|expression of concern)(?::|\s+(?:of|to)\b)|(?:a\s+)?study protocol\b|protocol for\b)",
+    re.IGNORECASE,
+)
+
+
+def _has_stable_locator(entry: SourceBundleEntry) -> bool:
+    doi = str(entry.doi or "").strip()
+    pmid = str(entry.pmid or "").strip()
+    openalex = str(entry.openalex_id or "").strip()
+    registry = str(entry.registry_id or "").strip()
+    return bool(
+        _DOI_PATTERN.match(doi)
+        or re.fullmatch(r"\d{4,12}", pmid)
+        or re.fullmatch(r"(?:https?://openalex\.org/)?W\d+", openalex, re.IGNORECASE)
+        or re.fullmatch(r"[A-Za-z][A-Za-z0-9._/-]{3,127}", registry)
+        or re.match(r"^https?://\S+$", str(entry.url or "").strip(), re.IGNORECASE)
+    )
+
+
+def _is_non_load_bearing(entry: SourceBundleEntry) -> bool:
+    return bool(
+        _NON_LOAD_BEARING_TITLE.search(entry.title)
+        or _NON_LOAD_BEARING_PUBLICATION_TYPE.search(entry.publication_type or "")
+    )
+
+
 def _int_value(value: object) -> int:
     try:
         return int(str(value))
@@ -261,8 +300,10 @@ def _int_value(value: object) -> int:
         return 0
 
 
-def _alpha_source_exception(article_type: str, citation_count: int, evidence_bundle: dict | None) -> bool:
-    if article_type != ArticleType.ALPHA_MEMO.value or not 2 <= citation_count <= 4:
+def _alpha_source_exception(
+    article_type: str, citation_count: int, evidence_bundle: dict | None, *, trusted: bool
+) -> bool:
+    if not trusted or article_type != ArticleType.ALPHA_MEMO.value or not 2 <= citation_count <= 4:
         return False
     verdict = (evidence_bundle or {}).get("publish_verdict")
     if not isinstance(verdict, dict):
@@ -291,6 +332,7 @@ def run_submission_template_checks(
     article_type: str = ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
     template: SubmissionTemplateV1 | None = None,
     evidence_bundle: dict | None = None,
+    alpha_exception_trusted: bool = False,
 ) -> list[GateResult]:
     active_template = template or submission_template_for(article_type)
     results: list[GateResult] = []
@@ -334,8 +376,37 @@ def run_submission_template_checks(
     except ValueError as exc:
         return [GateResult(name="source_bundle_schema", passed=False, reason=str(exc))]
 
-    citation_count = len(normalized_bundle)
-    citation_floor_exception = _alpha_source_exception(article_type, citation_count, evidence_bundle)
+    missing_locators = [index for index, entry in enumerate(normalized_bundle) if not _has_stable_locator(entry)]
+    results.append(
+        GateResult(
+            name="source_identity",
+            passed=not missing_locators,
+            reason=(
+                "every source must carry a stable DOI, PMID, OpenAlex, registry, or canonical URL"
+                + (f"; missing at indices {missing_locators}" if missing_locators else "")
+            ),
+        )
+    )
+    invalid_primary_roles = [
+        index
+        for index, entry in enumerate(normalized_bundle)
+        if entry.evidence_type == "primary" and _is_non_load_bearing(entry)
+    ]
+    results.append(
+        GateResult(
+            name="source_role",
+            passed=not invalid_primary_roles,
+            reason=(
+                "corrections, retractions, expressions of concern, and protocols cannot be primary evidence"
+                + (f"; invalid at indices {invalid_primary_roles}" if invalid_primary_roles else "")
+            ),
+        )
+    )
+    eligible_bundle = [entry for entry in normalized_bundle if not _is_non_load_bearing(entry)]
+    citation_count = len(eligible_bundle)
+    citation_floor_exception = _alpha_source_exception(
+        article_type, citation_count, evidence_bundle, trusted=alpha_exception_trusted
+    )
     citation_reason = f"source bundle must contain at least {active_template.minimum_citations} citations"
     if article_type == ArticleType.ALPHA_MEMO.value:
         citation_reason += " or qualify for the 2-4 source alpha exception"
@@ -359,7 +430,7 @@ def run_submission_template_checks(
 
     recent_count = sum(
         1
-        for entry in normalized_bundle
+        for entry in eligible_bundle
         if isinstance(entry.year, int) and entry.year >= RECENT_PUBLICATION_YEAR_FLOOR
     )
     recent_ratio = recent_count / citation_count if citation_count else 0.0

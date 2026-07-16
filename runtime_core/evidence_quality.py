@@ -11,6 +11,7 @@ WEAK_PATTERN = re.compile(
 )
 DIRECT_PATTERN = re.compile(r"contains\s+(\d+)\s+direct clinical sources", re.IGNORECASE)
 BUNDLE_REFERENCE_PATTERN = re.compile(r"\[bundle:(\d+)\]", re.IGNORECASE)
+UNASSESSED_VALUES = {"", "unknown", "not appraised", "not_appraised", "not extracted"}
 
 
 def claim_candidates(text: str) -> list[str]:
@@ -35,7 +36,21 @@ def evidence_profile(*, text: str, source_bundle: list[dict[str, Any]] | None = 
     direct_match = DIRECT_PATTERN.search(text)
     direct_count = int(direct_match.group(1)) if direct_match else None
     selected_count = len(source_bundle)
-    primary_count = sum(1 for item in source_bundle if item.get("evidence_type") == "primary")
+    primary_sources = [item for item in source_bundle if item.get("evidence_type") == "primary"]
+    primary_count = len(primary_sources)
+    directness_count = sum(
+        1 for item in source_bundle if str(item.get("directness") or "").strip().lower() not in UNASSESSED_VALUES
+    )
+    appraised_count = sum(
+        1
+        for item in primary_sources
+        if str(item.get("risk_of_bias") or "").strip().lower() not in UNASSESSED_VALUES
+    )
+    bundle_direct_count = sum(
+        1 for item in source_bundle if str(item.get("directness") or "").strip().lower().startswith("direct")
+    )
+    if direct_count is None and directness_count:
+        direct_count = bundle_direct_count
     lower = text.lower()
     claims = claim_candidates(text)
     exact_traces = sum(1 for claim in claims if support_for_claim(claim, source_bundle))
@@ -44,6 +59,8 @@ def evidence_profile(*, text: str, source_bundle: list[dict[str, Any]] | None = 
         "direct_clinical_sources": direct_count,
         "source_count": selected_count,
         "primary_source_ratio": round(primary_count / selected_count, 4) if selected_count else None,
+        "directness_coverage": round(directness_count / selected_count, 4) if selected_count else None,
+        "risk_of_bias_coverage": round(appraised_count / primary_count, 4) if primary_count else None,
         "claim_trace_count": len(claims),
         "exact_claim_trace_count": exact_traces,
         "exact_claim_trace_ratio": round(exact_traces / len(claims), 4) if claims else None,
@@ -66,6 +83,11 @@ def publication_class(*, article_type: str, title: str, profile: dict[str, Any])
     trace_count = int(profile.get("claim_trace_count") or 0)
     exact_traces = int(profile.get("exact_claim_trace_count") or 0)
     if title.lower().startswith("research synthesis:") and trace_count and exact_traces / trace_count < 0.8:
+        return "adjacent_evidence_brief"
+    if title.lower().startswith("research synthesis:") and (
+        float(profile.get("directness_coverage") or 0) < 0.8
+        or float(profile.get("risk_of_bias_coverage") or 0) < 0.8
+    ):
         return "adjacent_evidence_brief"
     if (
         title.lower().startswith("research synthesis:")
@@ -127,6 +149,12 @@ def support_for_claim(text: str, sources: list[dict[str, Any]]) -> list[dict[str
         for index, source in enumerate(sources)
         if source.get("doi") and str(source["doi"]).lower().rstrip(".,") in claim
     }
+    cited_as_indexes = {
+        index
+        for index, source in enumerate(sources)
+        if len(str(source.get("cited_as") or "").strip()) >= 4
+        and str(source["cited_as"]).strip().lower() in claim
+    }
     span_indexes = {
         index
         for index, source in enumerate(sources)
@@ -139,7 +167,7 @@ def support_for_claim(text: str, sources: list[dict[str, Any]]) -> list[dict[str
         )
     }
     support: list[dict[str, Any]] = []
-    for index in sorted(bundle_indexes | doi_indexes | span_indexes):
+    for index in sorted(bundle_indexes | doi_indexes | cited_as_indexes | span_indexes):
         source = sources[index]
         row = {
             "source_id": str(source.get("source_id") or f"source_{index + 1}"),
@@ -151,10 +179,12 @@ def support_for_claim(text: str, sources: list[dict[str, Any]]) -> list[dict[str
                 if index in bundle_indexes
                 else "direct_doi_match"
                 if index in doi_indexes
+                else "cited_as_match"
+                if index in cited_as_indexes
                 else "evidence_span_match"
             ),
         }
-        for key in ("population", "endpoint", "effect", "directness", "quote", "evidence_span", "dw_chain_ref"):
+        for key in ("cited_as", "population", "endpoint", "effect", "directness", "quote", "evidence_span", "dw_chain_ref"):
             if source.get(key):
                 row[key] = source[key]
         support.append(row)

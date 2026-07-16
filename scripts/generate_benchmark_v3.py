@@ -54,7 +54,7 @@ def compress_to_target(text: str, target_low: int, target_high: int) -> str:
     # Greedy: add sentences until we hit target_high
     best = ""
     for start in range(min(3, len(sentences))):
-        result = []
+        result: list[str] = []
         length = 0
         for s in sentences[start:]:
             sep = 2 if result else 0

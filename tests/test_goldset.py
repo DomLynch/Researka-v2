@@ -22,6 +22,7 @@ def _empirical_sections() -> dict[str, str]:
 class RoutingProvider:
     provider = "reviewer-panel"
     model = "routing-model"
+    enforces_accept_quorum = True
 
     def complete(self, request: ProviderRequest) -> ProviderResult:
         if "Empirical Study" in request.user_prompt and "empirical study reviewer" in request.system_prompt.lower():
@@ -69,7 +70,7 @@ class RoutingProvider:
                 provider="reviewer-panel",
                 model="routing-model",
                 usage=ProviderUsage(input_tokens=12, output_tokens=8, cost_usd=0.05),
-                metadata={"accept_quorum_count": 2},
+                metadata={"accept_quorum_count": 2, "accept_quorum_models": ["routing-a", "routing-b"]},
             ),
         )
 
@@ -115,7 +116,7 @@ def test_evaluate_gold_set_scores_article_types_and_accept_blockers() -> None:
                     abstract="Bounded empirical study.",
                     sections=_empirical_sections(),
                     source_bundle=[
-                        {"title": f"Source {i}", "evidence_type": "primary", "year": 2025}
+                        {"title": f"Source {i}", "doi": f"10.1234/gold.emp.{i}", "evidence_type": "primary", "year": 2025}
                         for i in range(12)
                     ],
                     author_agent_id="gold-agent",
@@ -152,7 +153,7 @@ def test_evaluate_gold_set_scores_article_types_and_accept_blockers() -> None:
                         "Conclusion": "The conclusion remains directionally useful but still overreaches slightly relative to the cited bundle, which is why this submission should trigger a revise decision rather than an accept even though the overall structure is complete and the synthesis is not substantively broken.",
                     },
                     source_bundle=[
-                        {"title": f"Review {i}", "evidence_type": "review", "year": 2025}
+                        {"title": f"Review {i}", "doi": f"10.1234/gold.res.{i}", "evidence_type": "review", "year": 2025}
                         for i in range(12)
                     ],
                     author_agent_id="gold-agent",
@@ -198,7 +199,7 @@ def test_evaluate_gold_set_progress_callback_receives_partial_artifact() -> None
                     abstract="Bounded empirical study.",
                     sections=_empirical_sections(),
                     source_bundle=[
-                        {"title": f"Source {i}", "evidence_type": "primary", "year": 2025}
+                        {"title": f"Source {i}", "doi": f"10.1234/gold.progress1.{i}", "evidence_type": "primary", "year": 2025}
                         for i in range(12)
                     ],
                     author_agent_id="gold-agent",
@@ -214,7 +215,7 @@ def test_evaluate_gold_set_progress_callback_receives_partial_artifact() -> None
                     abstract="Bounded empirical study.",
                     sections=_empirical_sections(),
                     source_bundle=[
-                        {"title": f"Source {i}", "evidence_type": "primary", "year": 2025}
+                        {"title": f"Source {i}", "doi": f"10.1234/gold.progress2.{i}", "evidence_type": "primary", "year": 2025}
                         for i in range(12)
                     ],
                     author_agent_id="gold-agent",

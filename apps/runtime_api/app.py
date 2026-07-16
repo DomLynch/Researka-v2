@@ -98,6 +98,18 @@ def reset_calibration_cache() -> None:
 
 def _normalize_benchmark(raw: dict) -> dict:
     if "summary" in raw:
+        summary = raw["summary"]
+        if "overall" not in summary and "accuracy" in summary:
+            return {
+                "summary": {
+                    "overall": {key: summary.get(key) for key in ("total", "correct", "accuracy")},
+                    "by_category": summary.get("by_article_type", {}),
+                    "gate_failures": summary.get("accept_blockers", {}),
+                    "confusion_matrix": summary.get("confusion_matrix", {}),
+                    "mismatches": summary.get("mismatches", []),
+                },
+                "results": raw.get("results", []),
+            }
         return raw
     aggregates = raw.get("aggregates", {})
     papers = raw.get("papers", [])
@@ -157,7 +169,7 @@ def _load_calibration_data() -> dict:
     global _calibration_cache, _calibration_path
     default_path = os.environ.get(
         "RESEARKA_V2_CALIBRATION_PATH",
-        str(Path(__file__).resolve().parents[2] / "artifacts" / "benchmark_style_v7.json"),
+        str(Path(__file__).resolve().parents[2] / "artifacts" / "gold_set_eval_v3_current.json"),
     )
     if _calibration_cache is not None and _calibration_path == default_path:
         _calibration_cache["receipt"] = _refresh_calibration_receipt(_calibration_cache["receipt"])
@@ -175,6 +187,7 @@ def _load_calibration_data() -> dict:
         "artifact": path.name,
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "provider": run_meta.get("provider"),
+        "corpus_status": run_meta.get("corpus_status", "unknown"),
         "generated_at": generated_at or None,
         "case_count": case_count,
     })
@@ -195,10 +208,13 @@ def _refresh_calibration_receipt(receipt: dict) -> dict:
     max_age_days = _bounded_env_int("RESEARKA_V2_CALIBRATION_MAX_AGE_DAYS", 90, floor=1, ceiling=365)
     minimum_cases = _bounded_env_int("RESEARKA_V2_CALIBRATION_MIN_CASES", 100, floor=1, ceiling=10000)
     fresh = age_days is not None and age_days <= max_age_days
+    adjudicated = receipt.get("corpus_status") == "adjudicated"
+    valid = fresh and case_count >= minimum_cases and adjudicated
+    status = "current" if valid else "working_or_insufficient" if fresh else "stale_or_insufficient"
     return {
         **receipt,
-        "status": "current" if fresh and case_count >= minimum_cases else "stale_or_insufficient",
-        "valid": fresh and case_count >= minimum_cases,
+        "status": status,
+        "valid": valid,
         "age_days": age_days,
         "max_age_days": max_age_days,
         "case_count": case_count,
@@ -520,7 +536,7 @@ def _public_integrity_signal(value: object) -> dict | None:
 
 
 def _support_row_is_exact(row: dict) -> bool:
-    if row.get("support_kind") in {"direct_doi_match", "bundle_reference"}:
+    if row.get("support_kind") in {"direct_doi_match", "bundle_reference", "cited_as_match"}:
         return True
     if row.get("quote") or row.get("evidence_span") or row.get("dw_chain_ref"):
         return True
@@ -1164,19 +1180,26 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         return _submission_decision_response(repo=app.state.repository, submission_id=submission_id, decision=latest)
 
     @app.get("/publications")
-    def list_publications(surface: str | None = None) -> dict:
+    def list_publications(surface: str | None = None, limit: int = 250, offset: int = 0) -> dict:
+        limit = max(1, min(limit, 250))
+        offset = max(0, offset)
         publications = app.state.repository.list_objects(ObjectType.PUBLICATION)
         if surface:
             normalized = surface.strip().lower()
             if normalized not in {"alpha", "papers"}:
                 raise HTTPException(status_code=400, detail="invalid_surface")
             publications = [publication for publication in publications if _publication_surface(publication) == normalized]
+        listed = [publication for publication in publications if _is_publicly_listed(publication)]
+        page = listed[offset : offset + limit]
         return {
             "publications": [
                 _publication_response(app.state.repository, publication)
-                for publication in publications
-                if _is_publicly_listed(publication)
-            ]
+                for publication in page
+            ],
+            "total": len(listed),
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + len(page) < len(listed),
         }
 
     @app.get("/publications/{publication_id}")

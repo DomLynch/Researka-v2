@@ -8,6 +8,7 @@ from typing import Any
 from contracts import ResearchObject
 
 from .evidence_quality import claim_candidates, support_for_claim
+from .sanitizer import extract_markdown_section
 
 SIDECAR_NAMES = {
     "claim_graph.json",
@@ -30,12 +31,15 @@ def _source_bundle(submission: ResearchObject | None) -> list[dict[str, Any]]:
 
 def _references_from_body(body: str) -> list[dict[str, Any]]:
     sources: list[dict[str, Any]] = []
-    for line in body.splitlines():
-        if not line.startswith("- **"):
+    for line in extract_markdown_section(body, "References").splitlines():
+        if not line.lstrip().startswith(("- ", "* ")):
             continue
         title_match = re.search(r"\*\*(.+?)\.\*\*", line)
         doi_match = re.search(r"DOI:\s*([^\s]+)", line)
         pmid_match = re.search(r"PMID:\s*([^\s.]+)", line)
+        url_match = re.search(r"https?://[^\s)>]+", line)
+        if not (doi_match or pmid_match or url_match):
+            continue
         year_match = re.search(r"\*\*.+?\.\*\*\s*(\d{4})\.", line)
         title = title_match.group(1).strip() if title_match else line[2:].strip()
         doi = doi_match.group(1).rstrip(".,") if doi_match else None
@@ -45,7 +49,7 @@ def _references_from_body(body: str) -> list[dict[str, Any]]:
                 "year": int(year_match.group(1)) if year_match else None,
                 "doi": doi,
                 "pmid": pmid_match.group(1) if pmid_match else None,
-                "url": f"https://doi.org/{doi}" if doi else None,
+                "url": f"https://doi.org/{doi}" if doi else url_match.group(0).rstrip(".,") if url_match else None,
                 "evidence_type": "citation",
             }
         )
@@ -65,7 +69,8 @@ def _dedupe_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def publication_sources(publication: ResearchObject, submission: ResearchObject | None = None) -> list[dict[str, Any]]:
-    return _dedupe_sources(_source_bundle(submission) + _references_from_body(publication.body_markdown or ""))
+    bundle = _source_bundle(submission)
+    return _dedupe_sources(bundle or _references_from_body(publication.body_markdown or ""))
 
 
 def evidence_rows(publication: ResearchObject, submission: ResearchObject | None = None) -> list[dict[str, Any]]:
@@ -84,9 +89,9 @@ def evidence_rows(publication: ResearchObject, submission: ResearchObject | None
             "endpoint": source.get("endpoint") or source.get("outcome") or "not extracted",
             "effect": source.get("effect") or source.get("effect_size") or "not extracted",
             "risk_of_bias": source.get("risk_of_bias") or "not appraised in public sidecar",
-            "directness": "review-level" if "review" in evidence_type else evidence_type or "source-traceable",
+            "directness": source.get("directness") or ("review-level" if "review" in evidence_type else evidence_type or "source-traceable"),
         }
-        for key in ("quote", "evidence_span", "dw_chain_ref"):
+        for key in ("cited_as", "quote", "evidence_span", "dw_chain_ref"):
             if source.get(key):
                 row[key] = source[key]
         rows.append(row)
