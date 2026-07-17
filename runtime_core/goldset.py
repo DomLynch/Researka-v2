@@ -53,7 +53,7 @@ def _accept_blockers(review_metadata: dict[str, object]) -> list[str]:
     return blockers
 
 
-def run_gold_entry(entry: GoldSetEntry, engine: WorkflowEngine) -> dict:
+def run_gold_entry(entry: GoldSetEntry, engine: WorkflowEngine, *, reviewer_only: bool = False) -> dict:
     repo = InMemoryRuntimeRepository()
     submission_payload = entry.submission.model_dump(mode="json")
     submission_payload["article_type"] = entry.article_type.value
@@ -93,22 +93,25 @@ def run_gold_entry(entry: GoldSetEntry, engine: WorkflowEngine) -> dict:
     }
 
     start = time.time()
-    try:
-        intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE))
-        intake_result = engine.handle_job(intake_job, repo)
-        repo.complete_job(intake_job.id)
-    except Exception as exc:
-        record["stage_reached"] = "intake"
-        record["error"] = str(exc)
-        record["duration_s"] = round(time.time() - start, 3)
-        return record
+    if reviewer_only:
+        repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.REVIEW))
+    else:
+        try:
+            intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE))
+            intake_result = engine.handle_job(intake_job, repo)
+            repo.complete_job(intake_job.id)
+        except Exception as exc:
+            record["stage_reached"] = "intake"
+            record["error"] = str(exc)
+            record["duration_s"] = round(time.time() - start, 3)
+            return record
 
-    if intake_result.get("terminal_decision") == Decision.REJECT.value:
-        record["stage_reached"] = "intake"
-        record["actual_decision"] = _decision_for_intake_reject()
-        record["decision_match"] = record["actual_decision"] == record["expected_decision"]
-        record["duration_s"] = round(time.time() - start, 3)
-        return record
+        if intake_result.get("terminal_decision") == Decision.REJECT.value:
+            record["stage_reached"] = "intake"
+            record["actual_decision"] = _decision_for_intake_reject()
+            record["decision_match"] = record["actual_decision"] == record["expected_decision"]
+            record["duration_s"] = round(time.time() - start, 3)
+            return record
 
     try:
         review_job = repo.claim_next_job()
@@ -144,6 +147,13 @@ def run_gold_entry(entry: GoldSetEntry, engine: WorkflowEngine) -> dict:
         for key in REVIEW_RUBRIC_KEYS
         if key in entry.expected.rubric_scores and key in actual_rubric_scores
     }
+
+    if reviewer_only:
+        record["stage_reached"] = "review"
+        record["actual_decision"] = str(review_metadata.get("recommendation") or "").strip().lower() or None
+        record["decision_match"] = record["actual_decision"] == record["expected_decision"]
+        record["duration_s"] = round(time.time() - start, 3)
+        return record
 
     try:
         editorial_job = repo.claim_next_job()
@@ -279,12 +289,18 @@ def evaluate_gold_set(
             "provider": getattr(active_engine.provider, "provider", active_engine.provider.__class__.__name__.lower()),
             "model": getattr(active_engine.provider, "model", "unknown"),
             "corpus_version": corpus.version,
+            "corpus_status": corpus.corpus_status,
+            "evaluation_scope": corpus.evaluation_scope,
+            "ground_truth_source": corpus.ground_truth_source,
+            "ground_truth_url": corpus.ground_truth_url,
+            "label_policy": corpus.label_policy,
+            "corpus_generated_at": corpus.generated_at,
         },
         "summary": summarize_gold_results(records),
         "results": records,
     }
     for index, entry in enumerate(corpus.entries, start=1):
-        record = run_gold_entry(entry, active_engine)
+        record = run_gold_entry(entry, active_engine, reviewer_only=corpus.evaluation_scope == "reviewer_only")
         records.append(record)
         artifact["summary"] = summarize_gold_results(records)
         if progress_callback is not None:
