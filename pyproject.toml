@@ -33,7 +33,7 @@ include = ["apps*", "contracts*", "runtime_core*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-filterwarnings = ["error:Using `httpx` with `starlette.testclient` is deprecated.*:starlette.exceptions.StarletteDeprecationWarning"]
+filterwarnings = ["error:Using `httpx` with `starlette.testclient` is deprecated.*"]
 
 [tool.mypy]
 python_version = "3.12"

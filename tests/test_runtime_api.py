@@ -1,9 +1,15 @@
-import os
-from datetime import datetime, timedelta, timezone
+import inspect
 import logging
+import os
+import subprocess
+import sys
+from datetime import datetime, timedelta, timezone
 from typing import Any, cast
-from fastapi.testclient import TestClient
 from urllib.parse import parse_qs, quote, urlparse
+
+import pytest
+import starlette.testclient as starlette_testclient
+from fastapi.testclient import TestClient
 
 from contracts import ClaimCard, ContradictionStatus, Decision, EventType, EvidenceGrade, ObjectType, ResearchObject, RuntimeEvent
 from runtime_core.osf import sign_oauth_state
@@ -69,6 +75,28 @@ def test_health(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_deprecated_testclient_fallback_is_a_hard_failure() -> None:
+    if "import httpx2 as httpx" not in inspect.getsource(starlette_testclient):
+        pytest.skip("Starlette predates the httpx2 migration")
+    script = """
+import builtins
+import warnings
+
+real_import = builtins.__import__
+def blocked_import(name, *args, **kwargs):
+    if name == "httpx2" or name.startswith("httpx2."):
+        raise ModuleNotFoundError(name)
+    return real_import(name, *args, **kwargs)
+
+builtins.__import__ = blocked_import
+warnings.filterwarnings("error", message=r"Using `httpx` with `starlette\\.testclient` is deprecated.*")
+from starlette.testclient import TestClient
+"""
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False)
+    assert result.returncode != 0
+    assert "StarletteDeprecationWarning" in result.stderr
 
 
 def test_version_returns_sha_and_start_time(client: TestClient) -> None:
