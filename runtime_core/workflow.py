@@ -10,7 +10,7 @@ from contracts import ArticleType, Decision, ObjectType, ResearchObject, Runtime
 
 from .compiler import compile_publication
 from .derivation_web import emit_decision_to_derivation_web, emit_publication_to_derivation_web
-from .doi_resolver import resolve_dois, resolve_source_locators
+from .doi_resolver import resolve_dois, resolve_source_locators, verify_source_metadata
 from .evidence_quality import classified_title, evidence_profile, publication_class
 from .integrity_client import check_integrity, index_integrity
 from .osf import mint_publication_doi_from_repository, osf_publication_metadata_from_env
@@ -221,6 +221,7 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
     if article_type not in {
         ArticleType.ALPHA_MEMO.value,
         ArticleType.EVIDENCE_MAP.value,
+        ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
         ArticleType.RESEARCH_SYNTHESIS.value,
     }:
         return []
@@ -920,6 +921,53 @@ class WorkflowEngine:
                         "notes": ["source resolver unavailable (fail-closed)"],
                         "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
                         "source_resolution": source_resolution,
+                        **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+                    },
+                    terminal=Decision.REVISE.value,
+                )
+        source_verification = verify_source_metadata(source_bundle)
+        if source_verification:
+            submission = repository.update_object_metadata(
+                submission.id, {**submission.metadata, "source_verification": source_verification}
+            ) or submission
+            verification_failures = [
+                {
+                    "name": name,
+                    "passed": False,
+                    "reason": reason + ": " + ", ".join(source_verification.get(field, [])[:10]),
+                }
+                for name, field, reason in (
+                    ("source_retracted", "retracted", "retracted sources cannot support publication"),
+                    ("source_identity_match", "title_mismatches", "source titles do not match registered records"),
+                    ("source_evidence_match", "evidence_mismatches", "submitted evidence text does not match authoritative abstracts"),
+                )
+                if source_verification.get(field)
+            ]
+            if verification_failures:
+                return self._terminal_intake_decision(
+                    repository,
+                    submission,
+                    body_markdown="Authoritative source verification failed: reject",
+                    metadata={
+                        "decision": Decision.REJECT.value,
+                        "notes": ["authoritative source verification rejection"],
+                        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                        "gate_failures": verification_failures,
+                        "source_verification": source_verification,
+                        **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+                    },
+                    terminal=Decision.REJECT.value,
+                )
+            if source_verification.get("recommendation") == Decision.REVISE.value:
+                return self._terminal_intake_decision(
+                    repository,
+                    submission,
+                    body_markdown="Source metadata verification unavailable: revise",
+                    metadata={
+                        "decision": Decision.REVISE.value,
+                        "notes": ["source metadata verification unavailable (fail-closed)"],
+                        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                        "source_verification": source_verification,
                         **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
                     },
                     terminal=Decision.REVISE.value,

@@ -48,7 +48,7 @@ def _unavailable_recommendation() -> str:
     # When the enabled integrity service is unreachable we never silently pass:
     # the result is always stamped available=False. RESEARKA_INTEGRITY_FAIL_CLOSED=1
     # additionally holds the submission (revise) instead of letting it proceed.
-    return "revise" if os.getenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "0") == "1" else "pass"
+    return "revise" if os.getenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "1") == "1" else "pass"
 
 
 def check_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
