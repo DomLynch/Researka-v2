@@ -246,7 +246,7 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
     count = int(profile.get("claim_trace_count") or 0)
     exact = int(profile.get("exact_claim_trace_count") or 0)
     if not count:
-        return []  # Structural/reviewer gates own missing-content failures.
+        return ["Add at least one substantive, source-traceable claim before acceptance."]
     required = max(1, int(count * minimum_ratio + 0.999))
     if count and exact >= required:
         return []
@@ -337,6 +337,13 @@ def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -
     }
 
 
+def _integrity_recommendation(integrity: dict[str, Any] | None) -> str:
+    if not integrity:
+        return ""
+    recommendation = str(integrity.get("recommendation") or "").strip().lower()
+    return recommendation if recommendation in {"pass", Decision.REJECT.value, Decision.REVISE.value} else Decision.REVISE.value
+
+
 def _integrity_without_self_match(integrity: dict[str, Any], publication_id: str) -> dict[str, Any]:
     if str(integrity.get("matched_publication_id") or "") != publication_id:
         return integrity
@@ -368,7 +375,7 @@ def refresh_publication_integrity(repository: RuntimeRepository, publication: Re
     if not integrity:
         return publication
     integrity = _integrity_without_self_match(integrity, publication.id)
-    recommendation = str(integrity.get("recommendation") or "").strip().lower() or "pass"
+    recommendation = _integrity_recommendation(integrity)
     return (
         repository.update_object_metadata(
             publication.id,
@@ -988,9 +995,8 @@ class WorkflowEngine:
                     terminal=Decision.REVISE.value,
                 )
         integrity = check_integrity(_integrity_payload_from_submission(submission))
-        recommendation = str(integrity.get("recommendation") or "").strip().lower() if integrity else ""
-        if integrity and recommendation not in {"pass", Decision.REJECT.value, Decision.REVISE.value}:
-            recommendation = Decision.REVISE.value
+        recommendation = _integrity_recommendation(integrity)
+        if integrity and str(integrity.get("recommendation") or "").strip().lower() != recommendation:
             integrity = {
                 **integrity,
                 "available": False,
@@ -1000,7 +1006,7 @@ class WorkflowEngine:
         if integrity:
             submission = repository.update_object_metadata(
                 submission.id,
-                {**submission.metadata, "integrity": _integrity_signal_metadata(integrity, recommendation or "pass")},
+                {**submission.metadata, "integrity": _integrity_signal_metadata(integrity, recommendation)},
             ) or submission
         if recommendation in {Decision.REJECT.value, Decision.REVISE.value}:
             return self._terminal_intake_decision(
@@ -1204,11 +1210,11 @@ class WorkflowEngine:
         integrity_metadata = submission.metadata.get("integrity")
         if _integrity_unavailable(integrity_metadata):
             refreshed = check_integrity(_integrity_payload_from_submission(submission))
-            recommendation = str((refreshed or {}).get("recommendation") or "").strip().lower()
+            recommendation = _integrity_recommendation(refreshed)
             if refreshed:
                 submission = repository.update_object_metadata(
                     submission.id,
-                    {**submission.metadata, "integrity": _integrity_signal_metadata(refreshed, recommendation or "pass")},
+                    {**submission.metadata, "integrity": _integrity_signal_metadata(refreshed, recommendation)},
                 ) or submission
                 if _integrity_publish_block(recommendation, refreshed):
                     raise ValueError(f"publish_blocked_by_integrity:{recommendation}")

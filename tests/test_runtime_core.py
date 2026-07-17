@@ -605,6 +605,22 @@ def test_alpha_claim_trace_guard_requires_exact_source_token() -> None:
     assert workflow._claim_trace_guard_revisions(submission) == []
 
 
+def test_claim_trace_guard_rejects_claimless_memo() -> None:
+    submission = ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Short memo",
+        metadata={
+            "article_type": ArticleType.ALPHA_MEMO.value,
+            "abstract": "A short note.",
+            "source_bundle": [{"title": "Source", "doi": "10.1234/source"}],
+        },
+    )
+
+    assert workflow._claim_trace_guard_revisions(submission) == [
+        "Add at least one substantive, source-traceable claim before acceptance."
+    ]
+
+
 def test_research_synthesis_trace_guard_requires_eighty_percent_exact() -> None:
     submission = ResearchObject(
         object_type=ObjectType.SUBMISSION,
@@ -703,6 +719,7 @@ def test_alpha_accept_with_unsupported_title_anchor_becomes_revise() -> None:
                         "title": "Cold-water immersion after sprint-interval training affects K+ transport proteins",
                         "doi": "10.1152/japplphysiol.00259.2018",
                         "evidence_type": "primary",
+                        "excerpt": "Cold-water immersion after sprint-interval training affected potassium transport proteins.",
                     },
                     {
                         "title": "Cold-water recovery during heat-based cycling training changes session load",
@@ -710,6 +727,7 @@ def test_alpha_accept_with_unsupported_title_anchor_becomes_revise() -> None:
                         "evidence_type": "primary",
                     },
                 ],
+                "abstract": "Cold-water immersion after sprint-interval training affected potassium transport proteins under the tested recovery protocol, but the finding remains bounded to that training context [bundle:1].",
             },
         )
     )
@@ -744,6 +762,7 @@ def test_alpha_accept_ignores_null_topic_anchor() -> None:
             "title": "Does Cold-Water Immersion After Strength Training Attenuate Training Adaptation?",
             "doi": "10.1123/ijspp.2019-0965",
             "evidence_type": "primary",
+            "excerpt": "Cold-water immersion after strength training may attenuate training adaptation in the tested population.",
         },
         {
             "title": "Strength Training Adaptations After Cold-Water Immersion",
@@ -759,6 +778,7 @@ def test_alpha_accept_ignores_null_topic_anchor() -> None:
                 "article_type": ArticleType.ALPHA_MEMO.value,
                 "source_bundle": source_bundle,
                 "topic": None,
+                "abstract": "Cold-water immersion after strength training may attenuate training adaptation in the tested population, but the source does not establish a universal recovery effect [bundle:1].",
             },
         )
     )
@@ -792,6 +812,7 @@ def test_alpha_accept_guard_ignores_named_program_scaffold_and_acronym_fragments
             "title": "Fisetin senolytic pilot reports epigenetic age acceleration",
             "doi": "10.1000/fisetin-pilot",
             "evidence_type": "primary",
+            "excerpt": "The fisetin senolytic pilot reported endpoint-specific epigenetic age acceleration findings.",
         },
         {
             "title": "Fisetin pregnancy cohort measures epigenetic age acceleration",
@@ -807,6 +828,7 @@ def test_alpha_accept_guard_ignores_named_program_scaffold_and_acronym_fragments
                 "article_type": ArticleType.ALPHA_MEMO.value,
                 "source_bundle": source_bundle,
                 "topic": "fisetin",
+                "abstract": "The fisetin senolytic pilot reported endpoint-specific epigenetic age acceleration findings, but the result remains bounded and requires independent replication [bundle:1].",
             },
         )
     )
@@ -850,6 +872,7 @@ def test_alpha_accept_guard_reads_structured_source_fact_terms() -> None:
                 "intervention": "Use of big data",
                 "endpoint": "Firm performance",
             },
+            "excerpt": "Use of big data was associated with firm performance in the sampled banking firms.",
         }
     ]
     submission = repo.create_object(
@@ -860,6 +883,7 @@ def test_alpha_accept_guard_reads_structured_source_fact_terms() -> None:
                 "article_type": ArticleType.ALPHA_MEMO.value,
                 "source_bundle": source_bundle,
                 "topic": "digital_transformation",
+                "abstract": "Use of big data was associated with firm performance in the sampled banking firms, but the result remains context-specific and does not establish universal causality [bundle:1].",
             },
         )
     )
