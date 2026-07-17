@@ -157,12 +157,18 @@ def _source_bundle_from_evidence_bundle(evidence_bundle: dict) -> list[dict]:
         if not isinstance(paper, dict):
             continue
         title = str(paper.get("title") or f"Alpha memo source {index}").strip()
+        raw_fact = paper.get("source_fact")
+        fact: dict = raw_fact if isinstance(raw_fact, dict) else {}
         entry = {
             "title": title,
             "doi": paper.get("doi") or None,
             "url": paper.get("url") or None,
             "year": paper.get("year") if isinstance(paper.get("year"), int) else None,
             "evidence_type": "review" if _review_like_source(paper) else "primary",
+            "excerpt": paper.get("excerpt") or next(
+                (fact.get(key) for key in ("canonical_phrase", "finding", "source_excerpt") if fact.get(key)),
+                None,
+            ),
         }
         bundle.append(entry)
     return bundle

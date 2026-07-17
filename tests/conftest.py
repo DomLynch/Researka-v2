@@ -28,6 +28,7 @@ def disable_integrity_by_default(monkeypatch):
 def disable_doi_check_by_default(monkeypatch):
     # Tests must never hit doi.org; gate tests re-enable with a mocked client.
     monkeypatch.setenv("RESEARKA_DOI_CHECK_ENABLED", "0")
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "0")
 
 
 @pytest.fixture(autouse=True)

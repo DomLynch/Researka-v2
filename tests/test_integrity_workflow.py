@@ -15,10 +15,10 @@ def _sections() -> dict[str, str]:
         "Research Question": "This synthesis asks a bounded, decision-relevant question about recent evidence, target populations, comparator conditions, intended outcomes, and methodological limits, and it stays narrow enough that another reviewer could reproduce the scope, publication window, inclusion logic, and decision frame without inventing missing assumptions, broadening the intervention target, or silently changing the evidence standard.",
         "Search Summary": "Searches covered PubMed and review corpora, with a documented date window, explicit inclusion logic, and a clear narrowing rule that explains why the retained receipts best match the scoped research question.",
         "Evidence Landscape": "The bundle includes review-level and primary evidence so the reader can see the balance of stronger and more applied material, and where individual studies still shape the remaining uncertainty.",
-        "Key Findings": "The key findings integrate the current evidence into bounded conclusions instead of stitching raw snippets together, and distinguish stronger review-level support from tentative primary-study signals.",
+        "Key Findings": "The key findings integrate the current evidence into bounded conclusions instead of stitching raw snippets together, and distinguish stronger review-level support from tentative primary-study signals [bundle:1].",
         "Limitations": "The main limits are rapid-review scope, incomplete coverage, heterogeneity across evidence units, and the risk that a synthetic bundle omits conflicting sources that could materially change certainty.",
         "Gaps Identified": "No adequately powered human RCT has tested this specific intervention for the primary endpoints reported in non-human models, leaving a translational gap between animal evidence and clinical applicability.",
-        "Conclusion": "The current evidence supports a structured MVP publication, but only with explicit uncertainty, honest limits on reproducibility, and no overclaiming beyond what the retained bundle can directly justify.",
+        "Conclusion": "The current evidence supports a structured MVP publication, but only with explicit uncertainty, honest limits on reproducibility, and no overclaiming beyond what the retained bundle can directly justify [bundle:1].",
     }
 
 
@@ -29,6 +29,11 @@ def _source_bundle() -> list[dict[str, object]]:
             "doi": f"10.1234/integrity.{index}",
             "year": 2024 - (index % 5),
             "evidence_type": "review" if index <= 6 else "primary",
+            "excerpt": (
+                "The key findings integrate current evidence into bounded conclusions and distinguish "
+                "stronger review-level support from tentative primary-study signals. The current evidence "
+                "supports publication only with explicit uncertainty and honest reproducibility limits."
+            ),
         }
         for index in range(1, 13)
     ]
@@ -118,6 +123,7 @@ def test_integrity_service_down_returns_unavailable_signal(monkeypatch: pytest.M
 
     monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "1")
     monkeypatch.setenv("RESEARKA_INTEGRITY_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "0")
     monkeypatch.setattr("runtime_core.integrity_client.time.sleep", lambda seconds: None)
     monkeypatch.setattr("runtime_core.integrity_client.httpx.Client", BrokenClient)
 

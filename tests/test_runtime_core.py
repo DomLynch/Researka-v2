@@ -45,6 +45,7 @@ def _valid_source_bundle() -> list[dict[str, object]]:
             "year": year,
             "evidence_type": evidence_type,
             "doi": f"10.1234/source.{index}",
+            "excerpt": f"Source {index} reports bounded evidence for the scoped outcome and population.",
         }
         for index, (year, evidence_type) in enumerate(zip(years, evidence_types, strict=True), start=1)
     ]
@@ -58,7 +59,12 @@ def test_claim_support_requires_explicit_evidence_span() -> None:
 
 
 def test_claim_support_resolves_submitted_citation_token() -> None:
-    source = {"title": "Trial", "cited_as": "Lynch et al. 2026", "doi": "10.1234/trial"}
+    source = {
+        "title": "Trial",
+        "cited_as": "Lynch et al. 2026",
+        "doi": "10.1234/trial",
+        "excerpt": "The bounded evidence suggests a context-specific intervention effect in the tested population.",
+    }
 
     support = support_for_claim(
         "The bounded evidence suggests a context-specific effect (Lynch et al. 2026).",
@@ -338,7 +344,13 @@ def test_alpha_memo_agent_artifact_uses_lightweight_intake_contract() -> None:
             "publish_verdict": {
                 "axes": {
                     "source_papers": [
-                        {"doi": f"10.1000/alpha-{index}", "title": f"Reserve threshold paper {index}"}
+                        {
+                            "doi": f"10.1000/alpha-{index}",
+                            "title": f"Reserve threshold paper {index}",
+                            "source_fact": {
+                                "canonical_phrase": "The cited source reports a bounded reserve threshold signal with clear limits."
+                            },
+                        }
                         for index in range(1, 6)
                     ],
                 },
@@ -356,6 +368,7 @@ def test_alpha_memo_agent_artifact_uses_lightweight_intake_contract() -> None:
             "url": None,
             "year": None,
             "evidence_type": "primary",
+            "excerpt": "The cited source reports a bounded reserve threshold signal with clear limits.",
         }
         for index in range(1, 6)
     ]
@@ -401,6 +414,7 @@ def test_alpha_memo_with_four_sources_fails_public_intake_gate() -> None:
                 "title": f"Narrow alpha source {index}",
                 "doi": f"10.1000/narrow-{index}",
                 "evidence_type": "primary",
+                "excerpt": "This source provides a bounded narrow alpha signal for the tested endpoint.",
             }
             for index in range(1, 5)
         ],
@@ -563,7 +577,12 @@ def test_alpha_claim_trace_guard_requires_exact_source_token() -> None:
                 "hypothesis-generating and does not establish clinical benefit across populations or endpoints."
             ),
             "source_bundle": [
-                {"title": "Metformin trial", "doi": "10.1234/metformin", "cited_as": "Lynch 2026"}
+                {
+                    "title": "Metformin trial",
+                    "doi": "10.1234/metformin",
+                    "cited_as": "Lynch 2026",
+                    "excerpt": "Metformin produced a context-specific longevity signal in the tested population.",
+                }
             ],
         },
     )
@@ -586,8 +605,18 @@ def test_research_synthesis_trace_guard_requires_eighty_percent_exact() -> None:
                 ]
             ),
             "source_bundle": [
-                {"title": "Alpha trial", "doi": "10.1234/alpha", "cited_as": "Alpha 2026"},
-                {"title": "Beta trial", "doi": "10.1234/beta", "cited_as": "Beta 2026"},
+                {
+                    "title": "Alpha trial",
+                    "doi": "10.1234/alpha",
+                    "cited_as": "Alpha 2026",
+                    "excerpt": "The tested intervention produced a bounded endpoint-specific improvement with population limits.",
+                },
+                {
+                    "title": "Beta trial",
+                    "doi": "10.1234/beta",
+                    "cited_as": "Beta 2026",
+                    "excerpt": "The second outcome remained context-dependent and did not justify a broad clinical recommendation.",
+                },
             ],
         },
     )
@@ -975,6 +1004,11 @@ def test_publish_preserves_research_synthesis_with_direct_clinical_core(
                         "evidence_type": "primary",
                         "directness": "direct clinical",
                         "risk_of_bias": "low",
+                        "excerpt": (
+                            "The evidence bounds interpretation, preserves heterogeneous findings, separates direct "
+                            "clinical results from adjacent evidence, treats disagreement as a boundary condition, "
+                            "identifies corpus uncertainty and scope restrictions, and avoids broad clinical guidance."
+                        ) if index == 1 else "This direct clinical source reports an appraised endpoint-specific result.",
                 }
                 for index in range(1, 59)
             ] + [

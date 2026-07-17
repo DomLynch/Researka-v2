@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import html
 import logging
 import os
-import html
 import re
 import socket
 import urllib.parse
@@ -93,9 +93,9 @@ def _text_matches(left: object, right: object, *, floor: float) -> bool:
     left_tokens, right_tokens = _tokens(left), _tokens(right)
     if not left_tokens or not right_tokens:
         return False
-    return len(left_tokens & right_tokens) >= 2 and (
-        len(left_tokens & right_tokens) / min(len(left_tokens), len(right_tokens))
-    ) >= floor
+    overlap = len(left_tokens & right_tokens)
+    minimum_overlap = 1 if min(len(left_tokens), len(right_tokens)) == 1 else 2
+    return overlap >= minimum_overlap and overlap / min(len(left_tokens), len(right_tokens)) >= floor
 
 
 def _openalex_abstract(payload: dict[str, Any]) -> str:
@@ -121,7 +121,10 @@ def _crossref_retracted(payload: dict[str, Any]) -> bool:
         return True
     titles = payload.get("title")
     title = titles[0] if isinstance(titles, list) and titles else titles
-    return "retract" in html.unescape(re.sub(r"<[^>]+>", " ", str(title or ""))).lower().split()[:2]
+    return any(
+        word.startswith("retract")
+        for word in html.unescape(re.sub(r"<[^>]+>", " ", str(title or ""))).lower().split()[:2]
+    )
 
 
 def _source_identity(source: dict[str, Any]) -> tuple[str, str | None, str | None] | None:
@@ -161,7 +164,8 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
                     if isinstance(message, dict):
                         authority_count += 1
                         raw_titles = message.get("title")
-                        titles.extend(str(value) for value in raw_titles if value) if isinstance(raw_titles, list) else None
+                        if isinstance(raw_titles, list):
+                            titles.extend(str(value) for value in raw_titles if value)
                         if message.get("abstract"):
                             abstracts.append(str(message["abstract"]))
                         retracted = retracted or _crossref_retracted(message)

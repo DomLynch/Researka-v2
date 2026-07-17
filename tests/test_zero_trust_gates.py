@@ -37,6 +37,7 @@ def _bundle(with_dois: bool = True) -> list[dict[str, object]]:
             "title": f"Source {index}",
             "year": 2024 - (index % 5),
             "evidence_type": "review" if index <= 6 else "primary",
+            "excerpt": f"Source {index} reports bounded evidence for the scoped outcome and population.",
             **({"doi": f"10.1000/src{index}"} if with_dois else {}),
         }
         for index in range(1, 13)
@@ -214,6 +215,7 @@ def test_intake_fail_closed_holds_when_resolver_down(monkeypatch: pytest.MonkeyP
 
 def test_intake_proceeds_with_stamp_when_resolver_down_fail_open(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_DOI_CHECK_ENABLED", "1")
+    monkeypatch.setenv("RESEARKA_DOI_CHECK_FAIL_CLOSED", "0")
     monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", _DownClient)
     repo = InMemoryRuntimeRepository()
     submission = _submission(repo)
@@ -251,6 +253,7 @@ def test_non_doi_source_resolver_can_fail_closed(monkeypatch: pytest.MonkeyPatch
     bundle = _bundle(with_dois=False)
     for index, source in enumerate(bundle, start=1):
         source["url"] = f"https://openalex.org/W{index}"
+        source["registry_id"] = f"REG-{index}"
     submission = _submission(repo, source_bundle=bundle)
 
     result = WorkflowEngine()._run_intake(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)

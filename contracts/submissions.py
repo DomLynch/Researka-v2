@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, model_validator
 
 from .models import ArticleType, GateResult
 from .templates import RAPID_EVIDENCE_SYNTHESIS, publication_template_for
@@ -178,6 +178,21 @@ class SourceBundleEntry(BaseModel):
     quote: str | None = None
     evidence_span: str | None = None
     excerpt: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def preserve_source_fact(cls, data: object) -> object:
+        if not isinstance(data, dict) or any(data.get(key) for key in ("quote", "evidence_span", "excerpt")):
+            return data
+        fact = data.get("source_fact")
+        if not isinstance(fact, dict):
+            return data
+        values = dict(data)
+        values["excerpt"] = next(
+            (fact.get(key) for key in ("canonical_phrase", "finding", "source_excerpt") if fact.get(key)),
+            None,
+        )
+        return values
 
 
 class SubmissionTemplateV1(BaseModel):
@@ -455,7 +470,7 @@ def run_submission_template_checks(
         index
         for index, entry in enumerate(normalized_bundle)
         if not _is_non_load_bearing(entry)
-        and not any(str(value or "").strip() for value in (entry.quote, entry.evidence_span, entry.excerpt))
+        and not any(len(str(value or "").strip()) >= 20 for value in (entry.quote, entry.evidence_span, entry.excerpt))
     ]
     results.append(
         GateResult(
