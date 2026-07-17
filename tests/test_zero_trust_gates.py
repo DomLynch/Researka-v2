@@ -12,7 +12,7 @@ import pytest
 import runtime_core.workflow as workflow
 from contracts import ArticleType, Decision, ObjectType, ProviderUsage, ResearchObject, RuntimeJob, Stage, run_submission_template_checks
 from runtime_core.providers import ProviderRequest, ProviderResponse, ProviderResult
-from runtime_core.doi_resolver import UnsafeSourceLocator, _require_public_source
+from runtime_core.doi_resolver import UnsafeSourceLocator, _require_public_source, verify_source_metadata
 from runtime_core.repos import InMemoryRuntimeRepository
 from runtime_core.workflow import SUBMISSION_DATA_END, SUBMISSION_DATA_START, WorkflowEngine
 
@@ -37,6 +37,7 @@ def _bundle(with_dois: bool = True) -> list[dict[str, object]]:
             "title": f"Source {index}",
             "year": 2024 - (index % 5),
             "evidence_type": "review" if index <= 6 else "primary",
+            "excerpt": f"Source {index} reports bounded evidence for the scoped outcome and population.",
             **({"doi": f"10.1000/src{index}"} if with_dois else {}),
         }
         for index in range(1, 13)
@@ -88,6 +89,28 @@ def test_source_identity_requires_a_stable_locator() -> None:
         result
         for result in run_submission_template_checks(sections=_sections(), source_bundle=bundle)
         if result.name == "source_identity"
+    )
+
+    assert not gate.passed
+    assert "indices [0]" in gate.reason
+
+
+def test_duplicate_sources_do_not_inflate_citation_floor() -> None:
+    source = _bundle()[0]
+    results = run_submission_template_checks(sections=_sections(), source_bundle=[source] * 12)
+
+    assert not next(result for result in results if result.name == "source_uniqueness").passed
+    assert not next(result for result in results if result.name == "minimum_citations").passed
+
+
+def test_load_bearing_sources_require_substantive_receipts() -> None:
+    bundle = _bundle()
+    bundle[0]["excerpt"] = "too short"
+
+    gate = next(
+        result
+        for result in run_submission_template_checks(sections=_sections(), source_bundle=bundle)
+        if result.name == "source_evidence_receipt"
     )
 
     assert not gate.passed
@@ -179,6 +202,37 @@ class _LocatorClient(_HandleClient):
         return super().get(url)
 
 
+class _MetadataResponse:
+    def __init__(self, payload: dict[str, Any], status_code: int = 200) -> None:
+        self.payload = payload
+        self.status_code = status_code
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict[str, Any]:
+        return self.payload
+
+
+def _metadata_client(message: dict[str, Any]) -> type:
+    class MetadataClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> "MetadataClient":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> _MetadataResponse:
+            if "crossref" in url:
+                return _MetadataResponse({"message": message})
+            return _MetadataResponse({}, status_code=404)
+
+    return MetadataClient
+
+
 def test_intake_rejects_fabricated_doi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_DOI_CHECK_ENABLED", "1")
     monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", _HandleClient)
@@ -214,6 +268,7 @@ def test_intake_fail_closed_holds_when_resolver_down(monkeypatch: pytest.MonkeyP
 
 def test_intake_proceeds_with_stamp_when_resolver_down_fail_open(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_DOI_CHECK_ENABLED", "1")
+    monkeypatch.setenv("RESEARKA_DOI_CHECK_FAIL_CLOSED", "0")
     monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", _DownClient)
     repo = InMemoryRuntimeRepository()
     submission = _submission(repo)
@@ -251,6 +306,7 @@ def test_non_doi_source_resolver_can_fail_closed(monkeypatch: pytest.MonkeyPatch
     bundle = _bundle(with_dois=False)
     for index, source in enumerate(bundle, start=1):
         source["url"] = f"https://openalex.org/W{index}"
+        source["registry_id"] = f"REG-{index}"
     submission = _submission(repo, source_bundle=bundle)
 
     result = WorkflowEngine()._run_intake(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
@@ -259,6 +315,99 @@ def test_non_doi_source_resolver_can_fail_closed(monkeypatch: pytest.MonkeyPatch
     stored = repo.get_object(submission.id)
     assert stored is not None
     assert stored.metadata["source_resolution"]["available"] is False
+
+
+def test_source_metadata_rejects_retracted_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client({
+            "title": ["Bounded intervention outcome in adults"],
+            "abstract": "The intervention produced a bounded endpoint-specific outcome in adults.",
+            "relation": {"retraction": [{"id": "10.1000/retraction"}]},
+        }),
+    )
+
+    result = verify_source_metadata([{
+        "title": "Bounded intervention outcome in adults",
+        "doi": "10.1000/retracted",
+        "excerpt": "The intervention produced a bounded endpoint-specific outcome in adults.",
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == Decision.REJECT.value
+    assert result["retracted"] == ["doi:10.1000/retracted"]
+
+
+def test_source_metadata_rejects_identity_and_evidence_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client({
+            "title": ["Registered placebo trial in adults"],
+            "abstract": "Adults receiving placebo showed no measurable endpoint change.",
+        }),
+    )
+
+    result = verify_source_metadata([{
+        "title": "Fabricated longevity intervention result",
+        "doi": "10.1000/mismatch",
+        "excerpt": "The intervention doubled lifespan in every treated animal cohort.",
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == Decision.REJECT.value
+    assert result["title_mismatches"] == ["doi:10.1000/mismatch"]
+    assert result["evidence_mismatches"] == ["doi:10.1000/mismatch"]
+
+
+def test_source_evidence_mismatch_is_held_for_revision(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client({
+            "title": ["Registered intervention trial in adults"],
+            "abstract": "Adults receiving placebo showed no measurable endpoint change.",
+        }),
+    )
+
+    result = verify_source_metadata([{
+        "title": "Registered intervention trial in adults",
+        "doi": "10.1000/evidence-mismatch",
+        "excerpt": "The intervention doubled lifespan in every treated animal cohort.",
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == Decision.REVISE.value
+    assert result["evidence_mismatches"] == ["doi:10.1000/evidence-mismatch"]
+
+
+def test_unregistered_url_source_is_held_for_verification(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.delenv("RESEARKA_SOURCE_METADATA_FAIL_CLOSED", raising=False)
+
+    result = verify_source_metadata([{
+        "title": "Unregistered web report",
+        "url": "https://example.org/report",
+        "excerpt": "This report claims a bounded result that requires independent verification.",
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == Decision.REVISE.value
+    assert result["unverified"] == ["url:https://example.org/report"]
+
+
+def test_source_metadata_outage_fails_closed_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.delenv("RESEARKA_SOURCE_METADATA_FAIL_CLOSED", raising=False)
+    monkeypatch.delenv("RESEARKA_DOI_CHECK_FAIL_CLOSED", raising=False)
+    monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", _DownClient)
+
+    result = verify_source_metadata([{"title": "Source", "doi": "10.1000/source"}])
+
+    assert result is not None
+    assert result["available"] is False
+    assert result["recommendation"] == Decision.REVISE.value
 
 
 # --- Gate 3: provisional publish tiers --------------------------------------------

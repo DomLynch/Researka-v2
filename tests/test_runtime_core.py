@@ -45,6 +45,7 @@ def _valid_source_bundle() -> list[dict[str, object]]:
             "year": year,
             "evidence_type": evidence_type,
             "doi": f"10.1234/source.{index}",
+            "excerpt": f"Source {index} reports bounded evidence for the scoped outcome and population.",
         }
         for index, (year, evidence_type) in enumerate(zip(years, evidence_types, strict=True), start=1)
     ]
@@ -58,7 +59,12 @@ def test_claim_support_requires_explicit_evidence_span() -> None:
 
 
 def test_claim_support_resolves_submitted_citation_token() -> None:
-    source = {"title": "Trial", "cited_as": "Lynch et al. 2026", "doi": "10.1234/trial"}
+    source = {
+        "title": "Trial",
+        "cited_as": "Lynch et al. 2026",
+        "doi": "10.1234/trial",
+        "excerpt": "The bounded evidence suggests a context-specific intervention effect in the tested population.",
+    }
 
     support = support_for_claim(
         "The bounded evidence suggests a context-specific effect (Lynch et al. 2026).",
@@ -67,6 +73,19 @@ def test_claim_support_resolves_submitted_citation_token() -> None:
 
     assert support[0]["support_kind"] == "cited_as_match"
     assert support[0]["doi"] == "10.1234/trial"
+
+
+def test_claim_support_rejects_citation_with_unrelated_receipt() -> None:
+    source = {
+        "title": "Trial",
+        "cited_as": "Lynch et al. 2026",
+        "excerpt": "The trial measured blood pressure after a short dietary intervention.",
+    }
+
+    assert support_for_claim(
+        "The treatment doubled survival in older adults (Lynch et al. 2026).",
+        [source],
+    ) == []
 
 
 def test_publication_sources_prefer_bundle_and_parse_only_reference_receipts() -> None:
@@ -338,7 +357,13 @@ def test_alpha_memo_agent_artifact_uses_lightweight_intake_contract() -> None:
             "publish_verdict": {
                 "axes": {
                     "source_papers": [
-                        {"doi": f"10.1000/alpha-{index}", "title": f"Reserve threshold paper {index}"}
+                        {
+                            "doi": f"10.1000/alpha-{index}",
+                            "title": f"Reserve threshold paper {index}",
+                            "source_fact": {
+                                "canonical_phrase": "The cited source reports a bounded reserve threshold signal with clear limits."
+                            },
+                        }
                         for index in range(1, 6)
                     ],
                 },
@@ -356,6 +381,7 @@ def test_alpha_memo_agent_artifact_uses_lightweight_intake_contract() -> None:
             "url": None,
             "year": None,
             "evidence_type": "primary",
+            "excerpt": "The cited source reports a bounded reserve threshold signal with clear limits.",
         }
         for index in range(1, 6)
     ]
@@ -401,6 +427,7 @@ def test_alpha_memo_with_four_sources_fails_public_intake_gate() -> None:
                 "title": f"Narrow alpha source {index}",
                 "doi": f"10.1000/narrow-{index}",
                 "evidence_type": "primary",
+                "excerpt": "This source provides a bounded narrow alpha signal for the tested endpoint.",
             }
             for index in range(1, 5)
         ],
@@ -563,7 +590,12 @@ def test_alpha_claim_trace_guard_requires_exact_source_token() -> None:
                 "hypothesis-generating and does not establish clinical benefit across populations or endpoints."
             ),
             "source_bundle": [
-                {"title": "Metformin trial", "doi": "10.1234/metformin", "cited_as": "Lynch 2026"}
+                {
+                    "title": "Metformin trial",
+                    "doi": "10.1234/metformin",
+                    "cited_as": "Lynch 2026",
+                    "excerpt": "Metformin produced a context-specific longevity signal in the tested population.",
+                }
             ],
         },
     )
@@ -571,6 +603,22 @@ def test_alpha_claim_trace_guard_requires_exact_source_token() -> None:
     assert workflow._claim_trace_guard_revisions(submission)
     submission.metadata["abstract"] += " (Lynch 2026)."
     assert workflow._claim_trace_guard_revisions(submission) == []
+
+
+def test_claim_trace_guard_rejects_claimless_memo() -> None:
+    submission = ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Short memo",
+        metadata={
+            "article_type": ArticleType.ALPHA_MEMO.value,
+            "abstract": "A short note.",
+            "source_bundle": [{"title": "Source", "doi": "10.1234/source"}],
+        },
+    )
+
+    assert workflow._claim_trace_guard_revisions(submission) == [
+        "Add at least one substantive, source-traceable claim before acceptance."
+    ]
 
 
 def test_research_synthesis_trace_guard_requires_eighty_percent_exact() -> None:
@@ -586,8 +634,18 @@ def test_research_synthesis_trace_guard_requires_eighty_percent_exact() -> None:
                 ]
             ),
             "source_bundle": [
-                {"title": "Alpha trial", "doi": "10.1234/alpha", "cited_as": "Alpha 2026"},
-                {"title": "Beta trial", "doi": "10.1234/beta", "cited_as": "Beta 2026"},
+                {
+                    "title": "Alpha trial",
+                    "doi": "10.1234/alpha",
+                    "cited_as": "Alpha 2026",
+                    "excerpt": "The tested intervention produced a bounded endpoint-specific improvement with population limits.",
+                },
+                {
+                    "title": "Beta trial",
+                    "doi": "10.1234/beta",
+                    "cited_as": "Beta 2026",
+                    "excerpt": "The second outcome remained context-dependent and did not justify a broad clinical recommendation.",
+                },
             ],
         },
     )
@@ -661,6 +719,7 @@ def test_alpha_accept_with_unsupported_title_anchor_becomes_revise() -> None:
                         "title": "Cold-water immersion after sprint-interval training affects K+ transport proteins",
                         "doi": "10.1152/japplphysiol.00259.2018",
                         "evidence_type": "primary",
+                        "excerpt": "Cold-water immersion after sprint-interval training affected potassium transport proteins.",
                     },
                     {
                         "title": "Cold-water recovery during heat-based cycling training changes session load",
@@ -668,6 +727,7 @@ def test_alpha_accept_with_unsupported_title_anchor_becomes_revise() -> None:
                         "evidence_type": "primary",
                     },
                 ],
+                "abstract": "Cold-water immersion after sprint-interval training affected potassium transport proteins under the tested recovery protocol, but the finding remains bounded to that training context [bundle:1].",
             },
         )
     )
@@ -702,6 +762,7 @@ def test_alpha_accept_ignores_null_topic_anchor() -> None:
             "title": "Does Cold-Water Immersion After Strength Training Attenuate Training Adaptation?",
             "doi": "10.1123/ijspp.2019-0965",
             "evidence_type": "primary",
+            "excerpt": "Cold-water immersion after strength training may attenuate training adaptation in the tested population.",
         },
         {
             "title": "Strength Training Adaptations After Cold-Water Immersion",
@@ -717,6 +778,7 @@ def test_alpha_accept_ignores_null_topic_anchor() -> None:
                 "article_type": ArticleType.ALPHA_MEMO.value,
                 "source_bundle": source_bundle,
                 "topic": None,
+                "abstract": "Cold-water immersion after strength training may attenuate training adaptation in the tested population, but the source does not establish a universal recovery effect [bundle:1].",
             },
         )
     )
@@ -750,6 +812,7 @@ def test_alpha_accept_guard_ignores_named_program_scaffold_and_acronym_fragments
             "title": "Fisetin senolytic pilot reports epigenetic age acceleration",
             "doi": "10.1000/fisetin-pilot",
             "evidence_type": "primary",
+            "excerpt": "The fisetin senolytic pilot reported endpoint-specific epigenetic age acceleration findings.",
         },
         {
             "title": "Fisetin pregnancy cohort measures epigenetic age acceleration",
@@ -765,6 +828,7 @@ def test_alpha_accept_guard_ignores_named_program_scaffold_and_acronym_fragments
                 "article_type": ArticleType.ALPHA_MEMO.value,
                 "source_bundle": source_bundle,
                 "topic": "fisetin",
+                "abstract": "The fisetin senolytic pilot reported endpoint-specific epigenetic age acceleration findings, but the result remains bounded and requires independent replication [bundle:1].",
             },
         )
     )
@@ -808,6 +872,7 @@ def test_alpha_accept_guard_reads_structured_source_fact_terms() -> None:
                 "intervention": "Use of big data",
                 "endpoint": "Firm performance",
             },
+            "excerpt": "Use of big data was associated with firm performance in the sampled banking firms.",
         }
     ]
     submission = repo.create_object(
@@ -818,6 +883,7 @@ def test_alpha_accept_guard_reads_structured_source_fact_terms() -> None:
                 "article_type": ArticleType.ALPHA_MEMO.value,
                 "source_bundle": source_bundle,
                 "topic": "digital_transformation",
+                "abstract": "Use of big data was associated with firm performance in the sampled banking firms, but the result remains context-specific and does not establish universal causality [bundle:1].",
             },
         )
     )
@@ -975,6 +1041,11 @@ def test_publish_preserves_research_synthesis_with_direct_clinical_core(
                         "evidence_type": "primary",
                         "directness": "direct clinical",
                         "risk_of_bias": "low",
+                        "excerpt": (
+                            "The evidence bounds interpretation, preserves heterogeneous findings, separates direct "
+                            "clinical results from adjacent evidence, treats disagreement as a boundary condition, "
+                            "identifies corpus uncertainty and scope restrictions, and avoids broad clinical guidance."
+                        ) if index == 1 else "This direct clinical source reports an appraised endpoint-specific result.",
                 }
                 for index in range(1, 59)
             ] + [

@@ -10,7 +10,7 @@ from contracts import ArticleType, Decision, ObjectType, ResearchObject, Runtime
 
 from .compiler import compile_publication
 from .derivation_web import emit_decision_to_derivation_web, emit_publication_to_derivation_web
-from .doi_resolver import resolve_dois, resolve_source_locators
+from .doi_resolver import resolve_dois, resolve_source_locators, verify_source_metadata
 from .evidence_quality import classified_title, evidence_profile, publication_class
 from .integrity_client import check_integrity, index_integrity
 from .osf import mint_publication_doi_from_repository, osf_publication_metadata_from_env
@@ -221,6 +221,7 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
     if article_type not in {
         ArticleType.ALPHA_MEMO.value,
         ArticleType.EVIDENCE_MAP.value,
+        ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
         ArticleType.RESEARCH_SYNTHESIS.value,
     }:
         return []
@@ -245,7 +246,7 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
     count = int(profile.get("claim_trace_count") or 0)
     exact = int(profile.get("exact_claim_trace_count") or 0)
     if not count:
-        return []  # Structural/reviewer gates own missing-content failures.
+        return ["Add at least one substantive, source-traceable claim before acceptance."]
     required = max(1, int(count * minimum_ratio + 0.999))
     if count and exact >= required:
         return []
@@ -320,7 +321,7 @@ def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -
     if not isinstance(matched_sources, list):
         matched_sources = []
     return {
-        "recommendation": recommendation or integrity.get("recommendation") or "pass",
+        "recommendation": recommendation or integrity.get("recommendation") or "revise",
         "available": bool(integrity.get("available", True)),
         "checked_at": integrity.get("checked_at") or datetime.now(timezone.utc).isoformat(),
         "reason": str(integrity.get("reason") or "").strip() or None,
@@ -334,6 +335,13 @@ def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -
         "attempts": integrity.get("attempts"),
         "self_match_ignored": bool(integrity.get("self_match_ignored")),
     }
+
+
+def _integrity_recommendation(integrity: dict[str, Any] | None) -> str:
+    if not integrity:
+        return ""
+    recommendation = str(integrity.get("recommendation") or "").strip().lower()
+    return recommendation if recommendation in {"pass", Decision.REJECT.value, Decision.REVISE.value} else Decision.REVISE.value
 
 
 def _integrity_without_self_match(integrity: dict[str, Any], publication_id: str) -> dict[str, Any]:
@@ -367,7 +375,7 @@ def refresh_publication_integrity(repository: RuntimeRepository, publication: Re
     if not integrity:
         return publication
     integrity = _integrity_without_self_match(integrity, publication.id)
-    recommendation = str(integrity.get("recommendation") or "").strip().lower() or "pass"
+    recommendation = _integrity_recommendation(integrity)
     return (
         repository.update_object_metadata(
             publication.id,
@@ -385,7 +393,7 @@ def _integrity_unavailable(integrity: object) -> bool:
 
 
 def _integrity_publish_block(recommendation: str, integrity: dict[str, Any]) -> bool:
-    return integrity.get("available", True) is not False and recommendation in {Decision.REJECT.value, Decision.REVISE.value}
+    return recommendation in {Decision.REJECT.value, Decision.REVISE.value}
 
 
 def _mint_publication_doi(repository: RuntimeRepository, publication: ResearchObject) -> dict:
@@ -924,12 +932,81 @@ class WorkflowEngine:
                     },
                     terminal=Decision.REVISE.value,
                 )
+        source_verification = verify_source_metadata(source_bundle)
+        if source_verification:
+            submission = repository.update_object_metadata(
+                submission.id, {**submission.metadata, "source_verification": source_verification}
+            ) or submission
+            verification_failures = [
+                {
+                    "name": name,
+                    "passed": False,
+                    "reason": reason + ": " + ", ".join(source_verification.get(field, [])[:10]),
+                }
+                for name, field, reason in (
+                    ("source_retracted", "retracted", "retracted sources cannot support publication"),
+                    ("source_identity_match", "title_mismatches", "source titles do not match registered records"),
+                )
+                if source_verification.get(field)
+            ]
+            if verification_failures:
+                return self._terminal_intake_decision(
+                    repository,
+                    submission,
+                    body_markdown="Authoritative source verification failed: reject",
+                    metadata={
+                        "decision": Decision.REJECT.value,
+                        "notes": ["authoritative source verification rejection"],
+                        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                        "gate_failures": verification_failures,
+                        "source_verification": source_verification,
+                        **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+                    },
+                    terminal=Decision.REJECT.value,
+                )
+            if source_verification.get("recommendation") == Decision.REVISE.value:
+                revision_failures = []
+                if source_verification.get("evidence_mismatches"):
+                    revision_failures.append({
+                        "name": "source_evidence_match",
+                        "passed": False,
+                        "reason": "submitted evidence text could not be reconciled with available authoritative abstracts: "
+                        + ", ".join(source_verification["evidence_mismatches"][:10]),
+                    })
+                if source_verification.get("unverified"):
+                    revision_failures.append({
+                        "name": "source_authority_available",
+                        "passed": False,
+                        "reason": "source metadata could not be verified: "
+                        + ", ".join(source_verification["unverified"][:10]),
+                    })
+                return self._terminal_intake_decision(
+                    repository,
+                    submission,
+                    body_markdown="Source metadata verification unavailable: revise",
+                    metadata={
+                        "decision": Decision.REVISE.value,
+                        "notes": ["source metadata verification unavailable (fail-closed)"],
+                        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                        "source_verification": source_verification,
+                        "gate_failures": revision_failures,
+                        **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+                    },
+                    terminal=Decision.REVISE.value,
+                )
         integrity = check_integrity(_integrity_payload_from_submission(submission))
-        recommendation = str(integrity.get("recommendation") or "").strip().lower() if integrity else ""
+        recommendation = _integrity_recommendation(integrity)
+        if integrity and str(integrity.get("recommendation") or "").strip().lower() != recommendation:
+            integrity = {
+                **integrity,
+                "available": False,
+                "recommendation": recommendation,
+                "reason": "integrity_invalid_recommendation",
+            }
         if integrity:
             submission = repository.update_object_metadata(
                 submission.id,
-                {**submission.metadata, "integrity": _integrity_signal_metadata(integrity, recommendation or "pass")},
+                {**submission.metadata, "integrity": _integrity_signal_metadata(integrity, recommendation)},
             ) or submission
         if recommendation in {Decision.REJECT.value, Decision.REVISE.value}:
             return self._terminal_intake_decision(
@@ -1133,11 +1210,11 @@ class WorkflowEngine:
         integrity_metadata = submission.metadata.get("integrity")
         if _integrity_unavailable(integrity_metadata):
             refreshed = check_integrity(_integrity_payload_from_submission(submission))
-            recommendation = str((refreshed or {}).get("recommendation") or "").strip().lower()
+            recommendation = _integrity_recommendation(refreshed)
             if refreshed:
                 submission = repository.update_object_metadata(
                     submission.id,
-                    {**submission.metadata, "integrity": _integrity_signal_metadata(refreshed, recommendation or "pass")},
+                    {**submission.metadata, "integrity": _integrity_signal_metadata(refreshed, recommendation)},
                 ) or submission
                 if _integrity_publish_block(recommendation, refreshed):
                     raise ValueError(f"publish_blocked_by_integrity:{recommendation}")

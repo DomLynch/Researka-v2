@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import html
 import logging
 import os
+import re
 import socket
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
@@ -39,9 +41,9 @@ def _timeout_s() -> float:
 
 def _max_dois() -> int:
     try:
-        return max(1, int(os.getenv("RESEARKA_DOI_CHECK_MAX", "25")))
+        return max(1, int(os.getenv("RESEARKA_DOI_CHECK_MAX", "100")))
     except ValueError:
-        return 25
+        return 100
 
 
 def _max_sources() -> int:
@@ -59,7 +61,186 @@ def _unavailable_recommendation() -> str:
     # Mirrors the integrity client: outages never silently pass. The result is
     # always stamped available=False; RESEARKA_DOI_CHECK_FAIL_CLOSED=1
     # additionally holds the submission (revise) instead of proceeding.
-    return "revise" if os.getenv("RESEARKA_DOI_CHECK_FAIL_CLOSED", "0") == "1" else "pass"
+    return "revise" if os.getenv("RESEARKA_DOI_CHECK_FAIL_CLOSED", "1") == "1" else "pass"
+
+
+def _metadata_enabled() -> bool:
+    return os.getenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1") == "1"
+
+
+def _metadata_unavailable_recommendation() -> str:
+    value = os.getenv(
+        "RESEARKA_SOURCE_METADATA_FAIL_CLOSED",
+        os.getenv("RESEARKA_DOI_CHECK_FAIL_CLOSED", "1"),
+    )
+    return "revise" if value == "1" else "pass"
+
+
+_GENERIC_WORDS = {
+    "about", "analysis", "article", "evidence", "effects", "results", "review", "study", "trial",
+}
+
+
+def _tokens(value: object) -> set[str]:
+    clean = html.unescape(re.sub(r"<[^>]+>", " ", str(value or ""))).lower()
+    return {
+        word for word in re.findall(r"[a-z0-9]+", clean)
+        if len(word) >= 4 and word not in _GENERIC_WORDS
+    }
+
+
+def _text_matches(left: object, right: object, *, floor: float) -> bool:
+    left_tokens, right_tokens = _tokens(left), _tokens(right)
+    if not left_tokens or not right_tokens:
+        return False
+    overlap = len(left_tokens & right_tokens)
+    minimum_overlap = 1 if min(len(left_tokens), len(right_tokens)) == 1 else 2
+    return overlap >= minimum_overlap and overlap / min(len(left_tokens), len(right_tokens)) >= floor
+
+
+def _openalex_abstract(payload: dict[str, Any]) -> str:
+    index = payload.get("abstract_inverted_index")
+    if not isinstance(index, dict):
+        return ""
+    positioned = [
+        (position, str(word))
+        for word, positions in index.items()
+        if isinstance(positions, list)
+        for position in positions
+        if isinstance(position, int)
+    ]
+    return " ".join(word for _, word in sorted(positioned))
+
+
+def _crossref_retracted(payload: dict[str, Any]) -> bool:
+    relation = payload.get("relation")
+    if isinstance(relation, dict) and any("retract" in str(key).lower() for key in relation):
+        return True
+    updates = payload.get("update-to")
+    if isinstance(updates, list) and any("retract" in str(item.get("type", "")).lower() for item in updates if isinstance(item, dict)):
+        return True
+    titles = payload.get("title")
+    title = titles[0] if isinstance(titles, list) and titles else titles
+    return any(
+        word.startswith("retract")
+        for word in html.unescape(re.sub(r"<[^>]+>", " ", str(title or ""))).lower().split()[:2]
+    )
+
+
+def _source_identity(source: dict[str, Any]) -> tuple[str, str | None, str | None] | None:
+    if doi := str(source.get("doi") or "").strip().lower():
+        return f"doi:{doi}", doi, f"https://doi.org/{urllib.parse.quote(doi, safe='')}"
+    if pmid := str(source.get("pmid") or "").strip():
+        return f"pmid:{pmid}", None, f"pmid:{urllib.parse.quote(pmid, safe='')}"
+    if openalex := str(source.get("openalex_id") or "").strip():
+        work_id = openalex.rstrip("/").rsplit("/", 1)[-1]
+        return f"openalex:{work_id.lower()}", None, urllib.parse.quote(work_id, safe="")
+    url = str(source.get("url") or "").strip()
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.hostname or ""
+    path = urllib.parse.unquote(parsed.path).strip("/")
+    if host.endswith("doi.org") and re.match(r"^10\.\d{4,}/\S+$", path):
+        return f"doi:{path.lower()}", path.lower(), f"https://doi.org/{urllib.parse.quote(path, safe='')}"
+    if host.endswith("pubmed.ncbi.nlm.nih.gov") and path.isdigit():
+        return f"pmid:{path}", None, f"pmid:{path}"
+    if host.endswith("openalex.org") and re.fullmatch(r"W\d+", path, re.I):
+        return f"openalex:{path.lower()}", None, urllib.parse.quote(path, safe="")
+    if registry := str(source.get("registry_id") or "").strip():
+        return f"registry:{registry.lower()}", None, None
+    if url:
+        return f"url:{url.lower().rstrip('/')}", None, None
+    return None
+
+
+def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Verify registered source identity, evidence text, and retraction state."""
+    if not _metadata_enabled():
+        return None
+    candidates = [(source, identity) for source in sources if (identity := _source_identity(source))][:_max_sources()]
+    if not candidates:
+        return None
+
+    crossref_base = os.getenv("RESEARKA_CROSSREF_URL", "https://api.crossref.org/works").rstrip("/")
+    openalex_base = os.getenv("RESEARKA_OPENALEX_URL", "https://api.openalex.org/works").rstrip("/")
+
+    def check(client: httpx.Client, item: tuple[dict[str, Any], tuple[str, str | None, str | None]]) -> dict[str, Any]:
+        source, (identity, doi, openalex_id) = item
+        titles: list[str] = []
+        abstracts: list[str] = []
+        retracted = False
+        authority_count = 0
+        if doi:
+            try:
+                response = client.get(f"{crossref_base}/{urllib.parse.quote(doi, safe='')}")
+                if response.status_code != 404:
+                    response.raise_for_status()
+                    message = response.json().get("message", {})
+                    if isinstance(message, dict):
+                        authority_count += 1
+                        raw_titles = message.get("title")
+                        if isinstance(raw_titles, list):
+                            titles.extend(str(value) for value in raw_titles if value)
+                        if message.get("abstract"):
+                            abstracts.append(str(message["abstract"]))
+                        retracted = retracted or _crossref_retracted(message)
+            except Exception:
+                pass
+        if openalex_id:
+            try:
+                response = client.get(f"{openalex_base}/{openalex_id}")
+                if response.status_code != 404:
+                    response.raise_for_status()
+                    payload = response.json()
+                    if isinstance(payload, dict):
+                        authority_count += 1
+                        if payload.get("title") or payload.get("display_name"):
+                            titles.append(str(payload.get("title") or payload.get("display_name")))
+                        if abstract := _openalex_abstract(payload):
+                            abstracts.append(abstract)
+                        retracted = retracted or bool(payload.get("is_retracted"))
+            except Exception:
+                pass
+        evidence = next(
+            (str(source.get(key) or "").strip() for key in ("quote", "evidence_span", "excerpt") if str(source.get(key) or "").strip()),
+            "",
+        )
+        return {
+            "identity": identity,
+            "checked": authority_count > 0,
+            "retracted": retracted,
+            "title_mismatch": bool(titles) and not any(_text_matches(source.get("title"), title, floor=0.6) for title in titles),
+            "evidence_mismatch": bool(evidence and abstracts) and not any(_text_matches(evidence, abstract, floor=0.35) for abstract in abstracts),
+        }
+
+    try:
+        with httpx.Client(
+            timeout=_timeout_s(),
+            follow_redirects=True,
+            headers={"User-Agent": "Researka/1.0 (https://researka.org)"},
+        ) as client:
+            with ThreadPoolExecutor(max_workers=min(8, len(candidates))) as pool:
+                results = list(pool.map(lambda item: check(client, item), candidates))
+    except Exception as exc:
+        log.warning("source_metadata_unavailable", extra={"error": str(exc)})
+        results = [{"identity": identity[0], "checked": False} for _, identity in candidates]
+
+    checked = [row["identity"] for row in results if row.get("checked")]
+    unverified = [row["identity"] for row in results if not row.get("checked")]
+    retracted = [row["identity"] for row in results if row.get("retracted")]
+    title_mismatches = [row["identity"] for row in results if row.get("title_mismatch")]
+    evidence_mismatches = [row["identity"] for row in results if row.get("evidence_mismatch")]
+    blocked = retracted or title_mismatches
+    uncertain = evidence_mismatches or unverified
+    recommendation = "reject" if blocked else _metadata_unavailable_recommendation() if uncertain else "pass"
+    return {
+        "available": not unverified,
+        "recommendation": recommendation,
+        "checked": checked,
+        "unverified": unverified,
+        "retracted": retracted,
+        "title_mismatches": title_mismatches,
+        "evidence_mismatches": evidence_mismatches,
+    }
 
 
 def resolve_dois(dois: list[str]) -> dict[str, Any] | None:

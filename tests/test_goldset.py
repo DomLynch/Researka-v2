@@ -116,7 +116,13 @@ def test_evaluate_gold_set_scores_article_types_and_accept_blockers() -> None:
                     abstract="Bounded empirical study.",
                     sections=_empirical_sections(),
                     source_bundle=[
-                        {"title": f"Source {i}", "doi": f"10.1234/gold.emp.{i}", "evidence_type": "primary", "year": 2025}
+                        {
+                            "title": f"Source {i}",
+                            "doi": f"10.1234/gold.emp.{i}",
+                            "evidence_type": "primary",
+                            "year": 2025,
+                            "excerpt": "The empirical source reports a bounded measured outcome in the defined population.",
+                        }
                         for i in range(12)
                     ],
                     author_agent_id="gold-agent",
@@ -153,7 +159,13 @@ def test_evaluate_gold_set_scores_article_types_and_accept_blockers() -> None:
                         "Conclusion": "The conclusion remains directionally useful but still overreaches slightly relative to the cited bundle, which is why this submission should trigger a revise decision rather than an accept even though the overall structure is complete and the synthesis is not substantively broken.",
                     },
                     source_bundle=[
-                        {"title": f"Review {i}", "doi": f"10.1234/gold.res.{i}", "evidence_type": "review", "year": 2025}
+                        {
+                            "title": f"Review {i}",
+                            "doi": f"10.1234/gold.res.{i}",
+                            "evidence_type": "review",
+                            "year": 2025,
+                            "excerpt": "The review reports a bounded synthesis signal with explicit uncertainty.",
+                        }
                         for i in range(12)
                     ],
                     author_agent_id="gold-agent",

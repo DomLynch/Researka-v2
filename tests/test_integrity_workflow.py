@@ -15,10 +15,10 @@ def _sections() -> dict[str, str]:
         "Research Question": "This synthesis asks a bounded, decision-relevant question about recent evidence, target populations, comparator conditions, intended outcomes, and methodological limits, and it stays narrow enough that another reviewer could reproduce the scope, publication window, inclusion logic, and decision frame without inventing missing assumptions, broadening the intervention target, or silently changing the evidence standard.",
         "Search Summary": "Searches covered PubMed and review corpora, with a documented date window, explicit inclusion logic, and a clear narrowing rule that explains why the retained receipts best match the scoped research question.",
         "Evidence Landscape": "The bundle includes review-level and primary evidence so the reader can see the balance of stronger and more applied material, and where individual studies still shape the remaining uncertainty.",
-        "Key Findings": "The key findings integrate the current evidence into bounded conclusions instead of stitching raw snippets together, and distinguish stronger review-level support from tentative primary-study signals.",
+        "Key Findings": "The key findings integrate the current evidence into bounded conclusions instead of stitching raw snippets together, and distinguish stronger review-level support from tentative primary-study signals [bundle:1].",
         "Limitations": "The main limits are rapid-review scope, incomplete coverage, heterogeneity across evidence units, and the risk that a synthetic bundle omits conflicting sources that could materially change certainty.",
         "Gaps Identified": "No adequately powered human RCT has tested this specific intervention for the primary endpoints reported in non-human models, leaving a translational gap between animal evidence and clinical applicability.",
-        "Conclusion": "The current evidence supports a structured MVP publication, but only with explicit uncertainty, honest limits on reproducibility, and no overclaiming beyond what the retained bundle can directly justify.",
+        "Conclusion": "The current evidence supports a structured MVP publication, but only with explicit uncertainty, honest limits on reproducibility, and no overclaiming beyond what the retained bundle can directly justify [bundle:1].",
     }
 
 
@@ -29,6 +29,11 @@ def _source_bundle() -> list[dict[str, object]]:
             "doi": f"10.1234/integrity.{index}",
             "year": 2024 - (index % 5),
             "evidence_type": "review" if index <= 6 else "primary",
+            "excerpt": (
+                "The key findings integrate current evidence into bounded conclusions and distinguish "
+                "stronger review-level support from tentative primary-study signals. The current evidence "
+                "supports publication only with explicit uncertainty and honest reproducibility limits."
+            ),
         }
         for index in range(1, 13)
     ]
@@ -118,6 +123,7 @@ def test_integrity_service_down_returns_unavailable_signal(monkeypatch: pytest.M
 
     monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "1")
     monkeypatch.setenv("RESEARKA_INTEGRITY_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "0")
     monkeypatch.setattr("runtime_core.integrity_client.time.sleep", lambda seconds: None)
     monkeypatch.setattr("runtime_core.integrity_client.httpx.Client", BrokenClient)
 
@@ -132,6 +138,19 @@ def test_integrity_service_down_returns_unavailable_signal(monkeypatch: pytest.M
     monkeypatch.setenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "1")
     held = check_integrity({"submission_id": "sub-1"})
     assert held is not None and held["recommendation"] == "revise"
+
+
+def test_integrity_outage_fails_closed_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "1")
+    monkeypatch.delenv("RESEARKA_INTEGRITY_FAIL_CLOSED", raising=False)
+    monkeypatch.setenv("RESEARKA_INTEGRITY_MAX_ATTEMPTS", "1")
+    monkeypatch.setattr("runtime_core.integrity_client.httpx.Client", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("down")))
+
+    result = check_integrity({"submission_id": "sub-1"})
+
+    assert result is not None
+    assert result["available"] is False
+    assert result["recommendation"] == Decision.REVISE.value
 
 
 def test_integrity_retry_recovers_transient_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -202,7 +221,7 @@ def test_integrity_malformed_json_returns_unavailable_signal(monkeypatch: pytest
     assert result is not None and result["available"] is False
 
 
-def test_integrity_missing_recommendation_continues_to_review(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_integrity_missing_recommendation_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = InMemoryRuntimeRepository()
     submission = _submission(repo)
     monkeypatch.setattr("runtime_core.workflow.check_integrity", lambda payload: {"duplication_score": 0.91})
@@ -210,10 +229,11 @@ def test_integrity_missing_recommendation_continues_to_review(monkeypatch: pytes
     result = WorkflowEngine(provider=AcceptProvider()).handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
     updated = repo.get_object(submission.id)
 
-    assert result["next_stage"] == Stage.REVIEW.value
-    assert [job.stage for job in repo.queued_jobs()] == [Stage.REVIEW]
+    assert result["terminal_decision"] == Decision.REVISE.value
+    assert repo.queued_jobs() == []
     assert updated is not None
-    assert updated.metadata["integrity"]["recommendation"] == "pass"
+    assert updated.metadata["integrity"]["recommendation"] == Decision.REVISE.value
+    assert updated.metadata["integrity"]["available"] is False
     assert updated.metadata["integrity"]["duplication_score"] == 0.91
 
 
@@ -360,6 +380,31 @@ def test_publish_blocks_when_integrity_recheck_finds_duplicate(monkeypatch: pyte
 
     with pytest.raises(ValueError, match="publish_blocked_by_integrity:reject"):
         engine.handle_job(publish_job, repo)
+    assert repo.list_objects(ObjectType.PUBLICATION) == []
+
+
+def test_publish_blocks_when_fail_closed_integrity_recheck_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    submission.metadata["integrity"] = {
+        "available": False,
+        "recommendation": Decision.REVISE.value,
+        "reason": "integrity_unavailable: timeout",
+    }
+    monkeypatch.setattr(
+        "runtime_core.workflow.check_integrity",
+        lambda payload: {
+            "available": False,
+            "recommendation": Decision.REVISE.value,
+            "reason": "integrity_unavailable: timeout",
+        },
+    )
+
+    with pytest.raises(ValueError, match="publish_blocked_by_integrity:revise"):
+        WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+
     assert repo.list_objects(ObjectType.PUBLICATION) == []
 
 

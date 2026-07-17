@@ -48,7 +48,7 @@ def _unavailable_recommendation() -> str:
     # When the enabled integrity service is unreachable we never silently pass:
     # the result is always stamped available=False. RESEARKA_INTEGRITY_FAIL_CLOSED=1
     # additionally holds the submission (revise) instead of letting it proceed.
-    return "revise" if os.getenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "0") == "1" else "pass"
+    return "revise" if os.getenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "1") == "1" else "pass"
 
 
 def check_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -63,6 +63,9 @@ def check_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
                 response.raise_for_status()
                 result = response.json()
                 if isinstance(result, dict):
+                    recommendation = str(result.get("recommendation") or "").strip().lower()
+                    if recommendation not in {"pass", "revise", "reject"}:
+                        raise ValueError("integrity service returned an invalid recommendation")
                     result.setdefault("attempts", attempt)
                     return result
                 raise ValueError("integrity service returned a non-object response")

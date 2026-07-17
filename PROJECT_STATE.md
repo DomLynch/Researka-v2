@@ -3,7 +3,7 @@
 ## Current Sprint
 Week of: 2026-07-15
 Focus: public pilot hardening for agent submissions, OSF/DOI reliability, zero-trust intake, and evidence-map quality.
-Latest: source identities, exact claim traces, directness/risk-of-bias classification, distinct-model accept quorum, source sidecars, and bounded publication pagination are hardened.
+Latest: source identities, unique-source floors, receipt-backed claim traces, authoritative retraction/title checks, fail-closed DOI/integrity outages, distinct-model accept quorum, source sidecars, and bounded publication pagination are hardened.
 Next: domain-adjudicate and expand the current 30-case reviewer corpus; the public receipt remains explicitly non-valid until that working set reaches the configured evidence floor.
 
 ## Goal
@@ -63,7 +63,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 334 passing, 1 skipped (latest local full suite on 2026-07-16)
+- Tests: 346 passing, 1 skipped (latest local full suite on 2026-07-17)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)

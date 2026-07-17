@@ -12,6 +12,10 @@ WEAK_PATTERN = re.compile(
 DIRECT_PATTERN = re.compile(r"contains\s+(\d+)\s+direct clinical sources", re.IGNORECASE)
 BUNDLE_REFERENCE_PATTERN = re.compile(r"\[bundle:(\d+)\]", re.IGNORECASE)
 UNASSESSED_VALUES = {"", "unknown", "not appraised", "not_appraised", "not extracted"}
+GENERIC_EVIDENCE_WORDS = {
+    "about", "across", "evidence", "finding", "findings", "reported", "results",
+    "review", "source", "study", "studies", "support", "supports", "suggests", "trial",
+}
 
 
 def claim_candidates(text: str) -> list[str]:
@@ -140,6 +144,27 @@ def contradiction_status_for_text(text: str, profile: dict[str, Any]) -> Contrad
     return ContradictionStatus.NONE
 
 
+def _evidence_aligns(claim: str, source: dict[str, Any]) -> bool:
+    claim_words = {
+        word for word in re.findall(r"[a-z0-9]+", claim.lower())
+        if len(word) >= 5 and word not in GENERIC_EVIDENCE_WORDS
+    }
+    for value in (source.get("quote"), source.get("evidence_span"), source.get("excerpt")):
+        evidence = " ".join(str(value or "").lower().split())
+        if len(evidence) < 20:
+            continue
+        if evidence in claim.lower() or claim.lower() in evidence:
+            return True
+        evidence_words = {
+            word for word in re.findall(r"[a-z0-9]+", evidence)
+            if len(word) >= 5 and word not in GENERIC_EVIDENCE_WORDS
+        }
+        required = min(4, max(2, (len(claim_words) + 4) // 5))
+        if len(claim_words & evidence_words) >= required:
+            return True
+    return False
+
+
 def support_for_claim(text: str, sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
     claim = text.lower()
     bundle_indexes = {int(value) - 1 for value in BUNDLE_REFERENCE_PATTERN.findall(text)}
@@ -169,6 +194,8 @@ def support_for_claim(text: str, sources: list[dict[str, Any]]) -> list[dict[str
     support: list[dict[str, Any]] = []
     for index in sorted(bundle_indexes | doi_indexes | cited_as_indexes | span_indexes):
         source = sources[index]
+        if not _evidence_aligns(text, source):
+            continue
         row = {
             "source_id": str(source.get("source_id") or f"source_{index + 1}"),
             "study": source.get("study") or source.get("title"),
@@ -184,7 +211,7 @@ def support_for_claim(text: str, sources: list[dict[str, Any]]) -> list[dict[str
                 else "evidence_span_match"
             ),
         }
-        for key in ("cited_as", "population", "endpoint", "effect", "directness", "quote", "evidence_span", "dw_chain_ref"):
+        for key in ("cited_as", "population", "endpoint", "effect", "directness", "quote", "evidence_span", "excerpt", "dw_chain_ref"):
             if source.get(key):
                 row[key] = source[key]
         support.append(row)

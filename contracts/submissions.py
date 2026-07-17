@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import re
+import urllib.parse
 from typing import Literal
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, model_validator
 
 from .models import ArticleType, GateResult
 from .templates import RAPID_EVIDENCE_SYNTHESIS, publication_template_for
@@ -177,6 +178,33 @@ class SourceBundleEntry(BaseModel):
     risk_of_bias: str | None = None
     quote: str | None = None
     evidence_span: str | None = None
+    excerpt: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def preserve_source_fact(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        values = dict(data)
+        parsed = urllib.parse.urlparse(str(values.get("url") or ""))
+        host = parsed.hostname or ""
+        path = urllib.parse.unquote(parsed.path).strip("/")
+        if host.endswith("doi.org") and not values.get("doi") and _DOI_PATTERN.match(path):
+            values["doi"] = path
+        if host.endswith("pubmed.ncbi.nlm.nih.gov") and not values.get("pmid") and path.isdigit():
+            values["pmid"] = path
+        if host.endswith("openalex.org") and not values.get("openalex_id") and re.fullmatch(r"W\d+", path, re.I):
+            values["openalex_id"] = path
+        if any(values.get(key) for key in ("quote", "evidence_span", "excerpt")):
+            return values
+        fact = data.get("source_fact")
+        if not isinstance(fact, dict):
+            return values
+        values["excerpt"] = next(
+            (fact.get(key) for key in ("canonical_phrase", "finding", "source_excerpt") if fact.get(key)),
+            None,
+        )
+        return values
 
 
 class SubmissionTemplateV1(BaseModel):
@@ -286,6 +314,21 @@ def _has_stable_locator(entry: SourceBundleEntry) -> bool:
     )
 
 
+def _stable_locator_key(entry: SourceBundleEntry) -> str | None:
+    values = (
+        ("doi", _clean_doi(str(entry.doi or ""))),
+        ("pmid", str(entry.pmid or "").strip()),
+        ("openalex", str(entry.openalex_id or "").strip().lower().removeprefix("https://openalex.org/")),
+        ("registry", str(entry.registry_id or "").strip().lower()),
+        ("url", str(entry.url or "").strip().lower().rstrip("/")),
+    )
+    return next((f"{kind}:{value}" for kind, value in values if value), None)
+
+
+def _has_registered_locator(entry: SourceBundleEntry) -> bool:
+    return any((entry.doi, entry.pmid, entry.openalex_id, entry.registry_id))
+
+
 def _is_non_load_bearing(entry: SourceBundleEntry) -> bool:
     return bool(
         _NON_LOAD_BEARING_TITLE.search(entry.title)
@@ -387,6 +430,24 @@ def run_submission_template_checks(
             ),
         )
     )
+    duplicate_sources: list[int] = []
+    seen_sources: set[str] = set()
+    for index, entry in enumerate(normalized_bundle):
+        key = _stable_locator_key(entry)
+        if key in seen_sources:
+            duplicate_sources.append(index)
+        elif key:
+            seen_sources.add(key)
+    results.append(
+        GateResult(
+            name="source_uniqueness",
+            passed=not duplicate_sources,
+            reason=(
+                "source floors count unique registered records only"
+                + (f"; duplicates at indices {duplicate_sources}" if duplicate_sources else "")
+            ),
+        )
+    )
     invalid_primary_roles = [
         index
         for index, entry in enumerate(normalized_bundle)
@@ -402,7 +463,45 @@ def run_submission_template_checks(
             ),
         )
     )
-    eligible_bundle = [entry for entry in normalized_bundle if not _is_non_load_bearing(entry)]
+    unregistered_primary = [
+        index
+        for index, entry in enumerate(normalized_bundle)
+        if entry.evidence_type == "primary" and not _has_registered_locator(entry)
+    ]
+    results.append(
+        GateResult(
+            name="primary_source_identity",
+            passed=not unregistered_primary,
+            reason=(
+                "primary evidence requires a DOI, PMID, OpenAlex, or registry identifier"
+                + (f"; URL-only primary sources at indices {unregistered_primary}" if unregistered_primary else "")
+            ),
+        )
+    )
+    missing_evidence = [
+        index
+        for index, entry in enumerate(normalized_bundle)
+        if not _is_non_load_bearing(entry)
+        and not any(len(str(value or "").strip()) >= 20 for value in (entry.quote, entry.evidence_span, entry.excerpt))
+    ]
+    results.append(
+        GateResult(
+            name="source_evidence_receipt",
+            passed=not missing_evidence,
+            reason=(
+                "every load-bearing source requires a quote, evidence span, or excerpt"
+                + (f"; missing at indices {missing_evidence}" if missing_evidence else "")
+            ),
+        )
+    )
+    eligible_bundle: list[SourceBundleEntry] = []
+    eligible_keys: set[str] = set()
+    for entry in normalized_bundle:
+        key = _stable_locator_key(entry)
+        if _is_non_load_bearing(entry) or not key or key in eligible_keys:
+            continue
+        eligible_keys.add(key)
+        eligible_bundle.append(entry)
     citation_count = len(eligible_bundle)
     citation_floor_exception = _alpha_source_exception(
         article_type, citation_count, evidence_bundle, trusted=alpha_exception_trusted
