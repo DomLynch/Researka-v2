@@ -63,6 +63,9 @@ def check_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
                 response.raise_for_status()
                 result = response.json()
                 if isinstance(result, dict):
+                    recommendation = str(result.get("recommendation") or "").strip().lower()
+                    if recommendation not in {"pass", "revise", "reject"}:
+                        raise ValueError("integrity service returned an invalid recommendation")
                     result.setdefault("attempts", attempt)
                     return result
                 raise ValueError("integrity service returned a non-object response")

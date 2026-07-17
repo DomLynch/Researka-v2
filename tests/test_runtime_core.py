@@ -75,6 +75,19 @@ def test_claim_support_resolves_submitted_citation_token() -> None:
     assert support[0]["doi"] == "10.1234/trial"
 
 
+def test_claim_support_rejects_citation_with_unrelated_receipt() -> None:
+    source = {
+        "title": "Trial",
+        "cited_as": "Lynch et al. 2026",
+        "excerpt": "The trial measured blood pressure after a short dietary intervention.",
+    }
+
+    assert support_for_claim(
+        "The treatment doubled survival in older adults (Lynch et al. 2026).",
+        [source],
+    ) == []
+
+
 def test_publication_sources_prefer_bundle_and_parse_only_reference_receipts() -> None:
     publication = ResearchObject(
         object_type=ObjectType.PUBLICATION,

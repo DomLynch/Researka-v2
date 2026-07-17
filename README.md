@@ -133,3 +133,9 @@ Clean old windows with:
 ```cron
 0 3 * * * root sqlite3 /var/lib/researka-v2/rate_limits.db "DELETE FROM rl_counters WHERE window < date('now', '-7 day');"
 ```
+
+## Evidence admission safeguards
+
+Public acceptance requires unique resolvable sources, a substantive receipt for every load-bearing source, exact claim-to-receipt traces, and a distinct-model reviewer quorum. DOI/source metadata and integrity checks are enabled and fail closed by default: an unavailable verifier returns `revise`, while retracted sources or registered-title conflicts return `reject`.
+
+Set `RESEARKA_DOI_CHECK_FAIL_CLOSED=0`, `RESEARKA_SOURCE_METADATA_FAIL_CLOSED=0`, or `RESEARKA_INTEGRITY_FAIL_CLOSED=0` only for isolated development. Production must keep all three at `1`.

@@ -146,6 +146,15 @@ def _review_like_source(item: dict) -> bool:
     return any(token in text for token in ("review", "meta-analysis", "systematic"))
 
 
+def _source_fact_excerpt(item: dict) -> object:
+    raw_fact = item.get("source_fact")
+    fact: dict = raw_fact if isinstance(raw_fact, dict) else {}
+    return next(
+        (fact.get(key) for key in ("canonical_phrase", "finding", "source_excerpt") if fact.get(key)),
+        None,
+    )
+
+
 def _source_bundle_from_evidence_bundle(evidence_bundle: dict) -> list[dict]:
     verdict = evidence_bundle.get("publish_verdict") if isinstance(evidence_bundle, dict) else {}
     axes = verdict.get("axes") if isinstance(verdict, dict) else {}
@@ -157,18 +166,13 @@ def _source_bundle_from_evidence_bundle(evidence_bundle: dict) -> list[dict]:
         if not isinstance(paper, dict):
             continue
         title = str(paper.get("title") or f"Alpha memo source {index}").strip()
-        raw_fact = paper.get("source_fact")
-        fact: dict = raw_fact if isinstance(raw_fact, dict) else {}
         entry = {
             "title": title,
             "doi": paper.get("doi") or None,
             "url": paper.get("url") or None,
             "year": paper.get("year") if isinstance(paper.get("year"), int) else None,
             "evidence_type": "review" if _review_like_source(paper) else "primary",
-            "excerpt": paper.get("excerpt") or next(
-                (fact.get(key) for key in ("canonical_phrase", "finding", "source_excerpt") if fact.get(key)),
-                None,
-            ),
+            "excerpt": paper.get("excerpt") or _source_fact_excerpt(paper),
         }
         bundle.append(entry)
     return bundle
@@ -227,6 +231,13 @@ class SubmissionPayload(BaseModel):
             values["abstract"] = _markdown_summary(markdown, str(values.get("title") or "Alpha memo"))
         if markdown and not values.get("sections"):
             values["sections"] = {"Evidence Landscape": markdown}
+        raw_bundle = values.get("source_bundle")
+        if isinstance(raw_bundle, list):
+            values["source_bundle"] = [
+                {**item, "excerpt": item.get("excerpt") or _source_fact_excerpt(item)}
+                if isinstance(item, dict) else item
+                for item in raw_bundle
+            ]
         if not values.get("source_bundle"):
             raw_evidence_bundle = values.get("evidence_bundle")
             evidence_bundle: dict = raw_evidence_bundle if isinstance(raw_evidence_bundle, dict) else {}

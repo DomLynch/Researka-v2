@@ -40,6 +40,7 @@ def _valid_synthesis_bundle(n: int = 12) -> list[dict[str, object]]:
                 # 0.5 recency ratio comfortably.
                 "year": 2024 if i % 2 == 0 else 2018,
                 "evidence_type": "primary" if i % 2 == 0 else "review",
+                "excerpt": "This source reports a bounded synthesis outcome with explicit population limits.",
             }
         )
     return bundle

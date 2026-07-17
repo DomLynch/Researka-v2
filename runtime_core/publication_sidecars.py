@@ -91,7 +91,7 @@ def evidence_rows(publication: ResearchObject, submission: ResearchObject | None
             "risk_of_bias": source.get("risk_of_bias") or "not appraised in public sidecar",
             "directness": source.get("directness") or ("review-level" if "review" in evidence_type else evidence_type or "source-traceable"),
         }
-        for key in ("cited_as", "quote", "evidence_span", "dw_chain_ref"):
+        for key in ("cited_as", "quote", "evidence_span", "excerpt", "dw_chain_ref"):
             if source.get(key):
                 row[key] = source[key]
         rows.append(row)

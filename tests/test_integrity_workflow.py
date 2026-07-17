@@ -140,6 +140,19 @@ def test_integrity_service_down_returns_unavailable_signal(monkeypatch: pytest.M
     assert held is not None and held["recommendation"] == "revise"
 
 
+def test_integrity_outage_fails_closed_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "1")
+    monkeypatch.delenv("RESEARKA_INTEGRITY_FAIL_CLOSED", raising=False)
+    monkeypatch.setenv("RESEARKA_INTEGRITY_MAX_ATTEMPTS", "1")
+    monkeypatch.setattr("runtime_core.integrity_client.httpx.Client", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("down")))
+
+    result = check_integrity({"submission_id": "sub-1"})
+
+    assert result is not None
+    assert result["available"] is False
+    assert result["recommendation"] == Decision.REVISE.value
+
+
 def test_integrity_retry_recovers_transient_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     attempts = 0
 
@@ -208,7 +221,7 @@ def test_integrity_malformed_json_returns_unavailable_signal(monkeypatch: pytest
     assert result is not None and result["available"] is False
 
 
-def test_integrity_missing_recommendation_continues_to_review(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_integrity_missing_recommendation_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = InMemoryRuntimeRepository()
     submission = _submission(repo)
     monkeypatch.setattr("runtime_core.workflow.check_integrity", lambda payload: {"duplication_score": 0.91})
@@ -216,10 +229,11 @@ def test_integrity_missing_recommendation_continues_to_review(monkeypatch: pytes
     result = WorkflowEngine(provider=AcceptProvider()).handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
     updated = repo.get_object(submission.id)
 
-    assert result["next_stage"] == Stage.REVIEW.value
-    assert [job.stage for job in repo.queued_jobs()] == [Stage.REVIEW]
+    assert result["terminal_decision"] == Decision.REVISE.value
+    assert repo.queued_jobs() == []
     assert updated is not None
-    assert updated.metadata["integrity"]["recommendation"] == "pass"
+    assert updated.metadata["integrity"]["recommendation"] == Decision.REVISE.value
+    assert updated.metadata["integrity"]["available"] is False
     assert updated.metadata["integrity"]["duplication_score"] == 0.91
 
 
@@ -366,6 +380,31 @@ def test_publish_blocks_when_integrity_recheck_finds_duplicate(monkeypatch: pyte
 
     with pytest.raises(ValueError, match="publish_blocked_by_integrity:reject"):
         engine.handle_job(publish_job, repo)
+    assert repo.list_objects(ObjectType.PUBLICATION) == []
+
+
+def test_publish_blocks_when_fail_closed_integrity_recheck_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    submission.metadata["integrity"] = {
+        "available": False,
+        "recommendation": Decision.REVISE.value,
+        "reason": "integrity_unavailable: timeout",
+    }
+    monkeypatch.setattr(
+        "runtime_core.workflow.check_integrity",
+        lambda payload: {
+            "available": False,
+            "recommendation": Decision.REVISE.value,
+            "reason": "integrity_unavailable: timeout",
+        },
+    )
+
+    with pytest.raises(ValueError, match="publish_blocked_by_integrity:revise"):
+        WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+
     assert repo.list_objects(ObjectType.PUBLICATION) == []
 
 

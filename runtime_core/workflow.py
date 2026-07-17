@@ -321,7 +321,7 @@ def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -
     if not isinstance(matched_sources, list):
         matched_sources = []
     return {
-        "recommendation": recommendation or integrity.get("recommendation") or "pass",
+        "recommendation": recommendation or integrity.get("recommendation") or "revise",
         "available": bool(integrity.get("available", True)),
         "checked_at": integrity.get("checked_at") or datetime.now(timezone.utc).isoformat(),
         "reason": str(integrity.get("reason") or "").strip() or None,
@@ -386,7 +386,7 @@ def _integrity_unavailable(integrity: object) -> bool:
 
 
 def _integrity_publish_block(recommendation: str, integrity: dict[str, Any]) -> bool:
-    return integrity.get("available", True) is not False and recommendation in {Decision.REJECT.value, Decision.REVISE.value}
+    return recommendation in {Decision.REJECT.value, Decision.REVISE.value}
 
 
 def _mint_publication_doi(repository: RuntimeRepository, publication: ResearchObject) -> dict:
@@ -939,7 +939,6 @@ class WorkflowEngine:
                 for name, field, reason in (
                     ("source_retracted", "retracted", "retracted sources cannot support publication"),
                     ("source_identity_match", "title_mismatches", "source titles do not match registered records"),
-                    ("source_evidence_match", "evidence_mismatches", "submitted evidence text does not match authoritative abstracts"),
                 )
                 if source_verification.get(field)
             ]
@@ -959,6 +958,21 @@ class WorkflowEngine:
                     terminal=Decision.REJECT.value,
                 )
             if source_verification.get("recommendation") == Decision.REVISE.value:
+                revision_failures = []
+                if source_verification.get("evidence_mismatches"):
+                    revision_failures.append({
+                        "name": "source_evidence_match",
+                        "passed": False,
+                        "reason": "submitted evidence text could not be reconciled with available authoritative abstracts: "
+                        + ", ".join(source_verification["evidence_mismatches"][:10]),
+                    })
+                if source_verification.get("unverified"):
+                    revision_failures.append({
+                        "name": "source_authority_available",
+                        "passed": False,
+                        "reason": "source metadata could not be verified: "
+                        + ", ".join(source_verification["unverified"][:10]),
+                    })
                 return self._terminal_intake_decision(
                     repository,
                     submission,
@@ -968,12 +982,21 @@ class WorkflowEngine:
                         "notes": ["source metadata verification unavailable (fail-closed)"],
                         "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
                         "source_verification": source_verification,
+                        "gate_failures": revision_failures,
                         **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
                     },
                     terminal=Decision.REVISE.value,
                 )
         integrity = check_integrity(_integrity_payload_from_submission(submission))
         recommendation = str(integrity.get("recommendation") or "").strip().lower() if integrity else ""
+        if integrity and recommendation not in {"pass", Decision.REJECT.value, Decision.REVISE.value}:
+            recommendation = Decision.REVISE.value
+            integrity = {
+                **integrity,
+                "available": False,
+                "recommendation": recommendation,
+                "reason": "integrity_invalid_recommendation",
+            }
         if integrity:
             submission = repository.update_object_metadata(
                 submission.id,

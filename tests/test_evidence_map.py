@@ -82,6 +82,7 @@ def test_valid_evidence_map_passes_template_checks() -> None:
             "doi": f"10.1000/m{i}",
             "year": 2024,
             "evidence_type": "review" if i % 2 == 0 else "primary",
+            "excerpt": "This source maps a bounded outcome-specific finding with heterogeneous direction.",
         }
         for i in range(10)
     ]

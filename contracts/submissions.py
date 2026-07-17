@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import urllib.parse
 from typing import Literal
 
 from pydantic import BaseModel, ValidationError, model_validator
@@ -182,12 +183,23 @@ class SourceBundleEntry(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def preserve_source_fact(cls, data: object) -> object:
-        if not isinstance(data, dict) or any(data.get(key) for key in ("quote", "evidence_span", "excerpt")):
-            return data
-        fact = data.get("source_fact")
-        if not isinstance(fact, dict):
+        if not isinstance(data, dict):
             return data
         values = dict(data)
+        parsed = urllib.parse.urlparse(str(values.get("url") or ""))
+        host = parsed.hostname or ""
+        path = urllib.parse.unquote(parsed.path).strip("/")
+        if host.endswith("doi.org") and not values.get("doi") and _DOI_PATTERN.match(path):
+            values["doi"] = path
+        if host.endswith("pubmed.ncbi.nlm.nih.gov") and not values.get("pmid") and path.isdigit():
+            values["pmid"] = path
+        if host.endswith("openalex.org") and not values.get("openalex_id") and re.fullmatch(r"W\d+", path, re.I):
+            values["openalex_id"] = path
+        if any(values.get(key) for key in ("quote", "evidence_span", "excerpt")):
+            return values
+        fact = data.get("source_fact")
+        if not isinstance(fact, dict):
+            return values
         values["excerpt"] = next(
             (fact.get(key) for key in ("canonical_phrase", "finding", "source_excerpt") if fact.get(key)),
             None,

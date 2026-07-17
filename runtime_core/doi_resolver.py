@@ -135,6 +135,20 @@ def _source_identity(source: dict[str, Any]) -> tuple[str, str | None, str | Non
     if openalex := str(source.get("openalex_id") or "").strip():
         work_id = openalex.rstrip("/").rsplit("/", 1)[-1]
         return f"openalex:{work_id.lower()}", None, urllib.parse.quote(work_id, safe="")
+    url = str(source.get("url") or "").strip()
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.hostname or ""
+    path = urllib.parse.unquote(parsed.path).strip("/")
+    if host.endswith("doi.org") and re.match(r"^10\.\d{4,}/\S+$", path):
+        return f"doi:{path.lower()}", path.lower(), f"https://doi.org/{urllib.parse.quote(path, safe='')}"
+    if host.endswith("pubmed.ncbi.nlm.nih.gov") and path.isdigit():
+        return f"pmid:{path}", None, f"pmid:{path}"
+    if host.endswith("openalex.org") and re.fullmatch(r"W\d+", path, re.I):
+        return f"openalex:{path.lower()}", None, urllib.parse.quote(path, safe="")
+    if registry := str(source.get("registry_id") or "").strip():
+        return f"registry:{registry.lower()}", None, None
+    if url:
+        return f"url:{url.lower().rstrip('/')}", None, None
     return None
 
 
@@ -215,8 +229,9 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
     retracted = [row["identity"] for row in results if row.get("retracted")]
     title_mismatches = [row["identity"] for row in results if row.get("title_mismatch")]
     evidence_mismatches = [row["identity"] for row in results if row.get("evidence_mismatch")]
-    blocked = retracted or title_mismatches or evidence_mismatches
-    recommendation = "reject" if blocked else _metadata_unavailable_recommendation() if unverified else "pass"
+    blocked = retracted or title_mismatches
+    uncertain = evidence_mismatches or unverified
+    recommendation = "reject" if blocked else _metadata_unavailable_recommendation() if uncertain else "pass"
     return {
         "available": not unverified,
         "recommendation": recommendation,

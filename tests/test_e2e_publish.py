@@ -20,6 +20,10 @@ def _valid_source_bundle() -> list[dict[str, object]]:
             "doi": f"10.1234/e2e.{index}",
             "year": year,
             "evidence_type": evidence_type,
+            "excerpt": (
+                "The retained evidence supports bounded conclusions, distinguishes review-level support "
+                "from primary signals, and requires explicit uncertainty in the final synthesis."
+            ),
         }
         for index, (year, evidence_type) in enumerate(zip(years, evidence_types, strict=True), start=1)
     ]
@@ -37,10 +41,10 @@ def _submission_payload(search_summary: str) -> dict:
             "Research Question": "This submission asks a bounded research question with enough detail on topic, evidence type, comparator, outcome target, and decision frame that a reviewer could reproduce the intended scope, publication window, and inclusion logic without inventing missing assumptions, broadening the claim, silently changing the relevant evidence category, or misreading the intended publication class for downstream review.",
             "Search Summary": search_summary,
             "Evidence Landscape": "The bundle mixes review-level and primary evidence, explains where umbrella or systematic reviews dominate the signal, and avoids overclaiming causal certainty when the retained evidence is heterogeneous or indirect.",
-            "Key Findings": "Key findings integrate the retained evidence into a bounded synthesis rather than stitched snippets, and they explicitly separate stronger review-level support from tentative applied or primary-study signals.",
+            "Key Findings": "Key findings integrate the retained evidence into a bounded synthesis rather than stitched snippets, and they explicitly separate stronger review-level support from tentative applied or primary-study signals [bundle:1].",
             "Limitations": "The main limits are scope, incomplete coverage, heterogeneous certainty, and the possibility of omitted contradictory sources that could shift the strength of any cautious conclusion.",
             "Gaps Identified": "No replication study has validated these findings outside the primary evidence population, and the translational gap between review-level synthesis and applied outcomes remains untested.",
-            "Conclusion": "The current evidence supports a cautious synthesis with explicit uncertainty, constrained claims, and a transparent acknowledgement that this is a rapid evidence product rather than a definitive systematic review.",
+            "Conclusion": "The current evidence supports a cautious synthesis with explicit uncertainty, constrained claims, and a transparent acknowledgement that this is a rapid evidence product rather than a definitive systematic review [bundle:1].",
         },
         "source_bundle": _valid_source_bundle(),
         "author_agent_id": "agent-demo",
