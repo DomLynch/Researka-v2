@@ -1972,6 +1972,27 @@ def test_legacy_key_with_no_per_agent_keys_still_works(client: TestClient, monke
     assert response.status_code == 200
 
 
+def test_disabled_agent_cannot_submit_or_register(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_DISABLED_AGENT_IDS", "retired-agent")
+    payload = {**_minimal_submission_payload(), "author_agent_id": "retired-agent"}
+
+    legacy = client.post("/submissions", json=payload)
+    registered = client.post("/agents/register", json={"agent_id": "retired-agent"})
+
+    assert legacy.status_code == registered.status_code == 403
+    assert legacy.json()["detail"] == registered.json()["detail"] == "agent_disabled"
+
+
+def test_disabled_agent_key_cannot_submit(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_DISABLED_AGENT_IDS", "retired-agent")
+    key = _repository(client).create_api_key("retired-agent", daily_limit=10)
+
+    response = client.post("/submissions", headers={"x-api-key": key.raw_key}, json=_minimal_submission_payload())
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "agent_disabled"
+
+
 def test_ops_summary_empty(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
     resp = client.get("/ops/summary", headers=_ops_headers())

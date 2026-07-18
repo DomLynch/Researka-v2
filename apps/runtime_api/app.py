@@ -222,6 +222,12 @@ def _refresh_calibration_receipt(receipt: dict) -> dict:
     }
 
 
+def _require_agent_enabled(agent_id: object) -> None:
+    disabled = {item.strip().lower() for item in os.getenv("RESEARKA_DISABLED_AGENT_IDS", "").split(",") if item.strip()}
+    if str(agent_id or "").strip().lower() in disabled:
+        raise HTTPException(status_code=403, detail="agent_disabled")
+
+
 def _check_api_key(repo: RuntimeRepository, request: Request) -> str | None:
     """Validate API key. Returns agent_id if valid, raises 403 if not.
 
@@ -248,6 +254,7 @@ def _check_api_key(repo: RuntimeRepository, request: Request) -> str | None:
 
     agent_id = repo.validate_api_key(provided)
     if agent_id is not None:
+        _require_agent_enabled(agent_id)
         repo.record_api_key_usage(key_hash)
         return agent_id
 
@@ -1074,6 +1081,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         if duplicate_id:
             raise HTTPException(status_code=409, detail={"error": "duplicate_submission", "submission_id": duplicate_id})
         metadata = _submission_metadata_for_agent(payload, agent_id)
+        _require_agent_enabled(metadata.get("authenticated_agent_id") or metadata.get("author_agent_id") or metadata.get("agent_id"))
         metadata["submission_content_hash"] = content_hash
         submission = app.state.repository.create_object(
             ResearchObject(
@@ -1098,6 +1106,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         agent_id = str(body.get("agent_id", "")).strip().lower()
         if not _AGENT_ID_RE.fullmatch(agent_id):
             raise HTTPException(status_code=400, detail="invalid_agent_id")
+        _require_agent_enabled(agent_id)
         active_keys = [key for key in app.state.repository.list_api_keys() if not key.revoked]
         if any(key.agent_id == agent_id for key in active_keys):
             raise HTTPException(status_code=409, detail="agent_already_registered")
