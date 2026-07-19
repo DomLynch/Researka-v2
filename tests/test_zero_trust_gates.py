@@ -382,6 +382,30 @@ def test_source_evidence_mismatch_is_held_for_revision(monkeypatch: pytest.Monke
     assert result["evidence_mismatches"] == ["doi:10.1000/evidence-mismatch"]
 
 
+def test_source_evidence_mismatch_is_not_reported_as_an_outage(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("runtime_core.workflow.resolve_dois", lambda _: None)
+    monkeypatch.setattr("runtime_core.workflow.resolve_source_locators", lambda _: None)
+    monkeypatch.setattr("runtime_core.workflow.verify_source_metadata", lambda _: {
+        "available": True,
+        "recommendation": "revise",
+        "checked": ["doi:10.1000/source"],
+        "unverified": [],
+        "retracted": [],
+        "title_mismatches": [],
+        "evidence_mismatches": ["doi:10.1000/source"],
+    })
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+
+    result = WorkflowEngine()._run_intake(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo
+    )
+
+    decision = repo.get_object(result["created_object_id"])
+    assert decision is not None
+    assert decision.metadata["notes"] == ["source evidence mismatch"]
+
+
 def test_unregistered_url_source_is_held_for_verification(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
     monkeypatch.delenv("RESEARKA_SOURCE_METADATA_FAIL_CLOSED", raising=False)

@@ -966,7 +966,9 @@ class WorkflowEngine:
                 )
             if source_verification.get("recommendation") == Decision.REVISE.value:
                 revision_failures = []
+                revision_notes = []
                 if source_verification.get("evidence_mismatches"):
+                    revision_notes.append("source evidence mismatch")
                     revision_failures.append({
                         "name": "source_evidence_match",
                         "passed": False,
@@ -974,6 +976,7 @@ class WorkflowEngine:
                         + ", ".join(source_verification["evidence_mismatches"][:10]),
                     })
                 if source_verification.get("unverified"):
+                    revision_notes.append("source metadata verification unavailable (fail-closed)")
                     revision_failures.append({
                         "name": "source_authority_available",
                         "passed": False,
@@ -983,10 +986,10 @@ class WorkflowEngine:
                 return self._terminal_intake_decision(
                     repository,
                     submission,
-                    body_markdown="Source metadata verification unavailable: revise",
+                    body_markdown="Authoritative source verification requires revision.",
                     metadata={
                         "decision": Decision.REVISE.value,
-                        "notes": ["source metadata verification unavailable (fail-closed)"],
+                        "notes": revision_notes,
                         "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
                         "source_verification": source_verification,
                         "gate_failures": revision_failures,
