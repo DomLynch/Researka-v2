@@ -384,6 +384,7 @@ def test_source_evidence_mismatch_is_held_for_revision(monkeypatch: pytest.Monke
 
 def test_intake_proceeds_when_later_evidence_receipt_matches(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr("runtime_core.doi_resolver.ThreadPoolExecutor", lambda **_: pytest.fail("registry burst"))
     monkeypatch.setattr(
         "runtime_core.doi_resolver.httpx.Client",
         _metadata_client({

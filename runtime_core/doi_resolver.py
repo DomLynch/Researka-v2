@@ -243,8 +243,7 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
             follow_redirects=True,
             headers={"User-Agent": "Researka/1.0 (https://researka.org)"},
         ) as client:
-            with ThreadPoolExecutor(max_workers=min(8, len(candidates))) as pool:
-                results = list(pool.map(lambda item: check(client, item), candidates))
+            results = [check(client, item) for item in candidates]
     except Exception as exc:
         log.warning("source_metadata_unavailable", extra={"error": str(exc)})
         results = [{"identity": identity[0], "checked": False} for _, identity in candidates]
