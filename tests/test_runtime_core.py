@@ -1408,6 +1408,10 @@ def test_failure_classifier_maps_structure_gate() -> None:
     assert classify_failure_reason("structure_gate: 'Conclusion' empty or placeholder-thin") == FailureClass.STRUCTURE_GATE
 
 
+def test_failure_classifier_maps_integrity_publish_block() -> None:
+    assert classify_failure_reason("publish_blocked_by_integrity:reject") == FailureClass.PUBLISH_GATES_FAILED
+
+
 def test_openrouter_provider_retries_transient_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     attempts = {"count": 0}
     sleeps: list[float] = []

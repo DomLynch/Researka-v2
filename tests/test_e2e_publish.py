@@ -94,6 +94,8 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     assert decision_payload["publication"]["publication_id"] == publication.id
     assert decision_payload["publication"]["url"] == f"https://researka.org/papers/{publication.id}"
     assert decision_payload["publication"]["deduped"] is False
+    assert decision_payload["publication_status"] == "published"
+    assert decision_payload["publication_failure"] is None
 
     repository.enqueue_job(RuntimeJob(target_object_id=publication.parent_object_id, stage=Stage.PUBLISH))
     duplicate_publish = client.post("/jobs/run-once", headers=_worker_headers())
@@ -226,6 +228,43 @@ def test_decision_response_reports_deduped_publication(client: TestClient) -> No
     assert payload["publication"]["publication_id"] == publication.id
     assert payload["publication"]["url"] == f"https://researka.org/alpha/{publication.id}"
     assert payload["publication"]["deduped"] is True
+    assert payload["publication_status"] == "deduped"
+
+
+def test_decision_response_reports_publish_integrity_block(client: TestClient) -> None:
+    repository = _repository(client)
+    submission = repository.create_object(ResearchObject(object_type=ObjectType.SUBMISSION, title="Duplicate paper"))
+    repository.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=submission.id,
+            title="Decision for duplicate paper",
+            metadata={"decision": Decision.ACCEPT.value},
+        )
+    )
+    repository.record_event(
+        RuntimeEvent(
+            event_type=EventType.JOB_FAILED,
+            target_object_id=submission.id,
+            payload={
+                "stage": Stage.PUBLISH.value,
+                "reason": "publish_blocked_by_integrity:reject",
+                "failure_class": "publish_gates_failed",
+            },
+        )
+    )
+
+    payload = client.get(f"/submissions/{submission.id}/decision").json()
+
+    assert payload["decision"] == "accept"
+    assert payload["publication"] is None
+    assert payload["publication_status"] == "blocked"
+    assert payload["publication_failure"] == {
+        "stage": Stage.PUBLISH.value,
+        "reason": "publish_blocked_by_integrity:reject",
+        "failure_class": "publish_gates_failed",
+    }
+    assert payload["resubmission"] == {"allowed": True, "parent_submission_id": submission.id}
 
 
 def test_end_to_end_publish_happy_path(client: TestClient) -> None:

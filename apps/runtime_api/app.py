@@ -921,6 +921,19 @@ def _decision_publication_feedback(repo: RuntimeRepository, submission_id: str) 
     return None
 
 
+def _publication_failure_feedback(repo: RuntimeRepository, submission_id: str) -> dict | None:
+    for event in reversed(repo.list_events()):
+        if event.target_object_id != submission_id or event.event_type != EventType.JOB_FAILED:
+            continue
+        if event.payload.get("stage") == Stage.PUBLISH.value:
+            return {
+                "stage": Stage.PUBLISH.value,
+                "reason": event.payload.get("reason"),
+                "failure_class": event.payload.get("failure_class"),
+            }
+    return None
+
+
 def _submission_decision_response(
     *,
     repo: RuntimeRepository,
@@ -937,6 +950,15 @@ def _submission_decision_response(
         derivation=_decision_derivation_map(repo).get(decision.id),
     )
     decision_value = public_record["decision"]
+    publication = _decision_publication_feedback(repo, submission_id)
+    publication_failure = None if publication else _publication_failure_feedback(repo, submission_id)
+    if publication:
+        publication_status = "deduped" if publication["deduped"] else "published"
+    elif publication_failure:
+        publication_status = "blocked"
+    else:
+        publication_status = "pending" if decision_value == Decision.ACCEPT.value else "not_applicable"
+    resubmission_allowed = decision_value in {Decision.REVISE.value, Decision.REJECT.value} or publication_failure is not None
     response = {
         "status": "complete",
         "decision": decision_value,
@@ -963,10 +985,12 @@ def _submission_decision_response(
         "dw_artifact_id": public_record["dw_artifact_id"],
         "dw_chain_url": public_record["dw_chain_url"],
         "resubmission": {
-            "allowed": decision_value in {Decision.REVISE.value, Decision.REJECT.value},
-            "parent_submission_id": submission_id if decision_value in {Decision.REVISE.value, Decision.REJECT.value} else None,
+            "allowed": resubmission_allowed,
+            "parent_submission_id": submission_id if resubmission_allowed else None,
         },
-        "publication": _decision_publication_feedback(repo, submission_id),
+        "publication_status": publication_status,
+        "publication_failure": publication_failure,
+        "publication": publication,
     }
     return response
 
