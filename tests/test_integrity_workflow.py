@@ -155,6 +155,7 @@ def test_integrity_outage_fails_closed_by_default(monkeypatch: pytest.MonkeyPatc
 
 def test_integrity_retry_recovers_transient_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     attempts = 0
+    timeouts: list[float] = []
 
     class GoodResponse:
         def raise_for_status(self) -> None:
@@ -166,6 +167,7 @@ def test_integrity_retry_recovers_transient_timeout(monkeypatch: pytest.MonkeyPa
     class FlakyClient:
         def __init__(self, timeout: float) -> None:
             self.timeout = timeout
+            timeouts.append(timeout)
 
         def __enter__(self) -> "FlakyClient":
             return self
@@ -182,6 +184,7 @@ def test_integrity_retry_recovers_transient_timeout(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "1")
     monkeypatch.setenv("RESEARKA_INTEGRITY_MAX_ATTEMPTS", "3")
+    monkeypatch.delenv("RESEARKA_INTEGRITY_TIMEOUT_S", raising=False)
     monkeypatch.setattr("runtime_core.integrity_client.time.sleep", lambda seconds: None)
     monkeypatch.setattr("runtime_core.integrity_client.httpx.Client", FlakyClient)
 
@@ -191,6 +194,7 @@ def test_integrity_retry_recovers_transient_timeout(monkeypatch: pytest.MonkeyPa
     assert result["recommendation"] == "pass"
     assert result["similarity_score"] == 0.02
     assert result["attempts"] == 2
+    assert timeouts == [18.0, 18.0]
 
 
 def test_integrity_malformed_json_returns_unavailable_signal(monkeypatch: pytest.MonkeyPatch) -> None:

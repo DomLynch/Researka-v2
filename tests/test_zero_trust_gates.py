@@ -410,6 +410,38 @@ def test_source_metadata_outage_fails_closed_by_default(monkeypatch: pytest.Monk
     assert result["recommendation"] == Decision.REVISE.value
 
 
+def test_source_metadata_retries_rate_limit_without_redundant_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    class RateLimitedClient(_HandleClient):
+        def get(self, url: str) -> Any:
+            calls.append(url)
+            if len(calls) == 1:
+                request = httpx.Request("GET", url)
+                return httpx.Response(429, request=request)
+            return _MetadataResponse({"message": {
+                "title": ["Bounded intervention outcome in adults"],
+                "abstract": "The intervention produced a bounded endpoint-specific outcome in adults.",
+            }})
+
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setenv("RESEARKA_CROSSREF_MAILTO", "research@example.org")
+    monkeypatch.setattr("runtime_core.doi_resolver.time.sleep", lambda _: None)
+    monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", RateLimitedClient)
+
+    result = verify_source_metadata([{
+        "title": "Bounded intervention outcome in adults",
+        "doi": "10.1000/rate-limited",
+        "excerpt": "The intervention produced a bounded endpoint-specific outcome in adults.",
+    }])
+
+    assert result is not None
+    assert result["available"] is True
+    assert result["recommendation"] == "pass"
+    assert len(calls) == 2
+    assert all("crossref" in url and "mailto=research%40example.org" in url for url in calls)
+
+
 # --- Gate 3: provisional publish tiers --------------------------------------------
 
 

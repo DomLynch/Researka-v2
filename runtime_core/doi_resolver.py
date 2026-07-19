@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import socket
+import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from ipaddress import ip_address
@@ -74,6 +75,36 @@ def _metadata_unavailable_recommendation() -> str:
         os.getenv("RESEARKA_DOI_CHECK_FAIL_CLOSED", "1"),
     )
     return "revise" if value == "1" else "pass"
+
+
+def _metadata_attempts() -> int:
+    try:
+        return max(1, int(os.getenv("RESEARKA_SOURCE_METADATA_MAX_ATTEMPTS", "3")))
+    except ValueError:
+        return 3
+
+
+def _registry_payload(client: httpx.Client, url: str) -> dict[str, Any] | None:
+    attempts = _metadata_attempts()
+    for attempt in range(1, attempts + 1):
+        try:
+            response = client.get(url)
+            if response.status_code == 404:
+                return None
+            if response.status_code == 429 or response.status_code >= 500:
+                if attempt < attempts:
+                    time.sleep(0.5 * attempt)
+                    continue
+            response.raise_for_status()
+            payload = response.json()
+            return payload if isinstance(payload, dict) else None
+        except httpx.HTTPStatusError:
+            return None
+        except (httpx.TransportError, OSError, ValueError):
+            if attempt == attempts:
+                return None
+            time.sleep(0.5 * attempt)
+    return None
 
 
 _GENERIC_WORDS = {
@@ -170,36 +201,28 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
         retracted = False
         authority_count = 0
         if doi:
-            try:
-                response = client.get(f"{crossref_base}/{urllib.parse.quote(doi, safe='')}")
-                if response.status_code != 404:
-                    response.raise_for_status()
-                    message = response.json().get("message", {})
-                    if isinstance(message, dict):
-                        authority_count += 1
-                        raw_titles = message.get("title")
-                        if isinstance(raw_titles, list):
-                            titles.extend(str(value) for value in raw_titles if value)
-                        if message.get("abstract"):
-                            abstracts.append(str(message["abstract"]))
-                        retracted = retracted or _crossref_retracted(message)
-            except Exception:
-                pass
-        if openalex_id:
-            try:
-                response = client.get(f"{openalex_base}/{openalex_id}")
-                if response.status_code != 404:
-                    response.raise_for_status()
-                    payload = response.json()
-                    if isinstance(payload, dict):
-                        authority_count += 1
-                        if payload.get("title") or payload.get("display_name"):
-                            titles.append(str(payload.get("title") or payload.get("display_name")))
-                        if abstract := _openalex_abstract(payload):
-                            abstracts.append(abstract)
-                        retracted = retracted or bool(payload.get("is_retracted"))
-            except Exception:
-                pass
+            url = f"{crossref_base}/{urllib.parse.quote(doi, safe='')}"
+            if mailto := os.getenv("RESEARKA_CROSSREF_MAILTO"):
+                url += "?" + urllib.parse.urlencode({"mailto": mailto})
+            payload = _registry_payload(client, url)
+            message = payload.get("message", {}) if payload else {}
+            if isinstance(message, dict) and message:
+                authority_count += 1
+                raw_titles = message.get("title")
+                if isinstance(raw_titles, list):
+                    titles.extend(str(value) for value in raw_titles if value)
+                if message.get("abstract"):
+                    abstracts.append(str(message["abstract"]))
+                retracted = retracted or _crossref_retracted(message)
+        if openalex_id and not authority_count:
+            payload = _registry_payload(client, f"{openalex_base}/{openalex_id}")
+            if payload:
+                authority_count += 1
+                if payload.get("title") or payload.get("display_name"):
+                    titles.append(str(payload.get("title") or payload.get("display_name")))
+                if abstract := _openalex_abstract(payload):
+                    abstracts.append(abstract)
+                retracted = retracted or bool(payload.get("is_retracted"))
         evidence = next(
             (str(source.get(key) or "").strip() for key in ("quote", "evidence_span", "excerpt") if str(source.get(key) or "").strip()),
             "",

@@ -20,16 +20,16 @@ def _enabled() -> bool:
 
 def _timeout_s() -> float:
     try:
-        return float(os.getenv("RESEARKA_INTEGRITY_TIMEOUT_S", "3"))
+        return float(os.getenv("RESEARKA_INTEGRITY_TIMEOUT_S", "18"))
     except ValueError:
-        return 3.0
+        return 18.0
 
 
 def _max_attempts() -> int:
     try:
-        return max(1, int(os.getenv("RESEARKA_INTEGRITY_MAX_ATTEMPTS", "3")))
+        return max(1, int(os.getenv("RESEARKA_INTEGRITY_MAX_ATTEMPTS", "2")))
     except ValueError:
-        return 3
+        return 2
 
 
 def _retry_backoff_s() -> float:
