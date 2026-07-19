@@ -382,6 +382,38 @@ def test_source_evidence_mismatch_is_held_for_revision(monkeypatch: pytest.Monke
     assert result["evidence_mismatches"] == ["doi:10.1000/evidence-mismatch"]
 
 
+def test_intake_proceeds_when_later_evidence_receipt_matches(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client({
+            "title": ["Registered intervention trial in adults"],
+            "abstract": "Adults receiving placebo showed no measurable endpoint change.",
+        }),
+    )
+    monkeypatch.setattr(workflow, "resolve_dois", lambda _: None)
+    monkeypatch.setattr(workflow, "resolve_source_locators", lambda _: None)
+    monkeypatch.setattr(workflow, "check_integrity", lambda _: {"recommendation": "pass"})
+    bundle = _bundle()
+    for source in bundle:
+        source.update({
+            "title": "Registered intervention trial in adults",
+            "quote": "Background statement available only in the full text.",
+            "excerpt": "Adults receiving placebo showed no measurable endpoint change.",
+        })
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo, source_bundle=bundle)
+
+    result = WorkflowEngine()._run_intake(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo
+    )
+
+    assert result["next_stage"] == Stage.REVIEW.value
+    stored = repo.get_object(submission.id)
+    assert stored is not None and stored.metadata["source_verification"]["evidence_mismatches"] == []
+    assert [job.stage for job in repo.queued_jobs()] == [Stage.REVIEW]
+
+
 def test_source_evidence_mismatch_is_not_reported_as_an_outage(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("runtime_core.workflow.resolve_dois", lambda _: None)
     monkeypatch.setattr("runtime_core.workflow.resolve_source_locators", lambda _: None)

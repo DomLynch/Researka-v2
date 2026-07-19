@@ -223,16 +223,18 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
                 if abstract := _openalex_abstract(payload):
                     abstracts.append(abstract)
                 retracted = retracted or bool(payload.get("is_retracted"))
-        evidence = next(
-            (str(source.get(key) or "").strip() for key in ("quote", "evidence_span", "excerpt") if str(source.get(key) or "").strip()),
-            "",
-        )
+        evidence = [
+            str(source.get(key) or "").strip()
+            for key in ("quote", "evidence_span", "excerpt")
+            if str(source.get(key) or "").strip()
+        ]
         return {
             "identity": identity,
             "checked": authority_count > 0,
             "retracted": retracted,
             "title_mismatch": bool(titles) and not any(_text_matches(source.get("title"), title, floor=0.6) for title in titles),
-            "evidence_mismatch": bool(evidence and abstracts) and not any(_text_matches(evidence, abstract, floor=0.35) for abstract in abstracts),
+            "evidence_mismatch": bool(evidence and abstracts)
+            and not any(_text_matches(value, abstract, floor=0.35) for value in evidence for abstract in abstracts),
         }
 
     try:
