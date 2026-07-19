@@ -264,6 +264,9 @@ def test_decision_response_reports_publish_integrity_block(client: TestClient) -
         "reason": "publish_blocked_by_integrity:reject",
         "failure_class": "publish_gates_failed",
     }
+    assert payload["failure_stage"] == Stage.PUBLISH.value
+    assert payload["failure_category"] == "publish_gates_failed"
+    assert payload["failed_checks"] == ["publish_blocked_by_integrity:reject"]
     assert payload["resubmission"] == {"allowed": True, "parent_submission_id": submission.id}
 
 
