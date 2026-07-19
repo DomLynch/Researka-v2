@@ -249,7 +249,7 @@ def test_decision_response_reports_publish_integrity_block(client: TestClient) -
             payload={
                 "stage": Stage.PUBLISH.value,
                 "reason": "publish_blocked_by_integrity:reject",
-                "failure_class": "publish_gates_failed",
+                "failure_class": "other",
             },
         )
     )

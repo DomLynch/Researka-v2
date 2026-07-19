@@ -19,6 +19,7 @@ from contracts import AuditReview, AuditVerdict, ClaimCard, Decision, EventType,
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
 from runtime_core.agent_query import fail_agent_query_job, run_agent_query_job
 from runtime_core.evidence_quality import classified_title, contradiction_status_for_text, evidence_profile
+from runtime_core.failure_classifier import classify_failure_reason
 from runtime_core.osf import (
     backfill_missing_publication_dois,
     build_oauth_authorization_url,
@@ -926,10 +927,12 @@ def _publication_failure_feedback(repo: RuntimeRepository, submission_id: str) -
         if event.target_object_id != submission_id or event.event_type != EventType.JOB_FAILED:
             continue
         if event.payload.get("stage") == Stage.PUBLISH.value:
+            reason = str(event.payload.get("reason") or "")
+            failure_class = event.payload.get("failure_class")
             return {
                 "stage": Stage.PUBLISH.value,
-                "reason": event.payload.get("reason"),
-                "failure_class": event.payload.get("failure_class"),
+                "reason": reason,
+                "failure_class": classify_failure_reason(reason).value if failure_class in {None, "other"} else failure_class,
             }
     return None
 
