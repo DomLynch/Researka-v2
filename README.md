@@ -136,6 +136,6 @@ Clean old windows with:
 
 ## Evidence admission safeguards
 
-Public acceptance requires unique resolvable sources, a substantive receipt for every load-bearing source, exact claim-to-receipt traces, and a distinct-model reviewer quorum. DOI/source metadata and integrity checks are enabled and fail closed by default: an unavailable verifier returns `revise`, while retracted sources or registered-title conflicts return `reject`.
+Public acceptance requires unique resolvable sources, a substantive receipt for every load-bearing source, exact claim-to-receipt traces, and a distinct-model reviewer quorum. DOI/source metadata, every supplied PMID, and integrity checks are enabled and fail closed by default: an unavailable verifier returns `revise`, while retracted sources or identifier conflicts return `reject`. Provider-only review failures create immutable, bounded retry jobs (`RESEARKA_V2_REVIEW_JOB_MAX_RETRIES`, default `2`) instead of weakening quorum or stranding the submission.
 
 Set `RESEARKA_DOI_CHECK_FAIL_CLOSED=0`, `RESEARKA_SOURCE_METADATA_FAIL_CLOSED=0`, or `RESEARKA_INTEGRITY_FAIL_CLOSED=0` only for isolated development. Production must keep all three at `1`.

@@ -1,9 +1,16 @@
 from __future__ import annotations
 
-from contracts import EventType, RuntimeEvent
+import os
+from typing import Protocol
+
+from contracts import EventType, FailureClass, RuntimeEvent, RuntimeJob, Stage
 from runtime_core import InMemoryRuntimeRepository, WorkflowEngine
 from runtime_core.ops import classify_failure
 from runtime_core.repos import RuntimeRepository
+
+
+class JobEngine(Protocol):
+    def handle_job(self, job: RuntimeJob, repository: RuntimeRepository) -> dict: ...
 
 
 class WorkerApp:
@@ -12,7 +19,7 @@ class WorkerApp:
         repository: RuntimeRepository,
         *,
         worker_id: str = "worker-1",
-        engine: WorkflowEngine | None = None,
+        engine: JobEngine | None = None,
     ) -> None:
         self.repository = repository
         self.worker_id = worker_id
@@ -68,6 +75,36 @@ class WorkerApp:
                     },
                 )
             )
+            retry_job = None
+            try:
+                retry_count = max(0, int(job.payload.get("provider_retry_count", 0) or 0))
+            except (TypeError, ValueError):
+                retry_count = 0
+            try:
+                retry_limit = min(10, max(0, int(os.getenv("RESEARKA_V2_REVIEW_JOB_MAX_RETRIES", "2"))))
+            except ValueError:
+                retry_limit = 2
+            if job.stage == Stage.REVIEW and failure_class == FailureClass.PROVIDER_ERROR and retry_count < retry_limit:
+                retry_job = self.repository.enqueue_job(RuntimeJob(
+                    target_object_id=job.target_object_id,
+                    stage=job.stage,
+                    payload={
+                        **job.payload,
+                        "provider_retry_count": retry_count + 1,
+                        "retry_of_job_id": job.id,
+                    },
+                ))
+                self.repository.record_event(RuntimeEvent(
+                    event_type=EventType.JOB_QUEUED,
+                    target_object_id=job.target_object_id,
+                    job_id=retry_job.id,
+                    worker_id=self.worker_id,
+                    payload={
+                        "stage": job.stage.value,
+                        "provider_retry_count": retry_count + 1,
+                        "retry_of_job_id": job.id,
+                    },
+                ))
             return {
                 "claimed": 1,
                 "completed": 0,
@@ -75,6 +112,8 @@ class WorkerApp:
                 "target_object_id": job.target_object_id,
                 "stage": job.stage.value,
                 "job_id": job.id,
+                "retried": int(retry_job is not None),
+                "retry_job_id": retry_job.id if retry_job else None,
             }
 
 
