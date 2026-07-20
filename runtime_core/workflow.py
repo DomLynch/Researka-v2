@@ -436,6 +436,16 @@ def _submission_full_body_markdown(submission: ResearchObject) -> str | None:
     return None
 
 
+def _supersede_prior_decisions(
+    repository: RuntimeRepository,
+    submission_id: str,
+    decision_id: str,
+) -> None:
+    for prior in repository.children_of(submission_id, ObjectType.DECISION):
+        if prior.id != decision_id and not prior.metadata.get("superseded_by"):
+            repository.update_object_metadata(prior.id, {**prior.metadata, "superseded_by": decision_id})
+
+
 class WorkflowEngine:
     def __init__(self, provider: LanguageModelProvider | None = None) -> None:
         self.provider = provider or reviewer_from_env()
@@ -1099,6 +1109,7 @@ class WorkflowEngine:
                 metadata=metadata,
             )
         )
+        _supersede_prior_decisions(repository, submission.id, decision.id)
         derivation = emit_decision_to_derivation_web(submission=submission, decision=decision)
         return {"created_object_id": decision.id, "terminal_decision": terminal, "next_jobs": 0, "derivation_web": derivation}
 
@@ -1211,6 +1222,7 @@ class WorkflowEngine:
                 },
             )
         )
+        _supersede_prior_decisions(repository, submission.id, decision_object.id)
         for next_job in outcome.next_jobs:
             repository.enqueue_job(next_job)
         derivation = emit_decision_to_derivation_web(submission=submission, review=review, decision=decision_object)

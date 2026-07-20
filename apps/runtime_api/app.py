@@ -1402,6 +1402,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             decision
             for decision in app.state.repository.list_objects(ObjectType.DECISION)
             if not _is_hidden_public_record(decision)
+            and not decision.metadata.get("superseded_by")
             and str(decision.metadata.get("decision") or "").strip().lower() in {Decision.REVISE.value, Decision.REJECT.value}
         ]
         decisions.sort(key=lambda item: item.created_at, reverse=True)
@@ -1424,7 +1425,12 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     @app.get("/reviews/{decision_id}")
     def get_review(decision_id: str) -> dict:
         decision = app.state.repository.get_object(decision_id)
-        if decision is None or decision.object_type != ObjectType.DECISION or _is_hidden_public_record(decision):
+        if (
+            decision is None
+            or decision.object_type != ObjectType.DECISION
+            or _is_hidden_public_record(decision)
+            or decision.metadata.get("superseded_by")
+        ):
             raise HTTPException(status_code=404, detail="review_record_not_found")
         decision_value = str(decision.metadata.get("decision") or "").strip().lower()
         if decision_value not in {Decision.REVISE.value, Decision.REJECT.value}:
