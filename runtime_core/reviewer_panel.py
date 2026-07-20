@@ -23,6 +23,7 @@ from .review_contract import (
     REVIEW_RUBRIC_KEYS,
     SYNTHESIS_QUALITY_VERDICTS,
     accept_contract_failure,
+    review_grounding_failure,
 )
 
 
@@ -43,8 +44,8 @@ class ReviewerPanel:
         self.model = f"{getattr(primary, 'model', 'primary')}|{getattr(sparring, 'model', 'sparring')}|{getattr(fallback, 'model', 'fallback')}"
 
     def complete(self, request: ProviderRequest) -> ProviderResult:
-        primary = self._validated_result(self.primary.complete(request))
-        sparring = self._validated_result(self.sparring.complete(request))
+        primary = self._validated_result(self.primary.complete(request), request=request)
+        sparring = self._validated_result(self.sparring.complete(request), request=request)
         slot_flags = self._slot_fallback_flags(primary, sparring)
 
         if primary.ok and sparring.ok:
@@ -152,11 +153,11 @@ class ReviewerPanel:
 
     def _validated_fallback(self, request: ProviderRequest) -> tuple[ProviderResult, int]:
         attempts = 0
-        last = self._validated_result(self.fallback.complete(request))
+        last = self._validated_result(self.fallback.complete(request), request=request)
         attempts += 1
         if last.ok:
             return last, attempts
-        last = self._validated_result(self.fallback.complete(request))
+        last = self._validated_result(self.fallback.complete(request), request=request)
         attempts += 1
         return last, attempts
 
@@ -301,12 +302,15 @@ class ReviewerPanel:
             ),
         )
 
-    def _validated_result(self, result: ProviderResult) -> ProviderResult:
+    def _validated_result(self, result: ProviderResult, *, request: ProviderRequest) -> ProviderResult:
         if not result.ok or result.response is None:
             return result
         try:
             payload = self._payload_from_result(result)
             self._validate_payload_contract(payload)
+            grounding_failure = review_grounding_failure(payload, user_prompt=request.user_prompt)
+            if grounding_failure:
+                raise ValueError(grounding_failure)
         except Exception as exc:
             return ProviderResult(
                 ok=False,
