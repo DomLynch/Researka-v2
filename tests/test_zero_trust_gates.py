@@ -266,7 +266,7 @@ class _MetadataResponse:
         return self.payload
 
 
-def _metadata_client(message: dict[str, Any]) -> type:
+def _metadata_client(message: dict[str, Any], pubmed: dict[str, Any] | None = None) -> type:
     class MetadataClient:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
@@ -280,6 +280,8 @@ def _metadata_client(message: dict[str, Any]) -> type:
         def get(self, url: str) -> _MetadataResponse:
             if "crossref" in url:
                 return _MetadataResponse({"message": message})
+            if "eutils" in url and pubmed is not None:
+                return _MetadataResponse({"result": pubmed})
             return _MetadataResponse({}, status_code=404)
 
     return MetadataClient
@@ -411,6 +413,87 @@ def test_source_metadata_rejects_identity_and_evidence_mismatch(monkeypatch: pyt
     assert result["recommendation"] == Decision.REJECT.value
     assert result["title_mismatches"] == ["doi:10.1000/mismatch"]
     assert result["evidence_mismatches"] == ["doi:10.1000/mismatch"]
+
+
+def test_source_metadata_cross_checks_pmid_when_doi_is_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    title = "Influenza vaccination and cardiovascular outcomes"
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client(
+            {"title": [title]},
+            {
+                "uids": ["41536962"],
+                "41536962": {
+                    "uid": "41536962",
+                    "title": title,
+                    "articleids": [{"idtype": "doi", "value": "10.1000/influenza"}],
+                },
+            },
+        ),
+    )
+
+    result = verify_source_metadata([{
+        "title": title,
+        "doi": "10.1000/influenza",
+        "pmid": "41536962",
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == "pass"
+    assert result["identifier_checked"] == ["pmid:41536962"]
+    assert result["identifier_mismatches"] == []
+
+
+def test_source_metadata_rejects_cross_identifier_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    title = "Influenza vaccination and cardiovascular outcomes"
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client(
+            {"title": [title]},
+            {
+                "uids": ["41536962"],
+                "41536962": {
+                    "uid": "41536962",
+                    "title": "Unrelated oncology trial",
+                    "articleids": [{"idtype": "doi", "value": "10.1000/other"}],
+                },
+            },
+        ),
+    )
+
+    result = verify_source_metadata([{
+        "title": title,
+        "doi": "10.1000/influenza",
+        "pmid": "41536962",
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == "reject"
+    assert result["identifier_mismatches"] == ["pmid:41536962"]
+
+
+def test_source_metadata_holds_when_secondary_identifier_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    title = "Influenza vaccination and cardiovascular outcomes"
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client({"title": [title]}),
+    )
+
+    result = verify_source_metadata([{
+        "title": title,
+        "doi": "10.1000/influenza",
+        "pmid": "41536962",
+    }])
+
+    assert result is not None
+    assert result["available"] is False
+    assert result["recommendation"] == "revise"
+    assert result["identifier_unverified"] == ["pmid:41536962"]
 
 
 def test_source_evidence_mismatch_is_held_for_revision(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -768,6 +851,105 @@ def test_reviewer_panel_excludes_ungrounded_integrity_verdict_before_consensus()
     public_review = TestClient(create_app(repo)).get(f"/reviews/{editorial['created_object_id']}")
     assert public_review.status_code == 200
     assert public_review.json()["review_markdown"] == "Methods require explicit source inclusion criteria."
+
+
+def test_reviewer_panel_excludes_false_source_identifier_accusation() -> None:
+    false_issue = "PMID 41536962 is fabricated or implausible and does not resolve."
+    legitimate_issue = "Methods do not explain the source inclusion criteria."
+    invalid_payload = _review_payload(
+        major_issues=[false_issue],
+        minor_issues=[],
+        required_revisions=["Replace the fabricated PMID."],
+        review_markdown=false_issue,
+    )
+    valid_payload = _review_payload(
+        major_issues=[legitimate_issue],
+        minor_issues=[],
+        required_revisions=["Add explicit source inclusion criteria to Methods."],
+        review_markdown=legitimate_issue,
+    )
+    panel = ReviewerPanel(
+        primary=_StaticReviewProvider(invalid_payload),
+        sparring=_StaticReviewProvider(valid_payload),
+        fallback=_StaticReviewProvider(valid_payload),
+    )
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo, source_verification={
+        "recommendation": "pass",
+        "checked": ["doi:10.1000/influenza"],
+        "identifier_checked": ["pmid:41536962"],
+        "unverified": [],
+        "title_mismatches": [],
+        "identifier_unverified": [],
+        "identifier_mismatches": [],
+    })
+
+    result = WorkflowEngine(provider=panel)._run_review(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.REVIEW),
+        repo,
+    )
+    review = repo.get_object(result["created_object_id"])
+
+    assert review is not None
+    assert review.metadata["route"] == "primary_failed_sparring_used"
+    assert review.metadata["major_issues"] == [legitimate_issue]
+    assert review.metadata["primary_error"].endswith(
+        "unsupported_source_integrity_finding:pmid:41536962"
+    )
+
+
+def test_review_allows_verified_source_support_criticism() -> None:
+    issue = "PMID 41536962 resolves, but it does not support the manuscript's broad causal claim."
+    payload = _review_payload(
+        major_issues=[issue],
+        minor_issues=[],
+        required_revisions=["Narrow the causal claim to the reported endpoint."],
+        review_markdown=issue,
+    )
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo, source_verification={
+        "recommendation": "pass",
+        "identifier_checked": ["pmid:41536962"],
+    })
+
+    _, _, metadata = WorkflowEngine(provider=_StaticReviewProvider(payload))._review_submission(submission)
+
+    assert metadata["major_issues"] == [issue]
+
+
+def test_review_does_not_treat_invalid_support_as_fake_identifier() -> None:
+    issue = "The citation is invalid support for the manuscript's broad causal claim."
+    payload = _review_payload(
+        major_issues=[issue],
+        minor_issues=[],
+        required_revisions=["Replace it with direct evidence or narrow the causal claim."],
+        review_markdown=issue,
+    )
+
+    _, _, metadata = WorkflowEngine(provider=_StaticReviewProvider(payload))._review_submission(
+        _submission(InMemoryRuntimeRepository())
+    )
+
+    assert metadata["major_issues"] == [issue]
+
+
+def test_review_preserves_platform_grounded_source_identifier_issue() -> None:
+    issue = "PMID 41536962 is invalid because it resolves to a different registered source."
+    payload = _review_payload(
+        major_issues=[issue],
+        minor_issues=[],
+        required_revisions=["Correct the invalid PMID."],
+        review_markdown=f"Source verification failed: {issue}",
+    )
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo, source_verification={
+        "recommendation": "reject",
+        "identifier_mismatches": ["pmid:41536962"],
+    })
+
+    _, _, metadata = WorkflowEngine(provider=_StaticReviewProvider(payload))._review_submission(submission)
+
+    assert metadata["major_issues"] == [issue]
 
 
 def test_review_preserves_grounded_reviewer_directive_findings() -> None:

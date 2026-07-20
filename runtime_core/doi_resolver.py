@@ -183,6 +183,60 @@ def _source_identity(source: dict[str, Any]) -> tuple[str, str | None, str | Non
     return None
 
 
+def _pubmed_identifier_checks(
+    client: httpx.Client,
+    sources: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows = [(source, str(source.get("pmid") or "").strip()) for source in sources]
+    rows = [(source, pmid) for source, pmid in rows if pmid]
+    if not rows:
+        return []
+
+    valid_pmids = sorted({pmid for _, pmid in rows if pmid.isdigit()})
+    records: dict[str, Any] = {}
+    if valid_pmids:
+        query = {
+            "db": "pubmed",
+            "id": ",".join(valid_pmids),
+            "retmode": "json",
+            "tool": "researka",
+        }
+        if email := os.getenv("RESEARKA_NCBI_EMAIL", os.getenv("RESEARKA_CROSSREF_MAILTO", "")):
+            query["email"] = email
+        base = os.getenv(
+            "RESEARKA_PUBMED_URL",
+            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+        )
+        payload = _registry_payload(client, f"{base}?{urllib.parse.urlencode(query)}")
+        result = payload.get("result") if payload else None
+        records = result if isinstance(result, dict) else {}
+
+    checks: list[dict[str, Any]] = []
+    for source, pmid in rows:
+        identity = f"pmid:{pmid}"
+        record = records.get(pmid) if pmid.isdigit() else None
+        if not isinstance(record, dict) or not str(record.get("title") or "").strip():
+            checks.append({"identity": identity, "checked": False, "mismatch": not pmid.isdigit()})
+            continue
+        articleids = record.get("articleids")
+        articleids = articleids if isinstance(articleids, list) else []
+        registered_dois = {
+            str(item.get("value") or "").strip().lower()
+            for item in articleids
+            if isinstance(item, dict) and str(item.get("idtype") or "").lower() == "doi"
+        }
+        submitted_doi = str(source.get("doi") or "").strip().lower()
+        checks.append({
+            "identity": identity,
+            "checked": True,
+            "mismatch": (
+                not _text_matches(source.get("title"), record.get("title"), floor=0.6)
+                or bool(submitted_doi and registered_dois and submitted_doi not in registered_dois)
+            ),
+        })
+    return checks
+
+
 def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Verify registered source identity, evidence text, and retraction state."""
     if not _metadata_enabled():
@@ -244,26 +298,46 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
             headers={"User-Agent": "Researka/1.0 (https://researka.org)"},
         ) as client:
             results = [check(client, item) for item in candidates]
+            identifier_results = _pubmed_identifier_checks(
+                client,
+                [source for source, _ in candidates],
+            )
     except Exception as exc:
         log.warning("source_metadata_unavailable", extra={"error": str(exc)})
         results = [{"identity": identity[0], "checked": False} for _, identity in candidates]
+        identifier_results = [
+            {"identity": f"pmid:{pmid}", "checked": False, "mismatch": False}
+            for source, _ in candidates
+            if (pmid := str(source.get("pmid") or "").strip())
+        ]
 
     checked = [row["identity"] for row in results if row.get("checked")]
     unverified = [row["identity"] for row in results if not row.get("checked")]
     retracted = [row["identity"] for row in results if row.get("retracted")]
     title_mismatches = [row["identity"] for row in results if row.get("title_mismatch")]
     evidence_mismatches = [row["identity"] for row in results if row.get("evidence_mismatch")]
-    blocked = retracted or title_mismatches
-    uncertain = evidence_mismatches or unverified
+    identifier_checked = sorted({row["identity"] for row in identifier_results if row.get("checked")})
+    identifier_mismatches = sorted({row["identity"] for row in identifier_results if row.get("mismatch")})
+    identifier_unverified = sorted({
+        row["identity"]
+        for row in identifier_results
+        if not row.get("checked") and not row.get("mismatch")
+    })
+    blocked = retracted or title_mismatches or identifier_mismatches
+    uncertain = evidence_mismatches or unverified or identifier_unverified
     recommendation = "reject" if blocked else _metadata_unavailable_recommendation() if uncertain else "pass"
     return {
-        "available": not unverified,
+        "verification_version": 2,
+        "available": not unverified and not identifier_unverified,
         "recommendation": recommendation,
         "checked": checked,
         "unverified": unverified,
         "retracted": retracted,
         "title_mismatches": title_mismatches,
         "evidence_mismatches": evidence_mismatches,
+        "identifier_checked": identifier_checked,
+        "identifier_unverified": identifier_unverified,
+        "identifier_mismatches": identifier_mismatches,
     }
 
 

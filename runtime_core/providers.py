@@ -17,6 +17,7 @@ class ProviderRequest(BaseModel):
     system_prompt: str
     user_prompt: str
     prompt_version: str
+    context: dict[str, object] = Field(default_factory=dict)
     timeout_sec: int = 60
     max_input_tokens: int = 12000
     max_output_tokens: int = 1200

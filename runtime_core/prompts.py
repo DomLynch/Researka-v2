@@ -1,4 +1,4 @@
-REVIEWER_PROMPT_VERSION = "reviewer-v11-research-synthesis"
+REVIEWER_PROMPT_VERSION = "reviewer-v12-grounded-integrity"
 EDITOR_PROMPT_VERSION = "editor-v1-clean-runtime"
 
 

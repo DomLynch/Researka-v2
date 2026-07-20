@@ -308,7 +308,12 @@ class ReviewerPanel:
         try:
             payload = self._payload_from_result(result)
             self._validate_payload_contract(payload)
-            grounding_failure = review_grounding_failure(payload, user_prompt=request.user_prompt)
+            source_verification = request.context.get("source_verification")
+            grounding_failure = review_grounding_failure(
+                payload,
+                user_prompt=request.user_prompt,
+                source_verification=source_verification if isinstance(source_verification, dict) else None,
+            )
             if grounding_failure:
                 raise ValueError(grounding_failure)
         except Exception as exc:

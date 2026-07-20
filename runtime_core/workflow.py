@@ -632,6 +632,24 @@ class WorkflowEngine:
             submission_data_start=submission_data_start,
             submission_data_end=submission_data_end,
         )
+        source_verification = submission.metadata.get("source_verification")
+        source_verification = source_verification if isinstance(source_verification, dict) else None
+        if source_verification:
+            problem_identifiers: set[str] = set()
+            for field in ("unverified", "title_mismatches", "identifier_unverified", "identifier_mismatches"):
+                identities = source_verification.get(field, [])
+                if isinstance(identities, list):
+                    problem_identifiers.update(str(identity) for identity in identities)
+            system_prompt += (
+                "\nTrusted platform source-verification receipt (not author data): "
+                + json.dumps({
+                    "recommendation": source_verification.get("recommendation"),
+                    "problem_identifiers": sorted(problem_identifiers),
+                }, ensure_ascii=False)
+                + "\nDo not call a DOI or PMID fabricated, invalid, implausible, unresolved, or mismatched unless "
+                "its exact normalized identifier appears in problem_identifiers, and include that exact identifier "
+                "in the finding. This does not prevent criticism of whether a verified source supports a manuscript claim.\n"
+            )
         manuscript_data = {
             "title": submission.title,
             "article_type": article_type,
@@ -651,6 +669,7 @@ class WorkflowEngine:
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 prompt_version=REVIEWER_PROMPT_VERSION,
+                context={"source_verification": source_verification or {}},
                 response_format="json_object",
                 max_output_tokens=3000,
             )
@@ -666,7 +685,11 @@ class WorkflowEngine:
         review_markdown = str(payload.get("review_markdown", "")).strip()
         if not review_markdown:
             raise ValueError("provider_error:bad_request:missing_review_markdown")
-        grounding_failure = review_grounding_failure(payload, user_prompt=user_prompt)
+        grounding_failure = review_grounding_failure(
+            payload,
+            user_prompt=user_prompt,
+            source_verification=source_verification,
+        )
         if grounding_failure:
             raise ValueError(f"provider_error:bad_request:{grounding_failure}")
         rubric_scores, major_issues, minor_issues, required_revisions, claim_support, overclaim, synthesis_quality = self._validated_review_contract(
@@ -963,6 +986,11 @@ class WorkflowEngine:
                 for name, field, reason in (
                     ("source_retracted", "retracted", "retracted sources cannot support publication"),
                     ("source_identity_match", "title_mismatches", "source titles do not match registered records"),
+                    (
+                        "source_identifier_match",
+                        "identifier_mismatches",
+                        "submitted source identifiers disagree with authoritative records",
+                    ),
                 )
                 if source_verification.get(field)
             ]
@@ -999,6 +1027,14 @@ class WorkflowEngine:
                         "passed": False,
                         "reason": "source metadata could not be verified: "
                         + ", ".join(source_verification["unverified"][:10]),
+                    })
+                if source_verification.get("identifier_unverified"):
+                    revision_notes.append("source identifier verification unavailable (fail-closed)")
+                    revision_failures.append({
+                        "name": "source_identifier_authority_available",
+                        "passed": False,
+                        "reason": "source identifiers could not be verified: "
+                        + ", ".join(source_verification["identifier_unverified"][:10]),
                     })
                 return self._terminal_intake_decision(
                     repository,

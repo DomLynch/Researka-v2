@@ -46,6 +46,19 @@ _INTEGRITY_LABEL = re.compile(
     re.IGNORECASE,
 )
 _QUOTED_TEXT = re.compile(r'"([^"]+)"|“([^”]+)”|\'([^\']+)\'|‘([^’]+)’')
+_SOURCE_ID_PROBLEM = re.compile(
+    r"\b(?:fabricated|fake|implausible|non[- ]?existent|unresolvable|"
+    r"(?:does|do|did|can|could) not (?:be )?resolve[dm]?|cannot be resolved|not found|"
+    r"unverified)\b",
+    re.IGNORECASE,
+)
+_SOURCE_IDENTIFIER_PROBLEM = re.compile(r"\b(?:invalid|mismatch(?:ed)?)\b", re.IGNORECASE)
+_SOURCE_ID_CONTEXT = re.compile(
+    r"\b(?:pmids?|dois?|identifiers?|citations?|references?|sources?)\b",
+    re.IGNORECASE,
+)
+_SOURCE_IDENTIFIER_CONTEXT = re.compile(r"\b(?:pmids?|dois?|identifiers?)\b", re.IGNORECASE)
+_DOI = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
 
 
 def _normalized_words(value: str) -> str:
@@ -77,12 +90,56 @@ def _quoted_directives(value: str) -> list[str]:
     return [_normalized_words(quote) for quote in quotes if _REVIEW_DIRECTIVE.search(quote)]
 
 
-def review_grounding_failure(payload: dict[str, object], *, user_prompt: str) -> str | None:
+def _source_integrity_failure(
+    feedback: list[str],
+    source_verification: dict[str, object] | None,
+) -> str | None:
+    allegations = [
+        item
+        for item in feedback
+        if (
+            _SOURCE_ID_PROBLEM.search(item) and (_SOURCE_ID_CONTEXT.search(item) or _DOI.search(item))
+        ) or (
+            _SOURCE_IDENTIFIER_PROBLEM.search(item)
+            and (_SOURCE_IDENTIFIER_CONTEXT.search(item) or _DOI.search(item))
+        )
+    ]
+    if not allegations:
+        return None
+    allowed: set[str] = set()
+    for field in ("unverified", "title_mismatches", "identifier_unverified", "identifier_mismatches"):
+        field_values = (source_verification or {}).get(field, [])
+        if isinstance(field_values, list):
+            allowed.update(str(identity).strip().lower() for identity in field_values if str(identity).strip())
+    identities: set[str] = set()
+    for allegation in allegations:
+        identities.update({
+            "doi:" + match.group(0).rstrip(".,;:)}").lower()
+            for match in _DOI.finditer(allegation)
+        })
+        if re.search(r"\bpmids?\b", allegation, re.IGNORECASE):
+            identities.update(f"pmid:{value}" for value in re.findall(r"\b\d{5,9}\b", allegation))
+    if not identities:
+        return "source_integrity_finding_missing_id"
+    unsupported = sorted(identities - allowed)
+    if unsupported:
+        return f"unsupported_source_integrity_finding:{unsupported[0]}"
+    return None
+
+
+def review_grounding_failure(
+    payload: dict[str, object],
+    *,
+    user_prompt: str,
+    source_verification: dict[str, object] | None = None,
+) -> str | None:
     feedback = [str(payload.get("review_markdown") or "")]
     for field in ("major_issues", "minor_issues", "required_revisions"):
         value = payload.get(field)
         if isinstance(value, list):
             feedback.extend(str(item) for item in value)
+    if source_failure := _source_integrity_failure(feedback, source_verification):
+        return source_failure
     allegations = [item for item in feedback if _is_integrity_allegation(item)]
 
     findings = payload.get("integrity_findings", [])
