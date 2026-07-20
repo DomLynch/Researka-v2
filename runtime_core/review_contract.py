@@ -27,9 +27,10 @@ _REVIEW_DIRECTIVE = re.compile(
     re.IGNORECASE,
 )
 _INTEGRITY_MANIPULATION = re.compile(
-    r"\b(?:author|manuscript|submission|paper|section|text)\b.{0,100}"
-    r"\b(?:tells?|instructs?|directs?|asks?|orders?|commands?|manipulates?|pressures?|steers?)\b.{0,100}"
-    r"\b(?:reviewer|evaluator|judge|panel|grade|score|verdict|decision|instruction|directive|prompt)\b",
+    r"\b(?:author|manuscript|submission|paper|section|text)\b.{0,80}"
+    r"\b(?:tells?|instructs?|directs?|asks?|orders?|commands?|manipulates?|pressures?|steers?)\b.{0,80}"
+    r"\b(?:reviewer|evaluator|judge|panel)\b\s+(?:(?:how\s+)?to|toward|into)\s+"
+    r"(?:approve|accept|reject|revise|grade|score|rate|decide|choose|recommend|return|issue|give|award)\b",
     re.IGNORECASE,
 )
 _INTEGRITY_CONTAINER = re.compile(

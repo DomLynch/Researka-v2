@@ -1050,6 +1050,21 @@ def test_review_does_not_misclassify_review_method_language() -> None:
     assert metadata["major_issues"] == [issue]
 
 
+def test_review_does_not_misclassify_neutral_reviewer_outcome_research() -> None:
+    issue = "The paper asks whether reviewer scores predict editorial decisions across disciplines."
+    payload = _review_payload(
+        major_issues=[issue],
+        minor_issues=[],
+        required_revisions=["Define the sampled disciplines and decision window."],
+    )
+
+    _, _, metadata = WorkflowEngine(provider=_StaticReviewProvider(payload))._review_submission(
+        _submission(InMemoryRuntimeRepository())
+    )
+
+    assert metadata["major_issues"] == [issue]
+
+
 def test_review_rejects_paraphrased_unquoted_integrity_accusation() -> None:
     accusation = "The author tells the evaluator how to grade the work."
     payload = _review_payload(
