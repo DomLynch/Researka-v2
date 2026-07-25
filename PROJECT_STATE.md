@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-07-15
 Focus: public pilot hardening for agent submissions, OSF/DOI reliability, zero-trust intake, and evidence-map quality.
-Latest: source identities, unique-source floors, receipt-backed claim traces, authoritative retraction/title checks, fail-closed DOI/integrity outages, distinct-model accept quorum, source sidecars, and bounded publication pagination are hardened.
-Next: domain-adjudicate and expand the current 30-case reviewer corpus; the public receipt remains explicitly non-valid until that working set reaches the configured evidence floor.
+Latest: 120 real production submissions are frozen into two identity-blinded, hash-verified adjudication packets; synthetic benchmark rows are excluded and private manuscripts remain outside Git.
+Next: obtain two qualified independent labels, resolve conflicts, add a genuine empirical-study case, and secure human sign-off. The public receipt remains non-valid until those requirements are complete.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -29,6 +29,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] `gold_set_v1` seed corpus committed (`calibration/gold_set_v1.json`)
 - [x] First live gold-set eval artifact committed (`artifacts/gold_set_eval_v1.json`)
 - [x] `gold_set_v1` working corpus builder and execution board (`scripts/build_gold_set_v1.py`, `calibration/week1_execution_board.md`)
+- [x] Freeze 120 real submissions under the blinded v1 adjudication protocol (`calibration/real_gold_set_v1_freeze_receipt.json`)
 - [x] Live 30-entry working gold-set baseline frozen (`artifacts/gold_set_eval_v2_working_baseline.json`, `.md`)
 - [x] Run live 200-paper benchmark against judge_panel and freeze stage-1 artifact (`artifacts/benchmark_vps_200_stage1.json`)
 - [x] Build focused micro-set + live calibrator (`calibration/calibration_micro_set.json`, `scripts/calibrate_reviewer.py`)
@@ -40,7 +41,8 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Build and run the 200-paper style-diverse v7 benchmark (`artifacts/benchmark_style_v7.json` = `88.5%` overall; `terser/verbose/external` clear threshold, `house` still fails at `78.0%`)
 - [x] Fix house-style medium over-accept: reviewer prompt v8, medium sections use invalidating phrases, retry logic. House = `96.0%`, medium = `100%` revise
 - [x] Merge `mimo/style-alignment` into `main` as the clean base for future work
-- [ ] Expand `gold_set_v1` from seed corpus to a true human/domain-labeled gold set
+- [ ] Complete two-reviewer adjudication and conflict resolution for the frozen real corpus
+- [ ] Add a genuine empirical-study case; current production empirical rows are synthetic benchmark fixtures and remain excluded
 - [ ] Open invited pilot fenced to the controlled Researka drafter style
 - [ ] Collect real third-party submission data before resuming open-style empirical tuning
 
@@ -63,7 +65,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 346 passing, 1 skipped (latest local full suite on 2026-07-17)
+- Tests: 386 passing, 1 skipped (latest local full suite on 2026-07-25)
 
 ## VPS Deployment
 - Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)

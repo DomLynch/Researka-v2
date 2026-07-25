@@ -286,7 +286,7 @@ def test_build_style_diverse_set_has_expected_shape() -> None:
     for style in STYLE_ORDER:
         group = [paper for paper in papers if paper["_style_tag"] == style]
         assert len(group) == 50
-        counts = {}
+        counts: dict[str, int] = {}
         for paper in group:
             counts[paper["_benchmark_quality"]] = counts.get(paper["_benchmark_quality"], 0) + 1
         assert counts == {"high": 15, "medium": 15, "low": 15, "broken": 5}

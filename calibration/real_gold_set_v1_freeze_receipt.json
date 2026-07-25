@@ -1,0 +1,38 @@
+{
+  "protocol_version": "researka-blinded-adjudication-v1",
+  "created_at": "2026-07-25T17:56:17.481797+00:00",
+  "case_count": 120,
+  "sampling_manifest_sha256": "sha256:07804bb60d710e132f754004e80c4303d67bb4f2c8f52453ae37743b87b48085",
+  "blinded_packet_sha256": [
+    "sha256:ec25aca60ac0f0b987c4385b600f5c85b609f535e71d7d9a6646902ff11eb07b",
+    "sha256:dd9579f49e240b70228fd7c0b5d84ca2abe7237af88fe4d201cc9655f501063c"
+  ],
+  "historical_decision_strata": {
+    "accept": 40,
+    "reject": 40,
+    "revise": 40
+  },
+  "article_type_counts": {
+    "alpha_memo": 53,
+    "evidence_map": 33,
+    "rapid_evidence_synthesis": 20,
+    "research_synthesis": 14
+  },
+  "missing_article_types": [
+    "empirical_study"
+  ],
+  "article_type_coverage_complete": false,
+  "domain_counts": {
+    "ai_research": 19,
+    "anti-aging": 3,
+    "business_research": 12,
+    "economics_research": 2,
+    "exercise": 2,
+    "finance_research": 4,
+    "general": 12,
+    "longevity": 41,
+    "longevity_research": 25
+  },
+  "private_material_committed": false,
+  "corpus_status": "blinded_incomplete_coverage"
+}
