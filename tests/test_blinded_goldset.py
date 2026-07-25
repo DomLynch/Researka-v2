@@ -14,6 +14,7 @@ from scripts.prepare_blinded_gold_set import (
     candidate_from_row,
     freeze_candidates,
     merge_adjudications,
+    select_candidates,
 )
 
 
@@ -156,6 +157,24 @@ def test_freeze_creates_private_diverse_packets_without_outcome_leakage(tmp_path
     assert "source_submission_id" not in receipt_path.read_text()
     assert stat.S_IMODE(manifest_path.stat().st_mode) == 0o600
     assert stat.S_IMODE(packet_a.stat().st_mode) == 0o600
+
+
+def test_sampler_preserves_rare_article_types_across_many_domain_buckets() -> None:
+    candidates = [_candidate(index) for index in range(600)]
+    for candidate in candidates:
+        candidate["article_type"] = "rapid_evidence_synthesis"
+        candidate["submission"]["article_type"] = "rapid_evidence_synthesis"
+        candidate["domain_slug"] = f"domain-{candidate['source_submission_id']}"
+    for offset, article_type in enumerate(ArticleType):
+        for decision_index, decision in enumerate(("accept", "revise", "reject")):
+            candidate = candidates[offset * 3 + decision_index]
+            candidate["historical_decision"] = decision
+            candidate["article_type"] = article_type.value
+            candidate["submission"]["article_type"] = article_type.value
+
+    selected = select_candidates(candidates, size=120, seed="rare-type-regression")
+
+    assert {item["article_type"] for item in selected} == {item.value for item in ArticleType}
 
 
 def test_merge_rejects_same_adjudicator_and_unresolved_conflict(tmp_path: Path) -> None:

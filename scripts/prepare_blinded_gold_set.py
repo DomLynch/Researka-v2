@@ -211,8 +211,20 @@ def _round_robin(items: list[dict], quota: int, seed: str) -> list[dict]:
     buckets: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for item in _deterministic_order(items, seed):
         buckets[(item["article_type"], item["domain_slug"])].append(item)
-    keys = sorted(buckets, key=lambda key: _sha256(f"{seed}:{key[0]}:{key[1]}"))
     selected: list[dict] = []
+    for article_type in sorted({item["article_type"] for item in items}):
+        candidates = _deterministic_order(
+            [item for item in items if item["article_type"] == article_type],
+            f"{seed}:{article_type}",
+        )
+        if candidates and len(selected) < quota:
+            candidate = candidates[0]
+            selected.append(candidate)
+            buckets[(candidate["article_type"], candidate["domain_slug"])].remove(candidate)
+    keys = sorted(
+        (key for key, bucket in buckets.items() if bucket),
+        key=lambda key: _sha256(f"{seed}:{key[0]}:{key[1]}"),
+    )
     while keys and len(selected) < quota:
         next_keys: list[tuple[str, str]] = []
         for key in keys:
