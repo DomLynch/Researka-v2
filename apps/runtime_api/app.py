@@ -19,7 +19,13 @@ from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, W
 from runtime_core.agent_query import fail_agent_query_job, run_agent_query_job
 from runtime_core.evidence_quality import classified_title, contradiction_status_for_text, evidence_profile
 from runtime_core.failure_classifier import classify_failure_reason
-from runtime_core.judge_release import SERVICE_GIT_SHA as _SERVICE_GIT_SHA
+from runtime_core.judge_release import (
+    SERVICE_GIT_SHA as _SERVICE_GIT_SHA,
+    calibration_metrics_complete,
+    calibration_timeline_valid,
+    judge_release_manifest_valid,
+    unsigned_calibration_sha256,
+)
 from runtime_core.osf import (
     backfill_missing_publication_dois,
     build_oauth_authorization_url,
@@ -35,6 +41,7 @@ from runtime_core.publication_sidecars import build_sidecar, sidecar_manifest
 
 _calibration_cache: dict | None = None
 _calibration_path: str | None = None
+_calibration_mtime_ns: int | None = None
 
 # Captured at module import for the /version endpoint.
 _SERVICE_STARTED_AT = datetime.now(timezone.utc).isoformat()
@@ -54,8 +61,9 @@ class AgentQueryPayload(BaseModel):
 
 
 def reset_calibration_cache() -> None:
-    global _calibration_cache, _calibration_path
+    global _calibration_cache, _calibration_mtime_ns, _calibration_path
     _calibration_cache = None
+    _calibration_mtime_ns = None
     _calibration_path = None
 
 
@@ -66,7 +74,7 @@ def _normalize_benchmark(raw: dict) -> dict:
             mismatches = summary.get("mismatches", [])
             if raw.get("run_meta", {}).get("corpus_status") == "adjudicated":
                 mismatches = [
-                    {key: value for key, value in mismatch.items() if key != "title"}
+                    {key: value for key, value in mismatch.items() if key not in {"title", "reason"}}
                     for mismatch in mismatches
                 ]
             return {
@@ -134,19 +142,79 @@ def _normalize_benchmark(raw: dict) -> dict:
     }
 
 
+def _utc_timestamp(value: object) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def _valid_calibration_signoff(receipt: dict) -> bool:
+    signoff = receipt.get("human_signoff")
+    signed_at = _utc_timestamp(signoff.get("signed_at")) if isinstance(signoff, dict) else None
+    generated_at = _utc_timestamp(receipt.get("generated_at"))
+    release_id = str(receipt.get("evaluated_judge_release_id") or "")
+    return bool(
+        isinstance(signoff, dict)
+        and release_id.startswith("sha256:")
+        and len(release_id) == 71
+        and signoff.get("approved") is True
+        and signoff.get("results_reviewed") is True
+        and signoff.get("limitations_reviewed") is True
+        and signoff.get("evaluation_sha256") == receipt.get("evaluation_sha256")
+        and signoff.get("judge_release_id") == receipt.get("evaluated_judge_release_id")
+        and str(signoff.get("signed_by") or "").strip()
+        and str(signoff.get("statement") or "").strip()
+        and signed_at
+        and generated_at
+        and generated_at <= signed_at <= datetime.now(timezone.utc)
+    )
+
+
+def _judge_release_matches_calibration(receipt: dict) -> bool:
+    path = Path(os.environ.get("RESEARKA_V2_ACTIVE_JUDGE_RELEASE_PATH", ""))
+    if not str(path) or not path.is_file():
+        return False
+    try:
+        release = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    calibration = release.get("calibration") if isinstance(release, dict) else None
+    release_id = str(receipt.get("evaluated_judge_release_id") or "")
+    return bool(
+        isinstance(calibration, dict)
+        and judge_release_manifest_valid(release)
+        and release_id.startswith("sha256:")
+        and len(release_id) == 71
+        and release.get("id") == release_id
+        and release.get("code_sha") == _SERVICE_GIT_SHA
+        and calibration.get("sha256") == receipt.get("sha256")
+    )
+
+
 def _load_calibration_data() -> dict:
-    global _calibration_cache, _calibration_path
+    global _calibration_cache, _calibration_mtime_ns, _calibration_path
     default_path = os.environ.get(
         "RESEARKA_V2_CALIBRATION_PATH",
         str(Path(__file__).resolve().parents[2] / "artifacts" / "gold_set_eval_v3_current.json"),
     )
-    if _calibration_cache is not None and _calibration_path == default_path:
+    path = Path(default_path)
+    try:
+        mtime_ns = path.stat().st_mtime_ns
+    except OSError:
+        mtime_ns = None
+    if _calibration_cache is not None and _calibration_path == default_path and _calibration_mtime_ns == mtime_ns:
         _calibration_cache["receipt"] = _refresh_calibration_receipt(_calibration_cache["receipt"])
         return _calibration_cache
-    path = Path(default_path)
     if not path.exists():
         return {"summary": {}, "results": [], "receipt": {"status": "missing", "valid": False}}
-    raw = json.loads(path.read_text())
+    try:
+        raw = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"summary": {}, "results": [], "receipt": {"status": "malformed", "valid": False}}
     _calibration_cache = _normalize_benchmark(raw)
     run_meta = raw.get("run_meta", {}) if isinstance(raw, dict) else {}
     generated_at = str(run_meta.get("repaired_at") or run_meta.get("timestamp") or "")
@@ -159,7 +227,13 @@ def _load_calibration_data() -> dict:
         "corpus_status": run_meta.get("corpus_status", "unknown"),
         "generated_at": generated_at or None,
         "case_count": case_count,
+        "metrics_complete": calibration_metrics_complete(raw),
+        "timeline_valid": calibration_timeline_valid(raw),
+        "evaluation_sha256": unsigned_calibration_sha256(raw),
+        "evaluated_judge_release_id": run_meta.get("judge_release_id"),
+        "human_signoff": run_meta.get("human_signoff", {}),
     })
+    _calibration_mtime_ns = mtime_ns
     _calibration_path = default_path
     return _calibration_cache
 
@@ -178,7 +252,17 @@ def _refresh_calibration_receipt(receipt: dict) -> dict:
     minimum_cases = _bounded_env_int("RESEARKA_V2_CALIBRATION_MIN_CASES", 100, floor=1, ceiling=10000)
     fresh = age_days is not None and age_days <= max_age_days
     adjudicated = receipt.get("corpus_status") == "adjudicated"
-    valid = fresh and case_count >= minimum_cases and adjudicated
+    human_signed = _valid_calibration_signoff(receipt)
+    judge_release_bound = _judge_release_matches_calibration(receipt)
+    valid = (
+        fresh
+        and case_count >= minimum_cases
+        and adjudicated
+        and receipt.get("metrics_complete") is True
+        and receipt.get("timeline_valid") is True
+        and human_signed
+        and judge_release_bound
+    )
     status = "current" if valid else "working_or_insufficient" if fresh else "stale_or_insufficient"
     return {
         **receipt,
@@ -188,6 +272,8 @@ def _refresh_calibration_receipt(receipt: dict) -> dict:
         "max_age_days": max_age_days,
         "case_count": case_count,
         "minimum_cases": minimum_cases,
+        "human_signed": human_signed,
+        "judge_release_bound": judge_release_bound,
     }
 
 

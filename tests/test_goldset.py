@@ -229,6 +229,9 @@ def test_evaluate_gold_set_scores_article_types_and_accept_blockers() -> None:
     assert artifact["summary"]["cost"]["total_usd"] == 0.1
     assert artifact["summary"]["latency"]["mean_s"] >= 0.0
     assert artifact["summary"]["mismatch_count"] == 1
+    assert artifact["summary"]["mismatches"][0]["reason"]
+    assert artifact["run_meta"]["judge_release_consistent"] is True
+    assert str(artifact["run_meta"]["judge_release_id"]).startswith("sha256:")
 
 
 def test_evaluate_gold_set_progress_callback_receives_partial_artifact() -> None:

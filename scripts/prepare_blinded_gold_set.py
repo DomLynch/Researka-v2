@@ -22,10 +22,17 @@ from contracts import (
     GoldSetExpectation,
     SubmissionPayload,
 )
+from runtime_core.judge_release import (
+    calibration_metrics_complete,
+    calibration_timeline_valid,
+    judge_release_manifest_valid,
+    unsigned_calibration_sha256,
+)
 
 PROTOCOL_VERSION = "researka-blinded-adjudication-v1"
 DECISIONS = ("accept", "revise", "reject")
 SYNTHETIC_AGENT_MARKERS = ("benchmark", "fixture", "gold-set", "style-test", "synthetic", "test-agent")
+SYNTHETIC_FLAG_KEYS = {"is_benchmark", "is_fixture", "is_synthetic", "synthetic", "test_fixture"}
 EXCLUDED_DOMAINS = {"ops", "test", "x"}
 IDENTITY_KEYS = (
     "author_name",
@@ -73,6 +80,53 @@ def _file_sha256(path: Path) -> str:
     return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
 
 
+def _model_key(value: object) -> str:
+    name = str(value or "").strip().casefold().split("/")[-1].split(":")[0]
+    return re.sub(r"[^a-z0-9]", "", name)
+
+
+def _timestamp(value: object, *, context: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"{context}: valid_timestamp_required") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"{context}: timezone_required")
+    parsed = parsed.astimezone(timezone.utc)
+    if parsed > datetime.now(timezone.utc):
+        raise ValueError(f"{context}: future_timestamp")
+    return parsed
+
+
+def _judge_release(raw: object) -> dict:
+    release = raw if isinstance(raw, dict) else {}
+    if not judge_release_manifest_valid(release):
+        raise ValueError("valid_target_judge_release_required")
+    return release
+
+
+def _independent_adjudicator(raw: object, *, judge_release: dict, context: str) -> tuple[dict, datetime]:
+    adjudicator = raw if isinstance(raw, dict) else {}
+    adjudicator_id = str(adjudicator.get("id") or "").strip()
+    adjudicator_type = str(adjudicator.get("type") or "").strip()
+    model = str(adjudicator.get("model") or "").strip()
+    excluded_models = {_model_key(item) for item in judge_release["models"]}
+    if (
+        not adjudicator_id
+        or adjudicator_type not in {"human", "independent_model"}
+        or adjudicator.get("qualified") is not True
+        or adjudicator.get("judge_release_id") != judge_release["id"]
+        or not adjudicator.get("qualification_statement")
+        or not adjudicator.get("conflict_disclosure")
+        or adjudicator.get("reviewer_outputs_hidden_until_freeze") is not True
+        or _model_key(adjudicator_id) in excluded_models
+        or (model and _model_key(model) in excluded_models)
+        or (adjudicator_type == "independent_model" and not model)
+    ):
+        raise ValueError(f"{context}: independent_adjudicator_provenance_required")
+    return adjudicator, _timestamp(adjudicator.get("completed_at"), context=context)
+
+
 def _load_json(path: Path) -> dict:
     raw = json.loads(path.read_text())
     if not isinstance(raw, dict):
@@ -102,8 +156,9 @@ def _redact_text(text: str, identities: set[str]) -> str:
     redacted = text
     for identity in sorted(identities, key=len, reverse=True):
         if len(identity) >= 4:
-            redacted = redacted.replace(identity, "[BLINDED]")
+            redacted = re.sub(re.escape(identity), "[BLINDED]", redacted, flags=re.I)
     redacted = re.sub(r"\b\d{4}-\d{4}-\d{4}-[\dX]{4}\b", "[BLINDED ORCID]", redacted, flags=re.I)
+    redacted = re.sub(r"\b[\w.+-]+@[\w.-]+\.[A-Z]{2,}\b", "[BLINDED EMAIL]", redacted, flags=re.I)
     return re.sub(
         r"(?im)^(?:author agent|submitted by|orcid|affiliation|institution)\s*:\s*.*$",
         "[BLINDED IDENTITY]",
@@ -121,35 +176,43 @@ def _redact(value: object, identities: set[str]) -> object:
     return value
 
 
+def _contains_synthetic_marker(metadata: dict) -> bool:
+    pending: list[object] = [metadata]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            for key, item in value.items():
+                normalized = str(key).strip().lower()
+                if normalized.startswith("_benchmark_"):
+                    return True
+                if normalized in SYNTHETIC_FLAG_KEYS and (
+                    item is True or str(item).strip().lower() in {"1", "true", "yes"}
+                ):
+                    return True
+                if normalized.endswith(("agent_id", "producer_id")) and any(
+                    marker in str(item).lower() for marker in SYNTHETIC_AGENT_MARKERS
+                ):
+                    return True
+                pending.append(item)
+        elif isinstance(value, list):
+            pending.extend(value)
+    return False
+
+
 def candidate_from_row(row: dict) -> dict | None:
     metadata = _metadata(row.get("metadata"))
     article_type = str(metadata.get("article_type") or "").strip()
     domain_slug = str(metadata.get("domain_slug") or "general").strip().lower()
-    agent_id = str(metadata.get("authenticated_agent_id") or metadata.get("author_agent_id") or "").lower()
     sources = metadata.get("source_bundle")
     if (
         article_type not in {item.value for item in ArticleType}
         or domain_slug in EXCLUDED_DOMAINS
-        or any(marker in agent_id for marker in SYNTHETIC_AGENT_MARKERS)
+        or _contains_synthetic_marker(metadata)
         or not isinstance(sources, list)
         or len(sources) < 3
     ):
         return None
 
-    identities = {str(metadata.get(key)).strip() for key in IDENTITY_KEYS if metadata.get(key)}
-    identity_text = "\n".join(
-        [
-            str(metadata.get("abstract") or ""),
-            str(metadata.get("body_markdown") or row.get("body_markdown") or ""),
-        ]
-    )
-    identities.update(
-        match.group(1).strip()
-        for match in re.finditer(
-            r"(?im)^(?:author|submitted by|affiliation|institution)\s*:\s*(.+)$",
-            identity_text,
-        )
-    )
     payload: dict[str, object] = {
         "title": row.get("title") or metadata.get("title") or "Untitled submission",
         "abstract": metadata.get("abstract") or row.get("body_markdown") or "",
@@ -166,6 +229,15 @@ def candidate_from_row(row: dict) -> dict | None:
         "core_claims_resolved": bool(metadata.get("core_claims_resolved", True)),
         "submitted_at": "2000-01-01T00:00:00Z",
     }
+    identities = {str(metadata.get(key)).strip() for key in IDENTITY_KEYS if metadata.get(key)}
+    identity_text = json.dumps(payload, ensure_ascii=False)
+    identities.update(
+        match.group(1).strip()
+        for match in re.finditer(
+            r"(?i)\b(?:author|submitted by|affiliation|institution)\s*:\s*([^,\n\"}]+)",
+            identity_text,
+        )
+    )
     blinded = SubmissionPayload.model_validate(_redact(payload, identities)).model_dump(mode="json", exclude_none=True)
     content = " ".join(
         [
@@ -261,7 +333,9 @@ def freeze_candidates(
     receipt_path: Path,
     size: int,
     seed: str,
+    judge_release: dict,
 ) -> dict:
+    target_release = _judge_release(judge_release)
     selected = select_candidates(candidates, size=size, seed=seed)
     sampled_types = {item["article_type"] for item in selected}
     missing_types = sorted({item.value for item in ArticleType} - sampled_types)
@@ -304,6 +378,7 @@ def freeze_candidates(
         "protocol_version": PROTOCOL_VERSION,
         "created_at": created_at,
         "seed": seed,
+        "judge_release": target_release,
         "case_count": len(cases),
         "sampling_rules": {
             "source": "production submissions with final decisions",
@@ -325,6 +400,7 @@ def freeze_candidates(
             "protocol_version": PROTOCOL_VERSION,
             "packet_id": packet_id,
             "sampling_manifest_sha256": manifest_sha,
+            "judge_release": target_release,
             "instructions": "Complete every adjudication independently. Do not seek platform verdicts or the other packet.",
             "rubric_keys": sorted(GOLD_SET_RUBRIC_KEYS),
             "adjudicator": {
@@ -332,6 +408,8 @@ def freeze_candidates(
                 "qualified": False,
                 "qualification_statement": "",
                 "conflict_disclosure": "",
+                "reviewer_outputs_hidden_until_freeze": False,
+                "judge_release_id": target_release["id"],
                 "completed_at": None,
             },
             "cases": ordered,
@@ -345,6 +423,7 @@ def freeze_candidates(
         "created_at": created_at,
         "case_count": len(cases),
         "sampling_manifest_sha256": manifest_sha,
+        "target_judge_release_id": target_release["id"],
         "blinded_packet_sha256": [_file_sha256(path) for path in packet_paths],
         "historical_decision_strata": dict(sorted(Counter(item["historical_decision"] for item in selected).items())),
         "article_type_counts": dict(sorted(Counter(item["article_type"] for item in selected).items())),
@@ -358,21 +437,25 @@ def freeze_candidates(
     return receipt
 
 
-def _validated_labels(path: Path, manifest: dict) -> tuple[dict, dict[str, tuple[dict, GoldSetExpectation]]]:
+def _validated_labels(
+    path: Path,
+    manifest: dict,
+) -> tuple[dict, datetime, dict[str, tuple[dict, GoldSetExpectation]]]:
     packet = _load_json(path)
     if packet.get("protocol_version") != PROTOCOL_VERSION:
         raise ValueError(f"{path}: protocol_version_mismatch")
     if packet.get("sampling_manifest_sha256") != _sha256(manifest):
         raise ValueError(f"{path}: manifest_hash_mismatch")
-    adjudicator = packet.get("adjudicator")
-    if not isinstance(adjudicator, dict) or not adjudicator.get("id") or adjudicator.get("qualified") is not True:
-        raise ValueError(f"{path}: qualified_adjudicator_required")
-    if (
-        not adjudicator.get("completed_at")
-        or not adjudicator.get("qualification_statement")
-        or not adjudicator.get("conflict_disclosure")
-    ):
-        raise ValueError(f"{path}: adjudicator_provenance_required")
+    target_release = _judge_release(manifest.get("judge_release"))
+    if packet.get("judge_release") != target_release:
+        raise ValueError(f"{path}: judge_release_mismatch")
+    adjudicator, completed_at = _independent_adjudicator(
+        packet.get("adjudicator"),
+        judge_release=target_release,
+        context=str(path),
+    )
+    if completed_at < _timestamp(manifest.get("created_at"), context="manifest"):
+        raise ValueError(f"{path}: adjudication_predates_freeze")
 
     expected_hashes = {case["case_id"]: case["blinded_content_sha256"] for case in manifest["cases"]}
     labels: dict[str, tuple[dict, GoldSetExpectation]] = {}
@@ -387,7 +470,7 @@ def _validated_labels(path: Path, manifest: dict) -> tuple[dict, dict[str, tuple
         labels[case_id] = (submission, expectation)
     if set(labels) != set(expected_hashes):
         raise ValueError(f"{path}: all_manifest_cases_required")
-    return adjudicator, labels
+    return adjudicator, completed_at, labels
 
 
 def _complete_expectation(raw: object, *, context: str) -> GoldSetExpectation:
@@ -413,12 +496,14 @@ def _label_signature(expectation: GoldSetExpectation) -> dict:
 def _resolution_labels(
     path: Path | None,
     *,
+    judge_release: dict,
     manifest_sha: str,
     conflict_ids: set[str],
     adjudicator_ids: set[str],
-) -> tuple[dict[str, GoldSetExpectation], str | None]:
+    labels_frozen_at: datetime,
+) -> tuple[dict[str, GoldSetExpectation], str | None, datetime]:
     if not conflict_ids:
-        return {}, None
+        return {}, None, datetime.now(timezone.utc)
     if path is None:
         raise ValueError("conflicts_require_resolution_record")
     record = _load_json(path)
@@ -427,20 +512,23 @@ def _resolution_labels(
     method = record.get("method")
     resolver_raw = record.get("resolver")
     resolver: dict[str, object] = resolver_raw if isinstance(resolver_raw, dict) else {}
-    resolver_id = str(resolver.get("id") or "")
+    resolver_id = str(resolver.get("id") or "").strip()
+    labels_revealed_at = _timestamp(record.get("labels_revealed_at"), context="resolution")
     if method == "third_adjudicator":
-        if (
-            not resolver.get("qualified")
-            or not resolver.get("qualification_statement")
-            or not resolver.get("conflict_disclosure")
-            or not resolver.get("completed_at")
-            or not resolver_id
-            or resolver_id.casefold() in adjudicator_ids
-        ):
+        try:
+            resolver, resolved_at = _independent_adjudicator(
+                resolver,
+                judge_release=judge_release,
+                context="resolver",
+            )
+        except ValueError as exc:
+            raise ValueError("qualified_independent_third_adjudicator_required") from exc
+        if resolver_id.casefold() in adjudicator_ids:
             raise ValueError("qualified_independent_third_adjudicator_required")
     elif method == "documented_consensus":
         participants = {str(item).strip().casefold() for item in record.get("participant_ids") or []}
-        if not adjudicator_ids.issubset(participants) or not record.get("completed_at"):
+        resolved_at = _timestamp(record.get("completed_at"), context="consensus")
+        if not adjudicator_ids.issubset(participants):
             raise ValueError("consensus_must_include_both_adjudicators")
     else:
         raise ValueError("unsupported_conflict_resolution_method")
@@ -453,7 +541,9 @@ def _resolution_labels(
     }
     if set(labels) != conflict_ids:
         raise ValueError("resolution_record_must_cover_exact_conflicts")
-    return labels, _file_sha256(path)
+    if not labels_frozen_at <= labels_revealed_at <= resolved_at:
+        raise ValueError("invalid_conflict_resolution_timeline")
+    return labels, _file_sha256(path), labels_revealed_at
 
 
 def merge_adjudications(
@@ -462,7 +552,6 @@ def merge_adjudications(
     receipt_path: Path,
     label_paths: tuple[Path, Path],
     resolution_path: Path | None,
-    signoff_path: Path,
     output_path: Path,
 ) -> GoldSetCorpus:
     manifest = _load_json(manifest_path)
@@ -470,8 +559,9 @@ def merge_adjudications(
     manifest_sha = _sha256(manifest)
     if receipt.get("sampling_manifest_sha256") != manifest_sha or receipt.get("case_count") != len(manifest["cases"]):
         raise ValueError("freeze_receipt_does_not_match_manifest")
-    first_adjudicator, first = _validated_labels(label_paths[0], manifest)
-    second_adjudicator, second = _validated_labels(label_paths[1], manifest)
+    target_release = _judge_release(manifest.get("judge_release"))
+    first_adjudicator, first_completed_at, first = _validated_labels(label_paths[0], manifest)
+    second_adjudicator, second_completed_at, second = _validated_labels(label_paths[1], manifest)
     adjudicator_ids = {
         str(first_adjudicator["id"]).strip().casefold(),
         str(second_adjudicator["id"]).strip().casefold(),
@@ -500,23 +590,15 @@ def merge_adjudications(
         if expected_agreement == 1 and observed_agreement == 1
         else round((observed_agreement - expected_agreement) / (1 - expected_agreement), 3)
     )
-    resolutions, resolution_sha = _resolution_labels(
+    labels_frozen_at = max(first_completed_at, second_completed_at)
+    resolutions, resolution_sha, labels_revealed_at = _resolution_labels(
         resolution_path,
+        judge_release=target_release,
         manifest_sha=manifest_sha,
         conflict_ids=conflicts,
         adjudicator_ids=adjudicator_ids,
+        labels_frozen_at=labels_frozen_at,
     )
-    signoff = _load_json(signoff_path)
-    if (
-        signoff.get("sampling_manifest_sha256") != manifest_sha
-        or signoff.get("approved") is not True
-        or not signoff.get("signed_by")
-        or not signoff.get("signed_at")
-        or not signoff.get("statement")
-        or signoff.get("reviewer_outputs_hidden_until_freeze") is not True
-    ):
-        raise ValueError("valid_human_signoff_required")
-
     manifest_by_id = {case["case_id"]: case for case in manifest["cases"]}
     entries = []
     for case_id in sorted(first):
@@ -531,7 +613,6 @@ def merge_adjudications(
                 notes="Independently adjudicated under the blinded calibration protocol.",
             )
         )
-    labels_frozen_at = datetime.now(timezone.utc)
     corpus = GoldSetCorpus(
         version="gold-set-v2-adjudicated",
         entries=entries,
@@ -539,6 +620,7 @@ def merge_adjudications(
             corpus_status="adjudicated",
             protocol_version=PROTOCOL_VERSION,
             sampling_manifest_sha256=manifest_sha,
+            target_judge_release_id=target_release["id"],
             blinded_packet_sha256=list(receipt["blinded_packet_sha256"]),
             adjudicator_ids=sorted(adjudicator_ids),
             label_file_sha256=[_file_sha256(path) for path in label_paths],
@@ -547,12 +629,58 @@ def merge_adjudications(
             inter_adjudicator_decision_agreement=round(observed_agreement, 3),
             inter_adjudicator_kappa=decision_kappa,
             labels_frozen_at=labels_frozen_at,
-            labels_revealed_at=labels_frozen_at,
-            human_signoff=signoff,
+            labels_revealed_at=labels_revealed_at,
         ),
     )
     _write_json(output_path, corpus.model_dump(mode="json", exclude_none=True))
     return corpus
+
+
+def sign_evaluation(
+    artifact_path: Path,
+    *,
+    active_release_path: Path,
+    signed_by: str,
+    statement: str,
+) -> dict:
+    artifact = _load_json(artifact_path)
+    run_meta = artifact.get("run_meta")
+    release = run_meta.get("judge_release") if isinstance(run_meta, dict) else None
+    release_id = str(run_meta.get("judge_release_id") or "") if isinstance(run_meta, dict) else ""
+    if (
+        not isinstance(run_meta, dict)
+        or run_meta.get("corpus_status") != "adjudicated"
+        or run_meta.get("judge_release_consistent") is not True
+        or run_meta.get("human_signoff")
+        or not isinstance(release, dict)
+        or not judge_release_manifest_valid(release)
+        or release.get("id") != release_id
+        or len(artifact.get("results") or []) < 100
+        or not calibration_metrics_complete(artifact)
+        or not calibration_timeline_valid(artifact)
+        or not artifact.get("limitations")
+        or not signed_by.strip()
+        or not statement.strip()
+    ):
+        raise ValueError("evaluation_not_ready_for_human_signoff")
+    run_meta["human_signoff"] = {
+        "approved": True,
+        "results_reviewed": True,
+        "limitations_reviewed": True,
+        "evaluation_sha256": unsigned_calibration_sha256(artifact),
+        "judge_release_id": release_id,
+        "signed_by": signed_by.strip(),
+        "signed_at": datetime.now(timezone.utc).isoformat(),
+        "statement": statement.strip(),
+    }
+    _write_json(artifact_path, artifact, private=True)
+    active_release = {key: value for key, value in release.items() if key != "request_prompt_sha256"}
+    active_release["calibration"] = {
+        "artifact": artifact_path.name,
+        "sha256": hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
+    }
+    _write_json(active_release_path, active_release, private=True)
+    return run_meta["human_signoff"]
 
 
 def main() -> None:
@@ -561,6 +689,7 @@ def main() -> None:
     sample = commands.add_parser("sample")
     sample.add_argument("--size", type=int, default=120)
     sample.add_argument("--seed", required=True)
+    sample.add_argument("--judge-release", type=Path, required=True)
     sample.add_argument("--out-dir", type=Path, default=Path("calibration/private/real-v1"))
     sample.add_argument("--public-receipt", type=Path, default=Path("calibration/real_gold_set_v1_freeze_receipt.json"))
 
@@ -569,8 +698,12 @@ def main() -> None:
     merge.add_argument("--freeze-receipt", type=Path, required=True)
     merge.add_argument("--labels", type=Path, nargs=2, required=True)
     merge.add_argument("--resolutions", type=Path)
-    merge.add_argument("--signoff", type=Path, required=True)
     merge.add_argument("--output", type=Path, default=Path("calibration/gold_set_v2.json"))
+    sign = commands.add_parser("sign")
+    sign.add_argument("--artifact", type=Path, required=True)
+    sign.add_argument("--active-release", type=Path, required=True)
+    sign.add_argument("--signed-by", required=True)
+    sign.add_argument("--statement", required=True)
     args = parser.parse_args()
 
     if args.command == "sample":
@@ -583,15 +716,24 @@ def main() -> None:
             receipt_path=args.public_receipt,
             size=args.size,
             seed=args.seed,
+            judge_release=_load_json(args.judge_release),
         )
         print(json.dumps(receipt, indent=2))
+        return
+    if args.command == "sign":
+        signoff = sign_evaluation(
+            args.artifact,
+            active_release_path=args.active_release,
+            signed_by=args.signed_by,
+            statement=args.statement,
+        )
+        print(json.dumps(signoff, indent=2))
         return
     corpus = merge_adjudications(
         manifest_path=args.manifest,
         receipt_path=args.freeze_receipt,
         label_paths=tuple(args.labels),
         resolution_path=args.resolutions,
-        signoff_path=args.signoff,
         output_path=args.output,
     )
     print(f"adjudicated_cases={len(corpus.entries)}")

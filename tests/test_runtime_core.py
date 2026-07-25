@@ -5,7 +5,7 @@ import pytest
 
 from runtime_core.compiler import canonical_bundle_facts, compile_publication
 from runtime_core.evidence_quality import evidence_profile, publication_class, support_for_claim
-from runtime_core.judge_release import build_judge_release
+from runtime_core.judge_release import build_judge_release, judge_release_manifest_valid
 from runtime_core.gates import run_publish_gates
 from runtime_core.failure_classifier import classify_failure_reason
 from runtime_core.prompts import REVIEWER_PROMPT_VERSION
@@ -120,17 +120,23 @@ def test_judge_release_is_stable_and_prompt_bound(tmp_path, monkeypatch) -> None
     monkeypatch.setenv("RESEARKA_V2_CALIBRATION_PATH", str(calibration))
     inputs = {
         "provider": "reviewer-panel",
-        "model": "panel",
+        "model": "model-b|model-a",
         "response_metadata": {"panel_models": ["model-b", "model-a"]},
     }
 
     first = build_judge_release(system_prompt="locked prompt", **inputs)
+    calibration.write_text('{"cases":[{"id":"new-calibration"}]}')
     second = build_judge_release(system_prompt="locked prompt", **inputs)
     changed = build_judge_release(system_prompt="changed prompt", **inputs)
 
-    assert first == second
-    assert first["id"] != changed["id"]
+    assert first["id"] == second["id"]
+    assert first["calibration"] != second["calibration"]
+    assert first["id"] == changed["id"]
+    assert first["request_prompt_sha256"] != changed["request_prompt_sha256"]
     assert first["models"] == ["model-a", "model-b"]
+    assert first["observed_models"] == ["model-a", "model-b"]
+    assert judge_release_manifest_valid(first) is True
+    assert judge_release_manifest_valid({**first, "models": ["tampered-model"]}) is False
     calibration_identity = first["calibration"]
     assert isinstance(calibration_identity, dict)
     assert calibration_identity["artifact"] == "gold.json"
@@ -1313,7 +1319,8 @@ def test_workflow_uses_provider_contract_for_trace_metadata() -> None:
         "source_grounding",
     }
     assert review.metadata["judge_release_id"].startswith("sha256:")
-    assert review.metadata["judge_release"]["models"] == ["stub-primary", "stub-sparring"]
+    assert review.metadata["judge_release"]["models"] == ["stub-model"]
+    assert review.metadata["judge_release"]["observed_models"] == ["stub-primary", "stub-sparring"]
     assert review.metadata["judge_release"]["settings"]["accept_quorum_min"] == 2
 
 

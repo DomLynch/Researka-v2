@@ -1,3 +1,4 @@
+import hashlib
 import inspect
 import logging
 import os
@@ -11,7 +12,9 @@ import pytest
 import starlette.testclient as starlette_testclient
 from fastapi.testclient import TestClient
 
-from contracts import ClaimCard, ContradictionStatus, Decision, EventType, EvidenceGrade, ObjectType, ResearchObject, RuntimeEvent
+from contracts import ArticleType, ClaimCard, ContradictionStatus, Decision, EventType, EvidenceGrade, ObjectType, ResearchObject, RuntimeEvent
+from runtime_core.goldset import summarize_gold_results
+from runtime_core.judge_release import judge_release_id
 from runtime_core.osf import sign_oauth_state
 from runtime_core.repos import InMemoryRuntimeRepository
 
@@ -2287,6 +2290,152 @@ def test_default_calibration_receipt_uses_current_working_gold_set(client: TestC
     assert receipt["provider"] == "reviewer-panel"
     assert receipt["corpus_status"] == "working"
     assert receipt["case_count"] == 30
+    assert receipt["valid"] is False
+
+
+def _complete_calibration_artifact(release_id: str, generated_at: datetime) -> dict[str, Any]:
+    article_types = [item.value for item in ArticleType]
+    decisions = [item.value for item in Decision]
+    results = [
+        {
+            "entry_id": f"case-{index}",
+            "article_type": article_types[index % len(article_types)],
+            "domain_slug": f"domain-{index % 8}",
+            "expected_decision": decisions[index % len(decisions)],
+            "actual_decision": decisions[index % len(decisions)],
+            "duration_s": 1.0,
+            "cost_usd": 0.01,
+        }
+        for index in range(100)
+    ]
+    return {
+        "run_meta": {
+            "timestamp": generated_at.isoformat(),
+            "corpus_status": "adjudicated",
+            "target_judge_release_id": release_id,
+            "judge_release_id": release_id,
+            "judge_release_consistent": True,
+            "judge_release_target_matched": True,
+            "inter_adjudicator_decision_agreement": 0.9,
+            "inter_adjudicator_kappa": 0.8,
+            "labels_frozen_at": (generated_at - timedelta(seconds=2)).isoformat(),
+            "labels_revealed_at": (generated_at - timedelta(seconds=1)).isoformat(),
+        },
+        "summary": summarize_gold_results(results),
+        "results": results,
+    }
+
+
+def _test_judge_release(code_sha: str) -> dict[str, Any]:
+    release: dict[str, Any] = {
+        "code_sha": code_sha,
+        "policy_version": "judge-policy-v1",
+        "reviewer_prompt_version": "reviewer-test-v1",
+        "editor_prompt_version": "editor-test-v1",
+        "provider": "reviewer-panel",
+        "models": ["model-a", "model-b"],
+        "settings": {"accept_quorum_min": 2},
+    }
+    return {"id": judge_release_id(release), **release}
+
+
+def test_calibration_requires_post_evaluation_signoff_and_active_release_binding(
+    client: TestClient,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from apps.runtime_api.app import reset_calibration_cache
+    from apps.runtime_api.app import _SERVICE_GIT_SHA
+    from runtime_core.judge_release import unsigned_calibration_sha256
+
+    release = _test_judge_release(_SERVICE_GIT_SHA)
+    release_id = release["id"]
+    generated_at = datetime.now(timezone.utc) - timedelta(seconds=2)
+    artifact = _complete_calibration_artifact(release_id, generated_at)
+    artifact["run_meta"]["human_signoff"] = {
+        "approved": True,
+        "results_reviewed": True,
+        "limitations_reviewed": True,
+        "evaluation_sha256": unsigned_calibration_sha256(artifact),
+        "judge_release_id": release_id,
+        "signed_by": "calibration-chair",
+        "signed_at": datetime.now(timezone.utc).isoformat(),
+        "statement": "I reviewed the measured results and stated limitations.",
+    }
+    calibration_path = tmp_path / "signed-calibration.json"
+    calibration_path.write_text(__import__("json").dumps(artifact))
+    active_release_path = tmp_path / "active-release.json"
+    active_release_path.write_text(
+        __import__("json").dumps(
+            {
+                **release,
+                "calibration": {
+                    "artifact": calibration_path.name,
+                    "sha256": hashlib.sha256(calibration_path.read_bytes()).hexdigest(),
+                },
+            }
+        )
+    )
+    monkeypatch.setenv("RESEARKA_V2_CALIBRATION_PATH", str(calibration_path))
+    monkeypatch.setenv("RESEARKA_V2_ACTIVE_JUDGE_RELEASE_PATH", str(active_release_path))
+    reset_calibration_cache()
+
+    receipt = client.get("/calibration").json()["receipt"]
+
+    assert receipt["human_signed"] is True
+    assert receipt["judge_release_bound"] is True
+    assert receipt["valid"] is True
+
+    artifact["summary"]["class_metrics"] = {}
+    artifact["run_meta"]["human_signoff"]["evaluation_sha256"] = unsigned_calibration_sha256(artifact)
+    calibration_path.write_text(__import__("json").dumps(artifact))
+    active_release = __import__("json").loads(active_release_path.read_text())
+    active_release["calibration"]["sha256"] = hashlib.sha256(calibration_path.read_bytes()).hexdigest()
+    active_release_path.write_text(__import__("json").dumps(active_release))
+
+    receipt = client.get("/calibration").json()["receipt"]
+
+    assert receipt["metrics_complete"] is False
+    assert receipt["valid"] is False
+
+
+def test_calibration_rejects_predated_signoff_and_wrong_release_sha(
+    client: TestClient,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from apps.runtime_api.app import reset_calibration_cache
+    from apps.runtime_api.app import _SERVICE_GIT_SHA
+    from runtime_core.judge_release import unsigned_calibration_sha256
+
+    release = _test_judge_release(_SERVICE_GIT_SHA)
+    release_id = release["id"]
+    generated_at = datetime.now(timezone.utc)
+    artifact = _complete_calibration_artifact(release_id, generated_at)
+    artifact["run_meta"]["human_signoff"] = {
+        "approved": True,
+        "results_reviewed": True,
+        "limitations_reviewed": True,
+        "evaluation_sha256": unsigned_calibration_sha256(artifact),
+        "judge_release_id": release_id,
+        "signed_by": "calibration-chair",
+        "signed_at": "1900-01-01T00:00:00Z",
+        "statement": "Invalid predated signoff.",
+    }
+    calibration_path = tmp_path / "invalid-calibration.json"
+    calibration_path.write_text(__import__("json").dumps(artifact))
+    active_release_path = tmp_path / "active-release.json"
+    active_release_path.write_text(
+        __import__("json").dumps({**release, "calibration": {"sha256": "wrong"}})
+    )
+    monkeypatch.setenv("RESEARKA_V2_CALIBRATION_PATH", str(calibration_path))
+    monkeypatch.setenv("RESEARKA_V2_ACTIVE_JUDGE_RELEASE_PATH", str(active_release_path))
+    reset_calibration_cache()
+
+    receipt = client.get("/calibration").json()["receipt"]
+
+    assert receipt["human_signed"] is False
+    assert receipt["judge_release_bound"] is False
     assert receipt["valid"] is False
 
 

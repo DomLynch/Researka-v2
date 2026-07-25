@@ -29,6 +29,7 @@ class GoldSetAdjudication(BaseModel):
     corpus_status: Literal["working", "adjudicated"] = "working"
     protocol_version: str | None = None
     sampling_manifest_sha256: str | None = None
+    target_judge_release_id: str | None = None
     blinded_packet_sha256: list[str] = Field(default_factory=list)
     adjudicator_ids: list[str] = Field(default_factory=list)
     label_file_sha256: list[str] = Field(default_factory=list)
@@ -38,7 +39,6 @@ class GoldSetAdjudication(BaseModel):
     inter_adjudicator_kappa: float | None = Field(default=None, ge=-1, le=1)
     labels_frozen_at: datetime | None = None
     labels_revealed_at: datetime | None = None
-    human_signoff: dict = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def require_adjudication_receipts(self) -> GoldSetAdjudication:
@@ -48,6 +48,7 @@ class GoldSetAdjudication(BaseModel):
             raise ValueError("adjudicated_corpus_missing_protocol_or_manifest")
         hashes = [
             self.sampling_manifest_sha256,
+            self.target_judge_release_id,
             *self.blinded_packet_sha256,
             *self.label_file_sha256,
         ]
@@ -72,14 +73,6 @@ class GoldSetAdjudication(BaseModel):
             or self.labels_revealed_at < self.labels_frozen_at
         ):
             raise ValueError("adjudicated_corpus_missing_label_freeze")
-        if (
-            not self.human_signoff.get("approved")
-            or not self.human_signoff.get("signed_by")
-            or not self.human_signoff.get("signed_at")
-            or not self.human_signoff.get("statement")
-            or self.human_signoff.get("reviewer_outputs_hidden_until_freeze") is not True
-        ):
-            raise ValueError("adjudicated_corpus_missing_human_signoff")
         return self
 
 

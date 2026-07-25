@@ -118,6 +118,11 @@ def run_gold_entry(entry: GoldSetEntry, engine: WorkflowEngine) -> dict:
         "actual_overclaim_verdict": None,
         "expected_synthesis_quality_verdict": entry.expected.synthesis_quality_verdict,
         "actual_synthesis_quality_verdict": None,
+        "actual_review_summary": "",
+        "actual_required_revisions": [],
+        "actual_major_issues": [],
+        "judge_release_id": None,
+        "judge_release": None,
         "accept_blockers": [],
     }
 
@@ -166,6 +171,11 @@ def run_gold_entry(entry: GoldSetEntry, engine: WorkflowEngine) -> dict:
     record["actual_claim_support_verdict"] = review_metadata.get("claim_support_verdict")
     record["actual_overclaim_verdict"] = review_metadata.get("overclaim_verdict")
     record["actual_synthesis_quality_verdict"] = review_metadata.get("synthesis_quality_verdict")
+    record["actual_review_summary"] = review.body_markdown
+    record["actual_required_revisions"] = list(review_metadata.get("required_revisions") or [])
+    record["actual_major_issues"] = list(review_metadata.get("major_issues") or [])
+    record["judge_release_id"] = review_metadata.get("judge_release_id")
+    record["judge_release"] = review_metadata.get("judge_release")
     record["accept_blockers"] = _accept_blockers(review_metadata)
     actual_rubric_scores = record["actual_rubric_scores"]
     record["rubric_score_deltas"] = {
@@ -233,6 +243,12 @@ def summarize_gold_results(records: list[dict]) -> dict:
         if actual == expected:
             correct += 1
         else:
+            reasons = (
+                record.get("actual_required_revisions")
+                or record.get("actual_major_issues")
+                or ([record["error"]] if record.get("error") else [])
+                or ([record["actual_review_summary"]] if record.get("actual_review_summary") else [])
+            )
             mismatches.append(
                 {
                     "entry_id": record.get("entry_id"),
@@ -242,6 +258,7 @@ def summarize_gold_results(records: list[dict]) -> dict:
                     "actual": actual,
                     "accept_blockers": record.get("accept_blockers", []),
                     "error": record.get("error"),
+                    "reason": "; ".join(str(reason).strip() for reason in reasons if str(reason).strip()),
                 }
             )
         article_type = str(record.get("article_type", "unknown"))
@@ -328,7 +345,7 @@ def evaluate_gold_set(
     started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     total = len(corpus.entries)
     records: list[dict] = []
-    artifact = {
+    artifact: dict[str, Any] = {
         "run_meta": {
             "timestamp": started_at,
             "entry_count": total,
@@ -339,11 +356,38 @@ def evaluate_gold_set(
         },
         "summary": summarize_gold_results(records),
         "results": records,
+        "limitations": [
+            "Performance is specific to the frozen submission sample, article types, domains, and judge release.",
+            "Adjudicated labels are review judgments, not proof that every scientific conclusion is objectively true.",
+            "Provider nondeterminism may change repeated-run latency, cost, and borderline decisions.",
+        ],
     }
     for index, entry in enumerate(corpus.entries, start=1):
         record = run_gold_entry(entry, active_engine)
         records.append(record)
         artifact["summary"] = summarize_gold_results(records)
+        release_records = [
+            item
+            for item in records
+            if item.get("judge_release_id") and isinstance(item.get("judge_release"), dict)
+        ]
+        releases = {
+            str(item["judge_release_id"]): item["judge_release"]
+            for item in release_records
+        }
+        release_consistent = len(release_records) == len(records) and len(releases) == 1
+        artifact["run_meta"]["judge_release_consistent"] = release_consistent
+        if release_consistent:
+            release_id, release = next(iter(releases.items()))
+            artifact["run_meta"]["judge_release_id"] = release_id
+            artifact["run_meta"]["judge_release"] = release
+            artifact["run_meta"]["judge_release_target_matched"] = (
+                release_id == artifact["run_meta"].get("target_judge_release_id")
+            )
+        else:
+            artifact["run_meta"].pop("judge_release_id", None)
+            artifact["run_meta"].pop("judge_release", None)
+            artifact["run_meta"]["judge_release_target_matched"] = False
         if progress_callback is not None:
             progress_callback(index, total, record, artifact)
     return artifact
@@ -393,7 +437,7 @@ def render_gold_set_report(artifact: dict) -> str:
             "",
             "## Mismatches",
             "",
-            "| Entry | Article type | Expected | Actual | Error |",
+            "| Entry | Article type | Expected | Actual | Reason |",
             "|---|---|---|---|---|",
         ]
     )
@@ -406,7 +450,7 @@ def render_gold_set_report(artifact: dict) -> str:
                     article_type=mismatch.get("article_type", "unknown"),
                     expected=mismatch.get("expected", "unknown"),
                     actual=mismatch.get("actual", "unknown"),
-                    error=(mismatch.get("error") or "").replace("\n", " "),
+                    error=(mismatch.get("reason") or mismatch.get("error") or "").replace("\n", " "),
                 )
             )
     else:
