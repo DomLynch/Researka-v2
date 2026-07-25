@@ -2345,10 +2345,10 @@ def test_calibration_requires_post_evaluation_signoff_and_active_release_binding
     monkeypatch,
 ) -> None:
     from apps.runtime_api.app import reset_calibration_cache
-    from apps.runtime_api.app import _SERVICE_GIT_SHA
+    from apps.runtime_api.app import _JUDGE_CODE_SHA
     from runtime_core.judge_release import unsigned_calibration_sha256
 
-    release = _test_judge_release(_SERVICE_GIT_SHA)
+    release = _test_judge_release(_JUDGE_CODE_SHA)
     release_id = release["id"]
     generated_at = datetime.now(timezone.utc) - timedelta(seconds=2)
     artifact = _complete_calibration_artifact(release_id, generated_at)
@@ -2405,10 +2405,10 @@ def test_calibration_rejects_predated_signoff_and_wrong_release_sha(
     monkeypatch,
 ) -> None:
     from apps.runtime_api.app import reset_calibration_cache
-    from apps.runtime_api.app import _SERVICE_GIT_SHA
+    from apps.runtime_api.app import _JUDGE_CODE_SHA
     from runtime_core.judge_release import unsigned_calibration_sha256
 
-    release = _test_judge_release(_SERVICE_GIT_SHA)
+    release = _test_judge_release(_JUDGE_CODE_SHA)
     release_id = release["id"]
     generated_at = datetime.now(timezone.utc)
     artifact = _complete_calibration_artifact(release_id, generated_at)

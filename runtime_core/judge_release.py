@@ -66,6 +66,30 @@ def resolve_git_sha() -> str:
 SERVICE_GIT_SHA = resolve_git_sha()
 
 
+def resolve_judge_code_sha(root: Path | None = None) -> str:
+    root = root or Path(__file__).resolve().parents[1]
+    paths = [
+        *sorted((root / "runtime_core").glob("**/*.py")),
+        *sorted((root / "contracts").glob("**/*.py")),
+        root / "apps/runtime_api/app.py",
+        root / "pyproject.toml",
+        root / "uv.lock",
+    ]
+    digest = hashlib.sha256()
+    included = 0
+    for path in paths:
+        if not path.is_file():
+            continue
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        included += 1
+    return f"sha256:{digest.hexdigest()}" if included else "unknown"
+
+
+JUDGE_CODE_SHA = resolve_judge_code_sha()
+
+
 def unsigned_calibration_sha256(raw: dict) -> str:
     unsigned = dict(raw)
     run_meta = dict(unsigned.get("run_meta", {}))
@@ -271,7 +295,8 @@ def build_judge_release(
     observed_models = sorted({str(item).strip() for item in observed if str(item).strip()}) if isinstance(observed, list) else []
     configured_models = sorted({item.strip() for item in model.split("|") if item.strip()})
     manifest: dict[str, object] = {
-        "code_sha": SERVICE_GIT_SHA,
+        "code_sha": JUDGE_CODE_SHA,
+        "source_commit": SERVICE_GIT_SHA,
         "policy_version": JUDGE_POLICY_VERSION,
         "reviewer_prompt_version": REVIEWER_PROMPT_VERSION,
         "editor_prompt_version": EDITOR_PROMPT_VERSION,

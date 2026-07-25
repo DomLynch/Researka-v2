@@ -20,6 +20,7 @@ from runtime_core.agent_query import fail_agent_query_job, run_agent_query_job
 from runtime_core.evidence_quality import classified_title, contradiction_status_for_text, evidence_profile
 from runtime_core.failure_classifier import classify_failure_reason
 from runtime_core.judge_release import (
+    JUDGE_CODE_SHA as _JUDGE_CODE_SHA,
     SERVICE_GIT_SHA as _SERVICE_GIT_SHA,
     calibration_metrics_complete,
     calibration_timeline_valid,
@@ -190,7 +191,7 @@ def _judge_release_matches_calibration(receipt: dict) -> bool:
         and release_id.startswith("sha256:")
         and len(release_id) == 71
         and release.get("id") == release_id
-        and release.get("code_sha") == _SERVICE_GIT_SHA
+        and release.get("code_sha") == _JUDGE_CODE_SHA
         and calibration.get("sha256") == receipt.get("sha256")
     )
 

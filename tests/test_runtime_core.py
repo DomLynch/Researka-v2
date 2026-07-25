@@ -5,7 +5,11 @@ import pytest
 
 from runtime_core.compiler import canonical_bundle_facts, compile_publication
 from runtime_core.evidence_quality import evidence_profile, publication_class, support_for_claim
-from runtime_core.judge_release import build_judge_release, judge_release_manifest_valid
+from runtime_core.judge_release import (
+    build_judge_release,
+    judge_release_manifest_valid,
+    resolve_judge_code_sha,
+)
 from runtime_core.gates import run_publish_gates
 from runtime_core.failure_classifier import classify_failure_reason
 from runtime_core.prompts import REVIEWER_PROMPT_VERSION
@@ -140,6 +144,26 @@ def test_judge_release_is_stable_and_prompt_bound(tmp_path, monkeypatch) -> None
     calibration_identity = first["calibration"]
     assert isinstance(calibration_identity, dict)
     assert calibration_identity["artifact"] == "gold.json"
+
+
+def test_judge_code_hash_ignores_attestations_but_tracks_code(tmp_path) -> None:
+    (tmp_path / "runtime_core").mkdir()
+    (tmp_path / "contracts").mkdir()
+    (tmp_path / "apps/runtime_api").mkdir(parents=True)
+    (tmp_path / "calibration").mkdir()
+    source = tmp_path / "runtime_core/judge.py"
+    source.write_text("POLICY = 1\n")
+    (tmp_path / "contracts/models.py").write_text("class Decision: pass\n")
+    (tmp_path / "apps/runtime_api/app.py").write_text("STATUS = 'ok'\n")
+
+    baseline = resolve_judge_code_sha(tmp_path)
+    (tmp_path / "calibration/receipt.json").write_text('{"release":"attested"}\n')
+
+    assert resolve_judge_code_sha(tmp_path) == baseline
+
+    source.write_text("POLICY = 2\n")
+
+    assert resolve_judge_code_sha(tmp_path) != baseline
 
 
 def test_publication_sources_prefer_bundle_and_parse_only_reference_receipts() -> None:
