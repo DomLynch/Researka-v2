@@ -150,6 +150,8 @@ def test_freeze_creates_private_diverse_packets_without_outcome_leakage(tmp_path
     assert receipt["case_count"] == 120
     assert receipt["historical_decision_strata"] == {"accept": 40, "reject": 40, "revise": 40}
     assert set(receipt["article_type_counts"]) == {item.value for item in ArticleType}
+    assert receipt["missing_article_types"] == []
+    assert receipt["article_type_coverage_complete"] is True
     assert len(receipt["domain_counts"]) == 10
     assert receipt["private_material_committed"] is False
     assert [case["case_id"] for case in first["cases"]] != [case["case_id"] for case in second["cases"]]
@@ -175,6 +177,26 @@ def test_sampler_preserves_rare_article_types_across_many_domain_buckets() -> No
     selected = select_candidates(candidates, size=120, seed="rare-type-regression")
 
     assert {item["article_type"] for item in selected} == {item.value for item in ArticleType}
+
+
+def test_freeze_records_missing_real_article_type_without_using_synthetic_cases(tmp_path: Path) -> None:
+    candidates = [
+        candidate
+        for index in range(150)
+        if (candidate := _candidate(index))["article_type"] != "empirical_study"
+    ]
+
+    receipt = freeze_candidates(
+        candidates,
+        out_dir=tmp_path / "private",
+        receipt_path=tmp_path / "receipt.json",
+        size=120,
+        seed="missing-real-type",
+    )
+
+    assert receipt["missing_article_types"] == ["empirical_study"]
+    assert receipt["article_type_coverage_complete"] is False
+    assert receipt["corpus_status"] == "blinded_incomplete_coverage"
 
 
 def test_merge_rejects_same_adjudicator_and_unresolved_conflict(tmp_path: Path) -> None:

@@ -247,8 +247,8 @@ def select_candidates(candidates: list[dict], *, size: int, seed: str) -> list[d
         quota = base + (1 if index < remainder else 0)
         decision_candidates = [item for item in candidates if item["historical_decision"] == decision]
         selected.extend(_round_robin(decision_candidates, quota, f"{seed}:{decision}"))
-    if {item["article_type"] for item in selected} != {item.value for item in ArticleType}:
-        raise ValueError("sample_does_not_span_all_supported_article_types")
+    if {item["article_type"] for item in selected} != {item["article_type"] for item in candidates}:
+        raise ValueError("sample_does_not_span_available_real_article_types")
     if len({item["domain_slug"] for item in selected}) < 8:
         raise ValueError("sample_requires_at_least_eight_domains")
     return _deterministic_order(selected, seed)
@@ -263,6 +263,8 @@ def freeze_candidates(
     seed: str,
 ) -> dict:
     selected = select_candidates(candidates, size=size, seed=seed)
+    sampled_types = {item["article_type"] for item in selected}
+    missing_types = sorted({item.value for item in ArticleType} - sampled_types)
     created_at = datetime.now(timezone.utc).isoformat()
     cases = []
     manifest_cases = []
@@ -346,9 +348,11 @@ def freeze_candidates(
         "blinded_packet_sha256": [_file_sha256(path) for path in packet_paths],
         "historical_decision_strata": dict(sorted(Counter(item["historical_decision"] for item in selected).items())),
         "article_type_counts": dict(sorted(Counter(item["article_type"] for item in selected).items())),
+        "missing_article_types": missing_types,
+        "article_type_coverage_complete": not missing_types,
         "domain_counts": dict(sorted(Counter(item["domain_slug"] for item in selected).items())),
         "private_material_committed": False,
-        "corpus_status": "blinded_pending_adjudication",
+        "corpus_status": "blinded_pending_adjudication" if not missing_types else "blinded_incomplete_coverage",
     }
     _write_json(receipt_path, receipt)
     return receipt

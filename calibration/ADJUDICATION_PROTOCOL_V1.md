@@ -14,6 +14,10 @@ Researka decisions, submitter identity, or reviewer output to adjudicators.
 - Deduplicate by the original submission content hash.
 - Keep the source submission IDs and historical decisions only in the private
   manifest. They must never appear in adjudicator packets.
+- If production has no genuine case for a supported article type, freeze the
+  available real cases and list the missing type in the public receipt. Do not
+  substitute a synthetic case; certification remains blocked until coverage is
+  complete.
 
 ## Adjudicator eligibility
 
