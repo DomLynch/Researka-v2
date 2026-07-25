@@ -1,12 +1,12 @@
 {
   "protocol_version": "researka-blinded-adjudication-v1",
-  "created_at": "2026-07-25T19:06:58.096977+00:00",
+  "created_at": "2026-07-25T19:10:38.256468+00:00",
   "case_count": 120,
-  "sampling_manifest_sha256": "sha256:fb7b455a470a3188b61a6ba4759849b2296c573ae2ed3b5167b0ec9f84e0f495",
-  "target_judge_release_id": "sha256:db31f8c302269da89aa5f8ffb7b2c4009be93fb257279e89b357d23f714e560f",
+  "sampling_manifest_sha256": "sha256:185074ac194f638de1d149d80cda727b5fc8cd618e76025c7fa7fdf8ab176b85",
+  "target_judge_release_id": "sha256:d5c676bccf54f498f2e51359944d2547b714effbd6001d703f5fda4ea64be018",
   "blinded_packet_sha256": [
-    "sha256:4541baef387442b673bc6aecf0147f2dc1baab6eb9caaa0649317527639aca82",
-    "sha256:7ddb67dd79e4574ee8ce8b787f82e7c5c389d9263cc4553986a5ac8acb75e813"
+    "sha256:7238edf52a1a95330e87b53d223025c5180000320a6a4711b02fa9e23ce6a4a8",
+    "sha256:5871379aa9d72daa58c566375837084e47d069e4befb2d3742167a27131379f5"
   ],
   "historical_decision_strata": {
     "accept": 40,
