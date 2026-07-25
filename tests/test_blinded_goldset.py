@@ -218,6 +218,8 @@ def test_freeze_creates_private_diverse_packets_without_outcome_leakage(tmp_path
 
     assert receipt["case_count"] == 120
     assert receipt["historical_decision_strata"] == {"accept": 40, "reject": 40, "revise": 40}
+    assert receipt["supported_article_types"] == sorted(item.value for item in ArticleType)
+    assert receipt["covered_article_types"] == sorted(item.value for item in ArticleType)
     assert set(receipt["article_type_counts"]) == {item.value for item in ArticleType}
     assert receipt["missing_article_types"] == []
     assert receipt["article_type_coverage_complete"] is True
@@ -264,6 +266,10 @@ def test_freeze_records_missing_real_article_type_without_using_synthetic_cases(
         judge_release=_judge_release(),
     )
 
+    assert receipt["supported_article_types"] == sorted(item.value for item in ArticleType)
+    assert receipt["covered_article_types"] == sorted(
+        item.value for item in ArticleType if item is not ArticleType.EMPIRICAL_STUDY
+    )
     assert receipt["missing_article_types"] == ["empirical_study"]
     assert receipt["article_type_coverage_complete"] is False
     assert receipt["corpus_status"] == "blinded_incomplete_coverage"

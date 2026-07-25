@@ -337,8 +337,9 @@ def freeze_candidates(
 ) -> dict:
     target_release = _judge_release(judge_release)
     selected = select_candidates(candidates, size=size, seed=seed)
+    supported_types = {item.value for item in ArticleType}
     sampled_types = {item["article_type"] for item in selected}
-    missing_types = sorted({item.value for item in ArticleType} - sampled_types)
+    missing_types = sorted(supported_types - sampled_types)
     created_at = datetime.now(timezone.utc).isoformat()
     cases = []
     manifest_cases = []
@@ -426,6 +427,8 @@ def freeze_candidates(
         "target_judge_release_id": target_release["id"],
         "blinded_packet_sha256": [_file_sha256(path) for path in packet_paths],
         "historical_decision_strata": dict(sorted(Counter(item["historical_decision"] for item in selected).items())),
+        "supported_article_types": sorted(supported_types),
+        "covered_article_types": sorted(sampled_types),
         "article_type_counts": dict(sorted(Counter(item["article_type"] for item in selected).items())),
         "missing_article_types": missing_types,
         "article_type_coverage_complete": not missing_types,
