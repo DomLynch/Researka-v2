@@ -1,11 +1,12 @@
 {
   "protocol_version": "researka-blinded-adjudication-v1",
-  "created_at": "2026-07-25T17:56:17.481797+00:00",
+  "created_at": "2026-07-25T19:06:58.096977+00:00",
   "case_count": 120,
-  "sampling_manifest_sha256": "sha256:07804bb60d710e132f754004e80c4303d67bb4f2c8f52453ae37743b87b48085",
+  "sampling_manifest_sha256": "sha256:fb7b455a470a3188b61a6ba4759849b2296c573ae2ed3b5167b0ec9f84e0f495",
+  "target_judge_release_id": "sha256:db31f8c302269da89aa5f8ffb7b2c4009be93fb257279e89b357d23f714e560f",
   "blinded_packet_sha256": [
-    "sha256:ec25aca60ac0f0b987c4385b600f5c85b609f535e71d7d9a6646902ff11eb07b",
-    "sha256:dd9579f49e240b70228fd7c0b5d84ca2abe7237af88fe4d201cc9655f501063c"
+    "sha256:4541baef387442b673bc6aecf0147f2dc1baab6eb9caaa0649317527639aca82",
+    "sha256:7ddb67dd79e4574ee8ce8b787f82e7c5c389d9263cc4553986a5ac8acb75e813"
   ],
   "historical_decision_strata": {
     "accept": 40,
@@ -29,9 +30,9 @@
     "economics_research": 2,
     "exercise": 2,
     "finance_research": 4,
-    "general": 12,
-    "longevity": 41,
-    "longevity_research": 25
+    "general": 14,
+    "longevity": 42,
+    "longevity_research": 22
   },
   "private_material_committed": false,
   "corpus_status": "blinded_incomplete_coverage"
