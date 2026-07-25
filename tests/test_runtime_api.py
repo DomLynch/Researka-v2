@@ -119,20 +119,24 @@ def test_version_returns_sha_and_start_time(client: TestClient) -> None:
 
 
 def test_resolve_git_sha_prefers_live_checkout_to_stale_file(monkeypatch) -> None:
-    import apps.runtime_api.app as app_module
+    import runtime_core.judge_release as release_module
 
     class GitResult:
         returncode = 0
         stdout = "b" * 40
 
     monkeypatch.setenv("RESEARKA_GIT_SHA", "a" * 40)
-    monkeypatch.setattr(app_module.subprocess, "run", lambda *args, **kwargs: GitResult())
-    monkeypatch.setattr(app_module.Path, "read_text", lambda self: (_ for _ in ()).throw(AssertionError("stale SHA read")))
+    monkeypatch.setattr(release_module.subprocess, "run", lambda *args, **kwargs: GitResult())
+    monkeypatch.setattr(
+        release_module.Path,
+        "read_text",
+        lambda self: (_ for _ in ()).throw(AssertionError("stale SHA read")),
+    )
 
-    assert app_module._resolve_git_sha() == "b" * 40
+    assert release_module.resolve_git_sha() == "b" * 40
 
     GitResult.returncode = 1
-    assert app_module._resolve_git_sha() == "a" * 40
+    assert release_module.resolve_git_sha() == "a" * 40
 
 
 def test_architecture(client: TestClient) -> None:
@@ -834,7 +838,11 @@ def test_publications_listing_is_bounded_and_paginated(client: TestClient) -> No
             ResearchObject(
                 object_type=ObjectType.PUBLICATION,
                 title=f"Publication {index}",
-                metadata={"article_type": "research_synthesis", "public_visibility": "listed"},
+                metadata={
+                    "article_type": "research_synthesis",
+                    "judge_release_id": f"sha256:{index}",
+                    "public_visibility": "listed",
+                },
             )
         )
 
@@ -845,6 +853,12 @@ def test_publications_listing_is_bounded_and_paginated(client: TestClient) -> No
     assert page["limit"] == 1
     assert page["offset"] == 1
     assert page["has_more"] is True
+    assert page["next_offset"] == 2
+    assert page["publications"][0]["judge_release_id"] == "sha256:1"
+
+    final_page = client.get("/publications?limit=1&offset=2").json()
+    assert final_page["has_more"] is False
+    assert final_page["next_offset"] is None
 
 
 def test_publication_response_relabels_scoping_only_research_synthesis(client: TestClient) -> None:

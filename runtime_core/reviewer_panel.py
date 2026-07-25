@@ -279,6 +279,9 @@ class ReviewerPanel:
             "route": route,
             "winner_provider": winner.response.provider,
             "winner_model": winner.response.model,
+            "panel_models": sorted({
+                result.response.model for result in used if result.response and result.response.model.strip()
+            }),
             "accept_quorum_models": self._accept_quorum_models(*used),
             **metadata,
         }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from contracts import ArticleType, ContradictionStatus
@@ -11,6 +12,17 @@ WEAK_PATTERN = re.compile(
 )
 DIRECT_PATTERN = re.compile(r"contains\s+(\d+)\s+direct clinical sources", re.IGNORECASE)
 BUNDLE_REFERENCE_PATTERN = re.compile(r"\[bundle:(\d+)\]", re.IGNORECASE)
+DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
+NUMERIC_CITATION_PATTERN = re.compile(r"\[(?:\d+[\s,;-]*)+\]|\b(?:source|ref(?:erence)?)\s*#?\d+\b", re.IGNORECASE)
+PMID_PATTERN = re.compile(r"\bPMID\s*:?\s*\d+\b", re.IGNORECASE)
+QUANTITY_PATTERN = re.compile(
+    r"(?<![\w./])(?P<number>[+-]?(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+))(?:\s*-\s*|\s*)"
+    r"(?P<unit>(?:%|percent(?:age)?(?:\s+points?)?|pp|mmol|mol|mmhg|bpm|hz|"
+    r"mg|kg|ug|µg|μg|ng|ml|km|cm|mm|g|l|m|seconds?|minutes?|hours?|days?|weeks?|months?|years?)"
+    r"(?:/[A-Za-zµμ]+)?)?(?![A-Za-z])",
+    re.IGNORECASE,
+)
+BUNDLE_COUNT_PATTERN = re.compile(r"^\s*(?:sources?|papers?|studies|findings|receipts|claims)\b", re.IGNORECASE)
 UNASSESSED_VALUES = {"", "unknown", "not appraised", "not_appraised", "not extracted"}
 GENERIC_EVIDENCE_WORDS = {
     "about", "across", "evidence", "finding", "findings", "reported", "results",
@@ -58,6 +70,12 @@ def evidence_profile(*, text: str, source_bundle: list[dict[str, Any]] | None = 
     lower = text.lower()
     claims = claim_candidates(text)
     exact_traces = sum(1 for claim in claims if support_for_claim(claim, source_bundle))
+    quantitative_claims = quantitative_claim_candidates(text)
+    quantitative_traces = sum(
+        1
+        for claim in quantitative_claims
+        if support_for_claim(claim, source_bundle, require_quantitative_agreement=True)
+    )
     return {
         "weak_evidence_ratio": round(weak_ratio, 4),
         "direct_clinical_sources": direct_count,
@@ -68,6 +86,11 @@ def evidence_profile(*, text: str, source_bundle: list[dict[str, Any]] | None = 
         "claim_trace_count": len(claims),
         "exact_claim_trace_count": exact_traces,
         "exact_claim_trace_ratio": round(exact_traces / len(claims), 4) if claims else None,
+        "quantitative_claim_count": len(quantitative_claims),
+        "quantitative_claim_trace_count": quantitative_traces,
+        "quantitative_claim_trace_ratio": (
+            round(quantitative_traces / len(quantitative_claims), 4) if quantitative_claims else None
+        ),
         "mixed_signal": any(term in lower for term in ("mixed", "heterogeneous", "disagreement", "tension")),
         "non_supportive_signal": any(term in lower for term in ("non-supportive", "does not support", "null or no extracted")),
         "indirect_signal": any(term in lower for term in ("indirect", "adjacent", "mechanistic")),
@@ -165,7 +188,66 @@ def _evidence_aligns(claim: str, source: dict[str, Any]) -> bool:
     return False
 
 
-def support_for_claim(text: str, sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _quantity_tokens(text: str, sources: list[dict[str, Any]] | None = None) -> set[tuple[str, str]]:
+    cleaned = BUNDLE_REFERENCE_PATTERN.sub(
+        " ",
+        DOI_PATTERN.sub(" ", PMID_PATTERN.sub(" ", NUMERIC_CITATION_PATTERN.sub(" ", text))),
+    )
+    for source in sources or []:
+        for field in ("doi", "cited_as"):
+            value = str(source.get(field) or "").strip()
+            if value:
+                cleaned = re.sub(re.escape(value), " ", cleaned, flags=re.IGNORECASE)
+    tokens: set[tuple[str, str]] = set()
+    for match in QUANTITY_PATTERN.finditer(cleaned):
+        raw_number = match.group("number").replace(",", "")
+        raw_unit = (match.group("unit") or "").strip().lower()
+        if not raw_unit and BUNDLE_COUNT_PATTERN.match(cleaned[match.end() :]):
+            continue
+        try:
+            number = format(Decimal(raw_number).normalize(), "f")
+        except InvalidOperation:
+            continue
+        if not raw_unit and Decimal(raw_number) == int(Decimal(raw_number)) and 1900 <= int(Decimal(raw_number)) <= 2100:
+            continue
+        unit = raw_unit.replace("μ", "u").replace("µ", "u")
+        if unit.startswith("percent"):
+            unit = "pp" if "point" in unit else "%"
+        elif unit.endswith("s") and unit not in {"mmhg"}:
+            unit = unit[:-1]
+        tokens.add((number, unit))
+    return tokens
+
+
+def quantitative_claim_candidates(text: str) -> list[str]:
+    return [
+        part.strip()
+        for part in re.split(r"\n+|(?<=[.!?])\s+", text)
+        if len(part.strip()) >= 40 and _quantity_tokens(part)
+    ][:30]
+
+
+def _quantities_agree(claim: str, sources: list[dict[str, Any]]) -> bool:
+    claim_tokens = _quantity_tokens(claim, sources)
+    if not claim_tokens:
+        return True
+    evidence_tokens: set[tuple[str, str]] = set()
+    for source in sources:
+        evidence = " ".join(
+            str(source.get(field) or "")
+            for field in ("quote", "evidence_span", "excerpt", "effect")
+        )
+        evidence_tokens.update(_quantity_tokens(evidence))
+    evidence_tokens.update((number, "") for number, _ in tuple(evidence_tokens))
+    return claim_tokens <= evidence_tokens
+
+
+def support_for_claim(
+    text: str,
+    sources: list[dict[str, Any]],
+    *,
+    require_quantitative_agreement: bool = False,
+) -> list[dict[str, Any]]:
     claim = text.lower()
     bundle_indexes = {int(value) - 1 for value in BUNDLE_REFERENCE_PATTERN.findall(text)}
     bundle_indexes = {index for index in bundle_indexes if 0 <= index < len(sources)}
@@ -191,11 +273,17 @@ def support_for_claim(text: str, sources: list[dict[str, Any]]) -> list[dict[str
             )
         )
     }
+    aligned_indexes = [
+        index
+        for index in sorted(bundle_indexes | doi_indexes | cited_as_indexes | span_indexes)
+        if _evidence_aligns(text, sources[index])
+    ]
+    aligned_sources = [sources[index] for index in aligned_indexes]
+    if require_quantitative_agreement and not _quantities_agree(text, aligned_sources):
+        return []
     support: list[dict[str, Any]] = []
-    for index in sorted(bundle_indexes | doi_indexes | cited_as_indexes | span_indexes):
+    for index in aligned_indexes:
         source = sources[index]
-        if not _evidence_aligns(text, source):
-            continue
         row = {
             "source_id": str(source.get("source_id") or f"source_{index + 1}"),
             "study": source.get("study") or source.get("title"),

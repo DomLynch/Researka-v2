@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import hashlib
 import hmac
 import re
@@ -20,6 +19,7 @@ from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, W
 from runtime_core.agent_query import fail_agent_query_job, run_agent_query_job
 from runtime_core.evidence_quality import classified_title, contradiction_status_for_text, evidence_profile
 from runtime_core.failure_classifier import classify_failure_reason
+from runtime_core.judge_release import SERVICE_GIT_SHA as _SERVICE_GIT_SHA
 from runtime_core.osf import (
     backfill_missing_publication_dois,
     build_oauth_authorization_url,
@@ -38,44 +38,6 @@ _calibration_path: str | None = None
 
 # Captured at module import for the /version endpoint.
 _SERVICE_STARTED_AT = datetime.now(timezone.utc).isoformat()
-
-
-def _resolve_git_sha() -> str:
-    """Best-effort SHA resolution for the /version endpoint.
-
-    Order:
-    1. Subprocess `git rev-parse HEAD` from package root
-    2. RESEARKA_GIT_SHA env var (packaged deployments without Git)
-    3. /etc/researka/git_sha file (packaged deployments without Git)
-    4. "unknown"
-    """
-    try:
-        repo_root = Path(__file__).resolve().parents[2]
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=2,
-            check=False,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        pass
-    env_sha = os.environ.get("RESEARKA_GIT_SHA", "").strip()
-    if env_sha:
-        return env_sha
-    sha_file = Path("/etc/researka/git_sha")
-    if sha_file.exists():
-        try:
-            return sha_file.read_text().strip() or "unknown"
-        except OSError:
-            pass
-    return "unknown"
-
-
-_SERVICE_GIT_SHA = _resolve_git_sha()
 DEFAULT_AGENT_DAILY_LIMIT = 10
 DEFAULT_INTAKE_REJECTION_BACKOFF = 3
 # Hours after which an intake rejection stops arming the submission backoff.
@@ -592,6 +554,7 @@ def _publication_response(repo: RuntimeRepository, publication: ResearchObject) 
     payload["doi"] = publication.metadata.get("doi")
     payload["doi_status"] = publication.metadata.get("doi_status")
     payload["osf_url"] = publication.metadata.get("osf_url")
+    payload["judge_release_id"] = publication.metadata.get("judge_release_id")
     return payload
 
 
@@ -854,6 +817,7 @@ def _public_decision_record(
         "gate_failures": gate_failures if isinstance(gate_failures, list) else [],
         "integrity": decision_metadata.get("integrity") if isinstance(decision_metadata.get("integrity"), dict) else None,
         "rubric_scores": _score_dict(review_metadata.get("rubric_scores")),
+        "rubric_calibration": review_metadata.get("rubric_calibration"),
         "required_revisions": required_revisions,
         "major_issues": major_issues,
         "minor_issues": minor_issues,
@@ -868,6 +832,8 @@ def _public_decision_record(
             "sparring": bool(review_metadata.get("sparring_fallback_used")),
         },
         "prompt_version": review_metadata.get("prompt_version"),
+        "judge_release_id": review_metadata.get("judge_release_id") or decision_metadata.get("judge_release_id"),
+        "judge_release": review_metadata.get("judge_release") or decision_metadata.get("judge_release"),
         "review_id": review.id if review else decision_metadata.get("review_id"),
         "review_summary": review_summary[:1000],
         "public_visible": True,
@@ -975,6 +941,7 @@ def _submission_decision_response(
         "integrity": public_record["integrity"],
         "review_summary": public_record["review_summary"],
         "rubric_scores": public_record["rubric_scores"],
+        "rubric_calibration": public_record["rubric_calibration"],
         "required_revisions": public_record["required_revisions"],
         "major_issues": public_record["major_issues"],
         "minor_issues": public_record["minor_issues"],
@@ -985,6 +952,8 @@ def _submission_decision_response(
         "models": public_record["models"],
         "fallback_used": public_record["fallback_used"],
         "prompt_version": public_record["prompt_version"],
+        "judge_release_id": public_record["judge_release_id"],
+        "judge_release": public_record["judge_release"],
         "dw_artifact_id": public_record["dw_artifact_id"],
         "dw_chain_url": public_record["dw_chain_url"],
         "resubmission": {
@@ -1227,6 +1196,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             publications = [publication for publication in publications if _publication_surface(publication) == normalized]
         listed = [publication for publication in publications if _is_publicly_listed(publication)]
         page = listed[offset : offset + limit]
+        has_more = offset + len(page) < len(listed)
         return {
             "publications": [
                 _publication_response(app.state.repository, publication)
@@ -1235,7 +1205,8 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             "total": len(listed),
             "limit": limit,
             "offset": offset,
-            "has_more": offset + len(page) < len(listed),
+            "has_more": has_more,
+            "next_offset": offset + len(page) if has_more else None,
         }
 
     @app.get("/publications/{publication_id}")
@@ -1461,6 +1432,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                 "review_id": r.id,
                 "recommendation": m.get("recommendation"),
                 "rubric_scores": m.get("rubric_scores", {}),
+                "rubric_calibration": m.get("rubric_calibration"),
                 "major_issues": m.get("major_issues", []),
                 "minor_issues": m.get("minor_issues", []),
                 "required_revisions": m.get("required_revisions", []),
@@ -1473,6 +1445,8 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                 "tokens_out": m.get("tokens_out", 0),
                 "cost_usd": m.get("cost_usd", 0.0),
                 "prompt_version": m.get("prompt_version"),
+                "judge_release_id": m.get("judge_release_id"),
+                "judge_release": m.get("judge_release"),
                 "created_at": r.created_at.isoformat(),
             })
         decisions_out = []
@@ -1488,6 +1462,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                 "model": m.get("model"),
                 "cost_usd": m.get("cost_usd", 0.0),
                 "prompt_version": m.get("prompt_version"),
+                "judge_release_id": m.get("judge_release_id"),
                 "created_at": d.created_at.isoformat(),
             })
         total_cost = sum(r.get("cost_usd", 0.0) for r in reviews_out)

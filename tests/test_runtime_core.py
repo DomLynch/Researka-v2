@@ -5,6 +5,7 @@ import pytest
 
 from runtime_core.compiler import canonical_bundle_facts, compile_publication
 from runtime_core.evidence_quality import evidence_profile, publication_class, support_for_claim
+from runtime_core.judge_release import build_judge_release
 from runtime_core.gates import run_publish_gates
 from runtime_core.failure_classifier import classify_failure_reason
 from runtime_core.prompts import REVIEWER_PROMPT_VERSION
@@ -86,6 +87,53 @@ def test_claim_support_rejects_citation_with_unrelated_receipt() -> None:
         "The treatment doubled survival in older adults (Lynch et al. 2026).",
         [source],
     ) == []
+
+
+def test_claim_support_requires_numeric_and_unit_agreement_when_requested() -> None:
+    source = {
+        "title": "Trial",
+        "cited_as": "Alpha 2026",
+        "excerpt": "The intervention reduced the primary risk by 12 percent in the tested adult population.",
+    }
+    claim = "The intervention reduced the primary risk by 47% in the tested adult population (Alpha 2026)."
+
+    assert support_for_claim(claim, [source])
+    assert support_for_claim(claim, [source], require_quantitative_agreement=True) == []
+
+    source["excerpt"] = "The intervention reduced the primary risk by 47 percent in the tested adult population."
+    assert support_for_claim(claim, [source], require_quantitative_agreement=True)
+
+    source["excerpt"] = "The intervention reduced the biomarker by 47 mg/L in the tested adult population."
+    claim = "The intervention reduced the biomarker by 47 mg/dL in the tested adult population (Alpha 2026)."
+    assert support_for_claim(claim, [source])
+    assert support_for_claim(claim, [source], require_quantitative_agreement=True) == []
+
+    source["excerpt"] = "The trial reported the endpoint after a 12-month follow-up in the tested adult population."
+    claim = "The trial reported the endpoint after a 12-week follow-up in the tested adult population (Alpha 2026)."
+    assert support_for_claim(claim, [source])
+    assert support_for_claim(claim, [source], require_quantitative_agreement=True) == []
+
+
+def test_judge_release_is_stable_and_prompt_bound(tmp_path, monkeypatch) -> None:
+    calibration = tmp_path / "gold.json"
+    calibration.write_text('{"cases":[]}')
+    monkeypatch.setenv("RESEARKA_V2_CALIBRATION_PATH", str(calibration))
+    inputs = {
+        "provider": "reviewer-panel",
+        "model": "panel",
+        "response_metadata": {"panel_models": ["model-b", "model-a"]},
+    }
+
+    first = build_judge_release(system_prompt="locked prompt", **inputs)
+    second = build_judge_release(system_prompt="locked prompt", **inputs)
+    changed = build_judge_release(system_prompt="changed prompt", **inputs)
+
+    assert first == second
+    assert first["id"] != changed["id"]
+    assert first["models"] == ["model-a", "model-b"]
+    calibration_identity = first["calibration"]
+    assert isinstance(calibration_identity, dict)
+    assert calibration_identity["artifact"] == "gold.json"
 
 
 def test_publication_sources_prefer_bundle_and_parse_only_reference_receipts() -> None:
@@ -652,6 +700,35 @@ def test_research_synthesis_trace_guard_requires_eighty_percent_exact() -> None:
 
     assert workflow._claim_trace_guard_revisions(submission)
     submission.metadata["abstract"] += " (Beta 2026)."
+    assert workflow._claim_trace_guard_revisions(submission) == []
+
+
+def test_claim_trace_guard_checks_abstract_numbers_against_evidence() -> None:
+    source = {
+        "title": "Alpha trial",
+        "doi": "10.1234/alpha",
+        "cited_as": "Alpha 2026",
+        "excerpt": "The intervention reduced the primary risk by 12 percent in the tested adult population.",
+    }
+    submission = ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Research Synthesis: bounded outcome",
+        metadata={
+            "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
+            "abstract": (
+                "The intervention reduced the primary risk by 47% in the tested adult population, "
+                "while uncertainty remains for other populations (Alpha 2026)."
+            ),
+            "source_bundle": [source],
+        },
+    )
+
+    assert workflow._claim_trace_guard_revisions(submission) == [
+        "Align every number and unit in the abstract and conclusion with its cited evidence span; "
+        "0/1 quantitative claims agree."
+    ]
+
+    source["excerpt"] = "The intervention reduced the primary risk by 47 percent in the tested adult population."
     assert workflow._claim_trace_guard_revisions(submission) == []
 
 
@@ -1229,6 +1306,15 @@ def test_workflow_uses_provider_contract_for_trace_metadata() -> None:
     assert review.metadata["tokens_in"] == 11
     assert review.metadata["tokens_out"] == 7
     assert review.metadata["cost_usd"] == 0.42
+    assert review.metadata["rubric_scores"]["claim_evidence_alignment"] == 4
+    assert review.metadata["rubric_scores"]["source_grounding"] == 4
+    assert set(review.metadata["rubric_calibration"]["changes"]) == {
+        "claim_evidence_alignment",
+        "source_grounding",
+    }
+    assert review.metadata["judge_release_id"].startswith("sha256:")
+    assert review.metadata["judge_release"]["models"] == ["stub-primary", "stub-sparring"]
+    assert review.metadata["judge_release"]["settings"]["accept_quorum_min"] == 2
 
 
 def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
@@ -1622,6 +1708,11 @@ def test_reviewer_panel_escalates_on_disagreement() -> None:
     assert result.response.metadata["primary_recommendation"] == "accept"
     assert result.response.metadata["sparring_recommendation"] == "reject"
     assert result.response.metadata["fallback_tiebreak_attempts"] == 1
+    assert result.response.metadata["panel_models"] == [
+        "google/gemma-4-31b-it",
+        "mimo-v2.5-pro",
+        "mistralai/mistral-small-2603",
+    ]
     assert result.response.usage.cost_usd == 0.3
 
 

@@ -90,12 +90,17 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     assert decision.status_code == 200
     decision_payload = decision.json()
     assert decision_payload["decision"] == "accept"
+    assert decision_payload["judge_release_id"].startswith("sha256:")
+    assert decision_payload["judge_release"]["code_sha"]
+    assert decision_payload["rubric_scores"]["source_grounding"] == 4
+    assert decision_payload["rubric_calibration"]["ceiling"] == 4
     assert decision_payload["resubmission"] == {"allowed": False, "parent_submission_id": None}
     assert decision_payload["publication"]["publication_id"] == publication.id
     assert decision_payload["publication"]["url"] == f"https://researka.org/papers/{publication.id}"
     assert decision_payload["publication"]["deduped"] is False
     assert decision_payload["publication_status"] == "published"
     assert decision_payload["publication_failure"] is None
+    assert publication.metadata["judge_release_id"] == decision_payload["judge_release_id"]
 
     repository.enqueue_job(RuntimeJob(target_object_id=publication.parent_object_id, stage=Stage.PUBLISH))
     duplicate_publish = client.post("/jobs/run-once", headers=_worker_headers())

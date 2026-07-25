@@ -12,8 +12,15 @@ from contracts import ArticleType, Decision, ObjectType, ResearchObject, Runtime
 from .compiler import compile_publication
 from .derivation_web import emit_decision_to_derivation_web, emit_publication_to_derivation_web
 from .doi_resolver import resolve_dois, resolve_source_locators, verify_source_metadata
-from .evidence_quality import classified_title, evidence_profile, publication_class
+from .evidence_quality import (
+    classified_title,
+    evidence_profile,
+    publication_class,
+    quantitative_claim_candidates,
+    support_for_claim,
+)
 from .integrity_client import check_integrity, index_integrity
+from .judge_release import build_judge_release
 from .osf import mint_publication_doi_from_repository, osf_publication_metadata_from_env
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
@@ -250,12 +257,69 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
     if not count:
         return ["Add at least one substantive, source-traceable claim before acceptance."]
     required = max(1, int(count * minimum_ratio + 0.999))
-    if count and exact >= required:
-        return []
-    return [
-        f"Add exact source tokens, DOI/PMID links, or evidence spans to major claims; "
-        f"{exact}/{count} claims are exactly traceable (required {required})."
-    ]
+    if exact < required:
+        return [
+            f"Add exact source tokens, DOI/PMID links, or evidence spans to major claims; "
+            f"{exact}/{count} claims are exactly traceable (required {required})."
+        ]
+    conclusion = "\n".join(
+        str(value)
+        for name, value in section_map.items()
+        if str(name).strip().lower() == "conclusion"
+    )
+    decisive_prose = "\n".join([str(submission.metadata.get("abstract") or ""), conclusion])
+    quantitative_claims = quantitative_claim_candidates(decisive_prose)
+    quantitative_exact = sum(
+        1
+        for claim in quantitative_claims
+        if support_for_claim(claim, bundle, require_quantitative_agreement=True)
+    )
+    if quantitative_exact < len(quantitative_claims):
+        return [
+            "Align every number and unit in the abstract and conclusion with its cited evidence span; "
+            f"{quantitative_exact}/{len(quantitative_claims)} quantitative claims agree."
+        ]
+    return []
+
+
+def _evidence_score_ceiling(
+    submission: ResearchObject,
+    scores: dict[str, int],
+) -> tuple[dict[str, int], dict[str, object] | None]:
+    sections = submission.metadata.get("sections")
+    section_map = sections if isinstance(sections, dict) else {}
+    raw_bundle = submission.metadata.get("source_bundle")
+    bundle = [item for item in raw_bundle if isinstance(item, dict)] if isinstance(raw_bundle, list) else []
+    profile = evidence_profile(
+        text="\n".join([str(submission.metadata.get("abstract") or ""), *map(str, section_map.values())]),
+        source_bundle=bundle,
+    )
+    reasons: list[str] = []
+    fields: set[str] = set()
+    directness = profile.get("directness_coverage")
+    risk_of_bias = profile.get("risk_of_bias_coverage")
+    if isinstance(directness, (int, float)) and directness < 0.8:
+        reasons.append(f"directness_coverage={directness}")
+        fields.update({"claim_evidence_alignment", "source_grounding"})
+    if isinstance(risk_of_bias, (int, float)) and risk_of_bias < 0.8:
+        reasons.append(f"risk_of_bias_coverage={risk_of_bias}")
+        fields.update({"claim_evidence_alignment", "source_grounding"})
+    if float(profile.get("weak_evidence_ratio") or 0) >= 0.6:
+        reasons.append(f"weak_evidence_ratio={profile['weak_evidence_ratio']}")
+        fields.add("claim_evidence_alignment")
+    adjusted = {key: min(value, 4) if key in fields else value for key, value in scores.items()}
+    changed = {
+        key: {"provider_score": scores[key], "stored_score": adjusted[key]}
+        for key in fields
+        if adjusted[key] != scores[key]
+    }
+    if not changed:
+        return adjusted, None
+    return adjusted, {
+        "ceiling": 4,
+        "changes": changed,
+        "reasons": reasons,
+    }
 
 
 def _publication_visibility(repository: RuntimeRepository, author_agent_id: object) -> str:
@@ -706,6 +770,13 @@ class WorkflowEngine:
             payload,
             recommendation=recommendation,
         )
+        rubric_scores, rubric_calibration = _evidence_score_ceiling(submission, rubric_scores)
+        judge_release = build_judge_release(
+            system_prompt=system_prompt,
+            provider=result.response.provider,
+            model=result.response.model,
+            response_metadata=result.response.metadata,
+        )
         metadata = {
             "prompt_version": REVIEWER_PROMPT_VERSION,
             "provider": result.response.provider,
@@ -723,7 +794,11 @@ class WorkflowEngine:
             "claim_support_verdict": claim_support,
             "overclaim_verdict": overclaim,
             "synthesis_quality_verdict": synthesis_quality,
+            "judge_release_id": judge_release["id"],
+            "judge_release": judge_release,
         }
+        if rubric_calibration:
+            metadata["rubric_calibration"] = rubric_calibration
         if recommendation == "accept":
             if (
                 not getattr(self.provider, "enforces_accept_quorum", False)
@@ -1187,6 +1262,7 @@ class WorkflowEngine:
                     "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
                     "notes": outcome.notes,
                     "review_id": review.id,
+                    "judge_release_id": review.metadata.get("judge_release_id"),
                     **(
                         {
                             "original_recommendation": original_recommendation,
@@ -1315,6 +1391,10 @@ class WorkflowEngine:
         ]
         decision = decisions[-1] if decisions else None
         review = repository.get_object(str(decision.metadata["review_id"])) if decision and decision.metadata.get("review_id") else None
+        if review:
+            publication.metadata.update({
+                "judge_release_id": review.metadata.get("judge_release_id"),
+            })
         publication = repository.create_object(publication)
         try:
             osf_metadata = _mint_publication_doi(repository, publication)
