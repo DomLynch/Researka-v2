@@ -2337,6 +2337,46 @@ def test_calibration_mismatches(client: TestClient, tmp_path, monkeypatch) -> No
     assert mismatches[1]["expected"] == "reject"
 
 
+def test_adjudicated_calibration_mismatches_do_not_expose_private_titles(
+    client: TestClient,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from apps.runtime_api.app import reset_calibration_cache
+
+    reset_calibration_cache()
+    artifact = {
+        "run_meta": {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "corpus_status": "adjudicated",
+        },
+        "summary": {
+            "total": 1,
+            "correct": 0,
+            "accuracy": 0.0,
+            "confusion_matrix": {},
+            "mismatches": [
+                {
+                    "entry_id": "case-private",
+                    "title": "Confidential rejected manuscript title",
+                    "article_type": "research_synthesis",
+                    "expected": "reject",
+                    "actual": "accept",
+                }
+            ],
+        },
+        "results": [{"entry_id": "case-private"}],
+    }
+    path = tmp_path / "adjudicated.json"
+    path.write_text(__import__("json").dumps(artifact))
+    monkeypatch.setenv("RESEARKA_V2_CALIBRATION_PATH", str(path))
+
+    mismatch = client.get("/calibration/mismatches").json()["mismatches"][0]
+
+    assert mismatch["entry_id"] == "case-private"
+    assert "title" not in mismatch
+
+
 def test_calibration_benchmark_format(client: TestClient, tmp_path, monkeypatch) -> None:
     from apps.runtime_api.app import reset_calibration_cache
 

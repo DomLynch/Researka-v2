@@ -33,6 +33,35 @@ def _decision_for_intake_reject() -> str:
     return Decision.REJECT.value
 
 
+def _cohen_kappa(confusion_matrix: dict[str, dict[str, int]]) -> float | None:
+    total = sum(sum(row.values()) for row in confusion_matrix.values())
+    if not total:
+        return None
+    observed = sum(confusion_matrix[label][label] for label in DECISION_LABELS) / total
+    expected = sum(
+        sum(confusion_matrix[label].values())
+        * sum(confusion_matrix[row][label] for row in DECISION_LABELS)
+        for label in DECISION_LABELS
+    ) / (total * total)
+    if expected == 1:
+        return 1.0 if observed == 1 else None
+    return round((observed - expected) / (1 - expected), 3)
+
+
+def _class_metrics(confusion_matrix: dict[str, dict[str, int]]) -> dict[str, dict[str, float | int]]:
+    metrics: dict[str, dict[str, float | int]] = {}
+    for label in DECISION_LABELS:
+        true_positive = confusion_matrix[label][label]
+        predicted = sum(confusion_matrix[row][label] for row in DECISION_LABELS)
+        expected = sum(confusion_matrix[label].values())
+        metrics[label] = {
+            "count": expected,
+            "precision": round(true_positive / predicted, 3) if predicted else 0.0,
+            "recall": round(true_positive / expected, 3) if expected else 0.0,
+        }
+    return metrics
+
+
 def _accept_blockers(review_metadata: dict[str, object]) -> list[str]:
     blockers: list[str] = []
     rubric_scores = review_metadata.get("rubric_scores", {})
@@ -193,6 +222,7 @@ def summarize_gold_results(records: list[dict]) -> dict:
     rubric_errors: dict[str, list[int]] = {key: [] for key in REVIEW_RUBRIC_KEYS}
     boolean_matches = {field: {"matched": 0, "count": 0} for field in BOOLEAN_FIELDS}
     by_article_type: dict[str, dict[str, int | float]] = {}
+    by_domain: dict[str, dict[str, int | float]] = {}
     accept_blockers: dict[str, int] = {}
 
     for record in records:
@@ -219,6 +249,11 @@ def summarize_gold_results(records: list[dict]) -> dict:
         by_article_type[article_type]["count"] += 1
         if actual == expected:
             by_article_type[article_type]["correct"] += 1
+        domain = str(record.get("domain_slug", "general"))
+        by_domain.setdefault(domain, {"count": 0, "correct": 0})
+        by_domain[domain]["count"] += 1
+        if actual == expected:
+            by_domain[domain]["correct"] += 1
 
         expected_scores = record.get("expected_rubric_scores", {})
         actual_scores = record.get("actual_rubric_scores", {})
@@ -242,15 +277,36 @@ def summarize_gold_results(records: list[dict]) -> dict:
     for stats in by_article_type.values():
         count = int(stats["count"])
         stats["accuracy"] = round(int(stats["correct"]) / count, 3) if count else 0.0
+    for stats in by_domain.values():
+        count = int(stats["count"])
+        stats["accuracy"] = round(int(stats["correct"]) / count, 3) if count else 0.0
+    non_accept_count = sum(sum(confusion_matrix[label].values()) for label in DECISION_LABELS if label != "accept")
+    false_accepts = sum(confusion_matrix[label]["accept"] for label in DECISION_LABELS if label != "accept")
+    durations = sorted(float(record.get("duration_s", 0.0) or 0.0) for record in records)
+    costs = [float(record.get("cost_usd", 0.0) or 0.0) for record in records]
 
     return {
         "total": total,
         "correct": correct,
         "accuracy": round(correct / total, 3) if total else 0.0,
         "confusion_matrix": confusion_matrix,
+        "class_metrics": _class_metrics(confusion_matrix),
+        "cohen_kappa": _cohen_kappa(confusion_matrix),
+        "false_accept_count": false_accepts,
+        "false_accept_rate": round(false_accepts / non_accept_count, 3) if non_accept_count else 0.0,
         "mismatch_count": len(mismatches),
         "mismatches": mismatches,
         "by_article_type": by_article_type,
+        "by_domain": by_domain,
+        "cost": {
+            "total_usd": round(sum(costs), 4),
+            "mean_usd": round(sum(costs) / total, 4) if total else 0.0,
+        },
+        "latency": {
+            "total_s": round(sum(durations), 3),
+            "mean_s": round(sum(durations) / total, 3) if total else 0.0,
+            "p95_s": durations[max(0, (95 * len(durations) + 99) // 100 - 1)] if durations else 0.0,
+        },
         "rubric_mae": {
             key: round(sum(values) / len(values), 3) if values else None
             for key, values in rubric_errors.items()
@@ -279,6 +335,7 @@ def evaluate_gold_set(
             "provider": getattr(active_engine.provider, "provider", active_engine.provider.__class__.__name__.lower()),
             "model": getattr(active_engine.provider, "model", "unknown"),
             "corpus_version": corpus.version,
+            **corpus.adjudication.model_dump(mode="json", exclude_none=True),
         },
         "summary": summarize_gold_results(records),
         "results": records,

@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import json
 
-from contracts import ArticleType, Decision, GoldSetCorpus, GoldSetEntry, GoldSetExpectation, ProviderUsage, SubmissionPayload
+from contracts import (
+    ArticleType,
+    Decision,
+    GoldSetAdjudication,
+    GoldSetCorpus,
+    GoldSetEntry,
+    GoldSetExpectation,
+    ProviderUsage,
+    SubmissionPayload,
+)
 from scripts.build_gold_set_v1 import build_gold_set
 from runtime_core.goldset import evaluate_gold_set, load_gold_set, render_gold_set_report
 from runtime_core.providers import ProviderRequest, ProviderResponse, ProviderResult
@@ -92,6 +101,22 @@ def test_load_gold_set_accepts_list_format(tmp_path) -> None:
     corpus = load_gold_set(str(path))
     assert corpus.version == "gold-set-v1"
     assert len(corpus.entries) == 1
+
+
+def test_evaluator_propagates_non_certified_corpus_status() -> None:
+    artifact = evaluate_gold_set(
+        GoldSetCorpus(
+            version="blinded-pending-v1",
+            adjudication=GoldSetAdjudication(
+                corpus_status="working",
+                protocol_version="researka-blinded-adjudication-v1",
+            ),
+        ),
+        engine=WorkflowEngine(provider=RoutingProvider()),
+    )
+
+    assert artifact["run_meta"]["corpus_status"] == "working"
+    assert artifact["run_meta"]["protocol_version"] == "researka-blinded-adjudication-v1"
 
 
 def test_build_gold_set_emits_expected_working_mix() -> None:
@@ -197,6 +222,12 @@ def test_evaluate_gold_set_scores_article_types_and_accept_blockers() -> None:
     assert artifact["summary"]["by_article_type"]["rapid_evidence_synthesis"]["accuracy"] == 0.0
     assert artifact["summary"]["accept_blockers"]["claim_support_verdict"] == 1
     assert artifact["summary"]["confusion_matrix"]["accept"]["accept"] == 1
+    assert artifact["summary"]["class_metrics"]["accept"] == {"count": 2, "precision": 1.0, "recall": 0.5}
+    assert artifact["summary"]["false_accept_rate"] == 0.0
+    assert artifact["summary"]["cohen_kappa"] == 0.0
+    assert artifact["summary"]["by_domain"]["general"]["count"] == 2
+    assert artifact["summary"]["cost"]["total_usd"] == 0.1
+    assert artifact["summary"]["latency"]["mean_s"] >= 0.0
     assert artifact["summary"]["mismatch_count"] == 1
 
 

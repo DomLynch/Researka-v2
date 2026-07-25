@@ -1,4 +1,4 @@
-from .goldset import GoldSetCorpus, GoldSetEntry, GoldSetExpectation
+from .goldset import GOLD_SET_RUBRIC_KEYS, GoldSetAdjudication, GoldSetCorpus, GoldSetEntry, GoldSetExpectation
 from .models import (
     ArticleType,
     ApiKeyCreateResponse,
@@ -46,7 +46,9 @@ __all__ = [
     "EvidenceGrade",
     "FailureClass",
     "GateResult",
+    "GOLD_SET_RUBRIC_KEYS",
     "GoldSetCorpus",
+    "GoldSetAdjudication",
     "GoldSetEntry",
     "GoldSetExpectation",
     "INTAKE_REJECT_REASONS",

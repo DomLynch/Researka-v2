@@ -12,6 +12,7 @@ build/
 elite_benchmark_v1.json
 artifacts/benchmark_vps_*.json
 artifacts/benchmark_vps_*.log
+calibration/private/
 
 # Pilot key files (raw secrets — never commit)
 pilot/pilot_keys_*.json

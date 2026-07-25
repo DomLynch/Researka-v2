@@ -63,13 +63,19 @@ def _normalize_benchmark(raw: dict) -> dict:
     if "summary" in raw:
         summary = raw["summary"]
         if "overall" not in summary and "accuracy" in summary:
+            mismatches = summary.get("mismatches", [])
+            if raw.get("run_meta", {}).get("corpus_status") == "adjudicated":
+                mismatches = [
+                    {key: value for key, value in mismatch.items() if key != "title"}
+                    for mismatch in mismatches
+                ]
             return {
                 "summary": {
                     "overall": {key: summary.get(key) for key in ("total", "correct", "accuracy")},
                     "by_category": summary.get("by_article_type", {}),
                     "gate_failures": summary.get("accept_blockers", {}),
                     "confusion_matrix": summary.get("confusion_matrix", {}),
-                    "mismatches": summary.get("mismatches", []),
+                    "mismatches": mismatches,
                 },
                 "results": raw.get("results", []),
             }
