@@ -1,18 +1,31 @@
 {
   "protocol_version": "researka-blinded-adjudication-v1",
-  "created_at": "2026-07-25T19:10:38.256468+00:00",
+  "created_at": "2026-07-25T19:14:34.506501+00:00",
   "case_count": 120,
-  "sampling_manifest_sha256": "sha256:185074ac194f638de1d149d80cda727b5fc8cd618e76025c7fa7fdf8ab176b85",
+  "sampling_manifest_sha256": "sha256:e27212bdc252d3fb8b4a4cf5399dc635a3622b9dd274b42013b476a105254fa0",
   "target_judge_release_id": "sha256:d5c676bccf54f498f2e51359944d2547b714effbd6001d703f5fda4ea64be018",
   "blinded_packet_sha256": [
-    "sha256:7238edf52a1a95330e87b53d223025c5180000320a6a4711b02fa9e23ce6a4a8",
-    "sha256:5871379aa9d72daa58c566375837084e47d069e4befb2d3742167a27131379f5"
+    "sha256:71f3933c3953c8a7009365fe25b4a5484377c1a302b28498b314c638d734e454",
+    "sha256:96fe3cbcd5e9c2b446470ef6452f8323075ec3b40348a9793e8a6e7cfec43ad4"
   ],
   "historical_decision_strata": {
     "accept": 40,
     "reject": 40,
     "revise": 40
   },
+  "supported_article_types": [
+    "alpha_memo",
+    "empirical_study",
+    "evidence_map",
+    "rapid_evidence_synthesis",
+    "research_synthesis"
+  ],
+  "covered_article_types": [
+    "alpha_memo",
+    "evidence_map",
+    "rapid_evidence_synthesis",
+    "research_synthesis"
+  ],
   "article_type_counts": {
     "alpha_memo": 53,
     "evidence_map": 33,
