@@ -1569,6 +1569,13 @@ def test_openrouter_provider_retries_transient_errors(monkeypatch: pytest.Monkey
     assert sleeps[1] == pytest.approx(0.5, abs=0.125)
 
 
+def test_openrouter_provider_rejects_unapproved_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RESEARKA_V2_OPENROUTER_ALLOWED_MODELS", raising=False)
+
+    with pytest.raises(ValueError, match="openrouter_model_not_allowed:anthropic/claude-sonnet-5"):
+        OpenRouterProvider(api_key="test-key", model="anthropic/claude-sonnet-5")
+
+
 def test_openrouter_provider_retries_rate_limits(monkeypatch: pytest.MonkeyPatch) -> None:
     attempts = {"count": 0}
     sleeps: list[float] = []

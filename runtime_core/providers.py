@@ -353,6 +353,16 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         model: str = "google/gemma-4-31b-it",
         base_url: str = "https://openrouter.ai/api/v1",
     ) -> None:
+        allowed_models = {
+            value.strip()
+            for value in os.environ.get(
+                "RESEARKA_V2_OPENROUTER_ALLOWED_MODELS",
+                "google/gemma-4-31b-it,mistralai/mistral-small-2603",
+            ).split(",")
+            if value.strip()
+        }
+        if model not in allowed_models:
+            raise ValueError(f"openrouter_model_not_allowed:{model}")
         super().__init__(
             provider="openrouter",
             model=model,
