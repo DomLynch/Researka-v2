@@ -1,5 +1,6 @@
 import hashlib
 import inspect
+import json
 import logging
 import os
 import subprocess
@@ -14,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from contracts import ArticleType, ClaimCard, ContradictionStatus, Decision, EventType, EvidenceGrade, ObjectType, ResearchObject, RuntimeEvent
 from runtime_core.goldset import summarize_gold_results
-from runtime_core.judge_release import judge_release_id
+from runtime_core.judge_release import calibration_metrics_complete, judge_release_id
 from runtime_core.osf import sign_oauth_state
 from runtime_core.repos import InMemoryRuntimeRepository
 
@@ -2324,6 +2325,43 @@ def _complete_calibration_artifact(release_id: str, generated_at: datetime) -> d
         "summary": summarize_gold_results(results),
         "results": results,
     }
+
+
+def test_calibration_rejects_inconsistent_derived_metrics() -> None:
+    artifact = _complete_calibration_artifact("sha256:" + "0" * 64, datetime.now(timezone.utc))
+    artifact["results"][1]["actual_decision"] = Decision.ACCEPT.value
+    artifact["summary"] = summarize_gold_results(artifact["results"])
+
+    assert calibration_metrics_complete(artifact) is True
+
+    for mutate in (
+        lambda summary: summary["accept_blockers"].update(tampered=1),
+        lambda summary: summary["boolean_match_rates"].update(overclaim_verdict=1.0),
+        lambda summary: summary["class_metrics"]["accept"].update(precision=0.5),
+        lambda summary: next(iter(summary["by_article_type"].values())).update(accuracy=0.5),
+        lambda summary: summary.update(false_accept_count=0),
+        lambda summary: summary.update(false_accept_rate=0.5),
+        lambda summary: summary.update(cohen_kappa=0.5),
+        lambda summary: summary["cost"].update(total_usd=0.0),
+        lambda summary: summary["latency"].update(mean_s=0.0),
+        lambda summary: summary["rubric_mae"].update(source_grounding=0.0),
+    ):
+        tampered = json.loads(json.dumps(artifact))
+        mutate(tampered["summary"])
+        assert calibration_metrics_complete(tampered) is False
+
+    stale = json.loads(json.dumps(artifact))
+    stale["results"][2]["actual_decision"] = Decision.ACCEPT.value
+    assert calibration_metrics_complete(stale) is False
+
+    failed = json.loads(json.dumps(artifact))
+    failed["results"][2].update(actual_decision=None, error="provider_crashed")
+    failed["summary"] = summarize_gold_results(failed["results"])
+    assert calibration_metrics_complete(failed) is False
+
+    missing = json.loads(json.dumps(artifact))
+    del missing["summary"]["accept_blockers"]
+    assert calibration_metrics_complete(missing) is False
 
 
 def _test_judge_release(code_sha: str) -> dict[str, Any]:

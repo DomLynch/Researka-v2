@@ -237,7 +237,7 @@ def summarize_gold_results(records: list[dict]) -> dict:
 
     for record in records:
         expected = record.get("expected_decision")
-        actual = record.get("actual_decision") or Decision.REJECT.value
+        actual = record.get("actual_decision")
         if expected in confusion_matrix and actual in confusion_matrix[expected]:
             confusion_matrix[expected][actual] += 1
         if actual == expected:

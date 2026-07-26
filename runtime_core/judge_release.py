@@ -15,16 +15,20 @@ from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 JUDGE_POLICY_VERSION = "judge-policy-v1"
 JUDGE_SETTINGS = {"accept_quorum_min": 2, "max_output_tokens": 3000, "response_format": "json_object"}
 CALIBRATION_METRIC_KEYS = {
+    "accept_blockers",
     "accuracy",
+    "boolean_match_rates",
     "confusion_matrix",
     "class_metrics",
     "correct",
+    "false_accept_count",
     "false_accept_rate",
     "cohen_kappa",
     "cost",
     "latency",
     "mismatch_count",
     "mismatches",
+    "rubric_mae",
     "total",
     "by_article_type",
     "by_domain",
@@ -179,6 +183,16 @@ def _class_metrics_valid(value: object, confusion: object, labels: set[str]) -> 
     )
 
 
+def _derived_metrics_valid(summary: dict, results: list[dict]) -> bool:
+    try:
+        from .goldset import summarize_gold_results
+
+        expected = summarize_gold_results(results)
+    except (KeyError, TypeError, ValueError):
+        return False
+    return all(summary.get(key) == expected.get(key) for key in CALIBRATION_METRIC_KEYS)
+
+
 def _accuracy_valid(accuracy: object, correct: object, total: int) -> bool:
     if not isinstance(correct, int) or isinstance(correct, bool):
         return False
@@ -249,6 +263,7 @@ def calibration_metrics_complete(raw: dict) -> bool:
         and summary.get("mismatch_count") == len(summary["mismatches"])
         and _number_in_range(false_accept_rate, 0, 1)
         and _number_in_range(judge_kappa, -1, 1)
+        and _derived_metrics_valid(summary, results)
         and run_meta.get("judge_release_consistent") is True
         and run_meta.get("judge_release_target_matched") is True
         and _number_in_range(agreement, 0, 1)
