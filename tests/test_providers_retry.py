@@ -144,6 +144,18 @@ def test_bad_request_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     assert counter[0] == 1
 
 
+def test_payment_required_is_billing_and_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    counter = _patch_urlopen(monkeypatch, [_RecordingHttpError(402)])
+
+    result = _make_provider().complete(_request())
+
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error.error_class is ProviderErrorClass.BILLING
+    assert result.error.status_code == 402
+    assert counter[0] == 1
+
+
 def test_5xx_uses_standard_attempt_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     """500-class errors retry up to max_attempts, NOT max_attempts_on_rate_limit."""
     counter = _patch_urlopen(monkeypatch, [_RecordingHttpError(503), _RecordingHttpError(503), _RecordingHttpError(503)])

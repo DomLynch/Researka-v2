@@ -23,7 +23,9 @@ from .review_contract import (
     REVIEW_RUBRIC_KEYS,
     SYNTHESIS_QUALITY_VERDICTS,
     accept_contract_failure,
+    billing_waiver_receipt_valid,
     review_grounding_failure,
+    review_attestation_secret,
 )
 
 
@@ -37,10 +39,12 @@ class ReviewerPanel:
         primary: LanguageModelProvider,
         sparring: LanguageModelProvider,
         fallback: LanguageModelProvider,
+        allow_sparring_billing_skip: bool = False,
     ) -> None:
         self.primary = primary
         self.sparring = sparring
         self.fallback = fallback
+        self.allow_sparring_billing_skip = allow_sparring_billing_skip
         self.model = f"{getattr(primary, 'model', 'primary')}|{getattr(sparring, 'model', 'sparring')}|{getattr(fallback, 'model', 'fallback')}"
 
     def complete(self, request: ProviderRequest) -> ProviderResult:
@@ -113,6 +117,33 @@ class ReviewerPanel:
             )
 
         if primary.ok and not sparring.ok:
+            if (
+                self.allow_sparring_billing_skip
+                and self._openrouter_sparring()
+                and sparring.error is not None
+                and sparring.error.error_class is ProviderErrorClass.BILLING
+                and sparring.error.status_code == 402
+                and slot_flags.get("primary_fallback_used") is False
+                and primary.response is not None
+                and primary.response.provider in {"minimax", "mimo"}
+                and self._recommendation_from(primary) == "accept"
+            ):
+                return self._panel_response(
+                    winner=primary,
+                    route="sparring_billing_skipped_primary_used",
+                    used=[primary],
+                    metadata={
+                        "ops_flag": "sparring_billing_skipped",
+                        "sparring_error": self._error_text(sparring),
+                        "sparring_provider": "openrouter",
+                        "sparring_http_status": 402,
+                        "secondary_review_skipped": True,
+                        "accept_quorum_count": self._accept_quorum_count(primary),
+                        "accept_quorum_waiver": "sparring_billing_unavailable",
+                        "consensus": False,
+                        **slot_flags,
+                    },
+                )
             return self._single_valid_response(
                 request,
                 valid=primary,
@@ -150,6 +181,17 @@ class ReviewerPanel:
                 **slot_flags,
             },
         )
+
+    def billing_skip_receipt_valid(self, metadata: dict[str, object]) -> bool:
+        return self.allow_sparring_billing_skip and billing_waiver_receipt_valid(metadata, provider=self.provider)
+
+    def _openrouter_sparring(self) -> bool:
+        if isinstance(self.sparring, FallbackProvider):
+            return isinstance(self.sparring.primary, OpenRouterProvider) and isinstance(
+                self.sparring.fallback,
+                OpenRouterProvider,
+            )
+        return isinstance(self.sparring, OpenRouterProvider)
 
     def _validated_fallback(self, request: ProviderRequest) -> tuple[ProviderResult, int]:
         attempts = 0
@@ -478,6 +520,11 @@ def reviewer_from_env() -> LanguageModelProvider:
         sparring: LanguageModelProvider = (
             FallbackProvider(primary=sparring_inner, fallback=_make_fallback()) if fallback_enabled else sparring_inner
         )
+        allow_billing_skip = os.getenv(
+            "RESEARKA_V2_SKIP_SPARRING_ON_BILLING_ERROR", "0"
+        ).strip().lower() in {"1", "true", "yes"}
+        if allow_billing_skip:
+            review_attestation_secret(required=True)
         return ReviewerPanel(
             primary=primary,
             sparring=sparring,
@@ -485,6 +532,7 @@ def reviewer_from_env() -> LanguageModelProvider:
                 model=os.getenv("RESEARKA_V2_JUDGE_MODEL", "mistralai/mistral-small-2603"),
                 base_url=or_base_url,
             ),
+            allow_sparring_billing_skip=allow_billing_skip,
         )
     if selected == "deterministic":
         return DeterministicProvider()

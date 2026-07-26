@@ -87,6 +87,7 @@ class FailureClass(StrEnum):
 class ProviderErrorClass(StrEnum):
     TIMEOUT = "timeout"
     RATE_LIMIT = "rate_limit"
+    BILLING = "billing"
     BAD_REQUEST = "bad_request"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
     OTHER = "other"

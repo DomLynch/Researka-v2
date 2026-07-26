@@ -35,6 +35,7 @@ class ProviderResponse(BaseModel):
 class ProviderError(BaseModel):
     error_class: ProviderErrorClass
     message: str
+    status_code: int | None = None
 
 
 class ProviderResult(BaseModel):
@@ -139,7 +140,11 @@ class OpenAICompatibleProvider:
             except urllib.error.HTTPError as exc:
                 error_class = self._classify_status(int(getattr(exc, "code", 0) or 0))
                 body = exc.read().decode("utf-8", errors="ignore")
-                last_error = ProviderError(error_class=error_class, message=body or str(exc))
+                last_error = ProviderError(
+                    error_class=error_class,
+                    message=body or str(exc),
+                    status_code=int(getattr(exc, "code", 0) or 0) or None,
+                )
                 if error_class is ProviderErrorClass.RATE_LIMIT:
                     if rate_limit_attempt >= self.max_attempts_on_rate_limit - 1:
                         return ProviderResult(ok=False, error=last_error)
@@ -223,6 +228,8 @@ class OpenAICompatibleProvider:
     def _classify_status(self, status: int) -> ProviderErrorClass:
         if status == 429:
             return ProviderErrorClass.RATE_LIMIT
+        if status == 402:
+            return ProviderErrorClass.BILLING
         if status in {400, 401, 403, 404}:
             return ProviderErrorClass.BAD_REQUEST
         if status in {408, 504}:

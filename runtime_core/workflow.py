@@ -33,9 +33,12 @@ from .review_contract import (
     SYNTHESIS_QUALITY_VERDICTS,
     accept_contract_failure,
     accept_quorum_satisfied,
+    billing_waiver_attestation,
+    billing_waiver_attestation_valid,
     review_grounding_failure,
+    review_attestation_secret,
 )
-from .reviewer_panel import reviewer_from_env
+from .reviewer_panel import ReviewerPanel, reviewer_from_env
 from .repos import RuntimeRepository
 from .sanitizer import extract_markdown_section
 
@@ -752,6 +755,10 @@ class WorkflowEngine:
             error_class = result.error.error_class.value if result.error else "other"
             message = result.error.message if result.error else "provider_failed"
             raise ValueError(f"provider_error:{error_class}:{message}")
+        billing_waiver_verified = (
+            isinstance(self.provider, ReviewerPanel)
+            and self.provider.billing_skip_receipt_valid(result.response.metadata)
+        )
         payload = self._parse_json_object(result.response.text)
         recommendation = str(payload.get("recommendation", "")).strip().lower()
         if recommendation not in {"accept", "revise", "reject"}:
@@ -775,8 +782,22 @@ class WorkflowEngine:
             system_prompt=system_prompt,
             provider=result.response.provider,
             model=result.response.model,
-            response_metadata=result.response.metadata,
+            response_metadata={
+                **result.response.metadata,
+                "accept_quorum_waiver_verified": billing_waiver_verified,
+            },
         )
+        waiver_metadata: dict[str, object] = {
+            "accept_quorum_waiver_verified": billing_waiver_verified,
+        }
+        if billing_waiver_verified:
+            waiver_metadata["accept_quorum_waiver_attestation"] = billing_waiver_attestation(
+                result.response.metadata,
+                submission_id=submission.id,
+                recommendation=recommendation,
+                judge_release_id=str(judge_release["id"]),
+                secret=review_attestation_secret(required=True) or "",
+            )
         metadata = {
             "prompt_version": REVIEWER_PROMPT_VERSION,
             "provider": result.response.provider,
@@ -785,6 +806,7 @@ class WorkflowEngine:
             "tokens_out": result.response.usage.output_tokens,
             "cost_usd": result.response.usage.cost_usd,
             **result.response.metadata,
+            **waiver_metadata,
             "article_type": article_type,
             "rubric_scores": rubric_scores,
             "major_issues": major_issues,
@@ -802,7 +824,11 @@ class WorkflowEngine:
         if recommendation == "accept":
             if (
                 not getattr(self.provider, "enforces_accept_quorum", False)
-                or not accept_quorum_satisfied(result.response.metadata, provider=result.response.provider)
+                or not accept_quorum_satisfied(
+                    result.response.metadata,
+                    provider=result.response.provider,
+                    allow_billing_waiver=billing_waiver_verified,
+                )
             ):
                 raise ValueError("provider_error:bad_request:accept_quorum_missing")
         return recommendation, review_markdown, metadata
@@ -1231,7 +1257,20 @@ class WorkflowEngine:
             raise ValueError(f"invalid_review_recommendation:{recommendation}")
         original_recommendation = recommendation
         if recommendation == Decision.ACCEPT.value:
-            if not accept_quorum_satisfied(review.metadata):
+            billing_waiver_verified = (
+                review.metadata.get("accept_quorum_waiver_verified") is True
+                and billing_waiver_attestation_valid(
+                    review.metadata,
+                    submission_id=submission.id,
+                    recommendation=recommendation,
+                    judge_release_id=str(review.metadata.get("judge_release_id") or ""),
+                    secret=review_attestation_secret(),
+                )
+            )
+            if not accept_quorum_satisfied(
+                review.metadata,
+                allow_billing_waiver=billing_waiver_verified,
+            ):
                 raise ValueError("accept_quorum_missing")
         alpha_guard_revisions: list[str] = []
         trace_guard_revisions: list[str] = []

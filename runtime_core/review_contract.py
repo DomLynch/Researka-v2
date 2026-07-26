@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import os
 import re
+from pathlib import Path
 
 REVIEW_RUBRIC_KEYS = (
     "research_question_quality",
@@ -15,6 +20,19 @@ OVERCLAIM_VERDICTS = {"none", "mild", "significant"}
 SYNTHESIS_QUALITY_VERDICTS = {"strong", "adequate", "weak", "empty"}
 SUBMISSION_DATA_START = "SUBMISSION_DATA_START"
 SUBMISSION_DATA_END = "SUBMISSION_DATA_END"
+_BILLING_WAIVER_FIELDS = (
+    "route",
+    "ops_flag",
+    "secondary_review_skipped",
+    "accept_quorum_count",
+    "accept_quorum_models",
+    "accept_quorum_waiver",
+    "sparring_provider",
+    "sparring_http_status",
+    "primary_fallback_used",
+    "winner_provider",
+    "winner_model",
+)
 
 _REVIEW_DIRECTIVE = re.compile(
     r"\b(?:ignore (?:all |any )?(?:previous|prior|system) instructions?|"
@@ -166,7 +184,26 @@ def review_grounding_failure(
     return None
 
 
-def accept_quorum_satisfied(metadata: dict, *, provider: str | None = None) -> bool:
+def accept_quorum_satisfied(
+    metadata: dict,
+    *,
+    provider: str | None = None,
+    allow_billing_waiver: bool = False,
+) -> bool:
+    models = metadata.get("accept_quorum_models")
+    distinct_models = {model.strip() for model in models if isinstance(model, str) and model.strip()} if isinstance(models, list) else set()
+    try:
+        count = int(metadata.get("accept_quorum_count") or 0)
+    except (TypeError, ValueError):
+        return False
+    if (provider or metadata.get("provider")) != "reviewer-panel":
+        return False
+    if count >= 2 and len(distinct_models) >= 2:
+        return True
+    return allow_billing_waiver and billing_waiver_receipt_valid(metadata, provider=provider)
+
+
+def billing_waiver_receipt_valid(metadata: dict, *, provider: str | None = None) -> bool:
     models = metadata.get("accept_quorum_models")
     distinct_models = {model.strip() for model in models if isinstance(model, str) and model.strip()} if isinstance(models, list) else set()
     try:
@@ -175,9 +212,69 @@ def accept_quorum_satisfied(metadata: dict, *, provider: str | None = None) -> b
         return False
     return (
         (provider or metadata.get("provider")) == "reviewer-panel"
-        and count >= 2
-        and len(distinct_models) >= 2
+        and count == len(distinct_models) == 1
+        and metadata.get("route") == "sparring_billing_skipped_primary_used"
+        and metadata.get("ops_flag") == "sparring_billing_skipped"
+        and metadata.get("secondary_review_skipped") is True
+        and metadata.get("accept_quorum_waiver") == "sparring_billing_unavailable"
+        and metadata.get("sparring_provider") == "openrouter"
+        and metadata.get("sparring_http_status") == 402
+        and metadata.get("primary_fallback_used") is False
+        and metadata.get("winner_provider") in {"minimax", "mimo"}
     )
+
+
+def review_attestation_secret(*, required: bool = False) -> str | None:
+    secret = os.environ.get("RESEARKA_V2_REVIEW_ATTESTATION_SECRET", "").strip()
+    path = os.environ.get("RESEARKA_V2_REVIEW_ATTESTATION_SECRET_PATH", "").strip()
+    if not secret and path:
+        try:
+            secret = Path(path).read_text().strip()
+        except OSError as exc:
+            if required:
+                raise RuntimeError("review_attestation_secret_unreadable") from exc
+    if required and not secret:
+        raise RuntimeError("review_attestation_secret_required")
+    return secret or None
+
+
+def billing_waiver_attestation(
+    metadata: dict,
+    *,
+    submission_id: str,
+    recommendation: str,
+    judge_release_id: str,
+    secret: str,
+) -> str:
+    payload = {
+        "submission_id": submission_id,
+        "recommendation": recommendation,
+        "judge_release_id": judge_release_id,
+        "receipt": {key: metadata.get(key) for key in _BILLING_WAIVER_FIELDS},
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return f"hmac-sha256:{hmac.new(secret.encode(), encoded, hashlib.sha256).hexdigest()}"
+
+
+def billing_waiver_attestation_valid(
+    metadata: dict,
+    *,
+    submission_id: str,
+    recommendation: str,
+    judge_release_id: str,
+    secret: str | None,
+) -> bool:
+    provided = str(metadata.get("accept_quorum_waiver_attestation") or "")
+    if not secret or not provided or not billing_waiver_receipt_valid(metadata):
+        return False
+    expected = billing_waiver_attestation(
+        metadata,
+        submission_id=submission_id,
+        recommendation=recommendation,
+        judge_release_id=judge_release_id,
+        secret=secret,
+    )
+    return hmac.compare_digest(provided, expected)
 
 
 def accept_contract_failure(

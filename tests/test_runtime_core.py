@@ -3,6 +3,7 @@ import urllib.error
 
 import pytest
 
+from apps.worker.main import WorkerApp
 from runtime_core.compiler import canonical_bundle_facts, compile_publication
 from runtime_core.evidence_quality import evidence_profile, publication_class, support_for_claim
 from runtime_core.judge_release import (
@@ -13,7 +14,7 @@ from runtime_core.judge_release import (
 from runtime_core.gates import run_publish_gates
 from runtime_core.failure_classifier import classify_failure_reason
 from runtime_core.prompts import REVIEWER_PROMPT_VERSION
-from runtime_core.providers import FallbackProvider, MimoProvider, MiniMaxProvider, OpenRouterProvider, ProviderRequest, ProviderResponse, ProviderResult
+from runtime_core.providers import DeterministicProvider, FallbackProvider, MimoProvider, MiniMaxProvider, OpenRouterProvider, ProviderError, ProviderRequest, ProviderResponse, ProviderResult
 from runtime_core.publication_sidecars import publication_sources
 from runtime_core.review_contract import accept_quorum_satisfied
 from runtime_core.reviewer_panel import ReviewerPanel, reviewer_from_env
@@ -24,7 +25,7 @@ from runtime_core.workflow import (
     WorkflowEngine,
 )
 
-from contracts import ArticleType, Decision, FailureClass, ObjectType, ProviderUsage, ResearchObject, RuntimeJob, Stage, SubmissionPayload, WorkflowContext, run_submission_template_checks
+from contracts import ArticleType, Decision, FailureClass, ObjectType, ProviderErrorClass, ProviderUsage, ResearchObject, RuntimeJob, Stage, SubmissionPayload, WorkflowContext, run_submission_template_checks
 
 
 def _full_sections(
@@ -1622,6 +1623,7 @@ def test_reviewer_panel_from_env_uses_minimax_gemma_mistral(monkeypatch: pytest.
     monkeypatch.delenv("RESEARKA_V2_MINIMAX_MODEL", raising=False)
     monkeypatch.delenv("RESEARKA_V2_REVIEWER_MODEL", raising=False)
     monkeypatch.delenv("RESEARKA_V2_JUDGE_MODEL", raising=False)
+    monkeypatch.delenv("RESEARKA_V2_SKIP_SPARRING_ON_BILLING_ERROR", raising=False)
     # Default behaviour: per-slot Mistral fallback is enabled, so primary and
     # sparring are wrapped in FallbackProvider.
     monkeypatch.delenv("RESEARKA_V2_REVIEWER_FALLBACK_ENABLED", raising=False)
@@ -1642,6 +1644,7 @@ def test_reviewer_panel_from_env_uses_minimax_gemma_mistral(monkeypatch: pytest.
     # The fallback inside each wrapper is Mistral via OpenRouter.
     assert provider.primary.fallback.model == "mistralai/mistral-small-2603"
     assert provider.sparring.fallback.model == "mistralai/mistral-small-2603"
+    assert provider.allow_sparring_billing_skip is False
 
 
 def test_reviewer_panel_from_env_can_disable_per_slot_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1656,6 +1659,33 @@ def test_reviewer_panel_from_env_can_disable_per_slot_fallback(monkeypatch: pyte
     assert isinstance(provider, ReviewerPanel)
     assert isinstance(provider.primary, MiniMaxProvider)
     assert isinstance(provider.sparring, OpenRouterProvider)
+
+
+@pytest.mark.parametrize(("value", "expected"), [("1", True), ("true", True), ("typo", False), ("", False)])
+def test_reviewer_panel_from_env_parses_billing_skip_strictly(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+    expected: bool,
+) -> None:
+    monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
+    monkeypatch.setenv("RESEARKA_V2_SKIP_SPARRING_ON_BILLING_ERROR", value)
+    if expected:
+        monkeypatch.setenv("RESEARKA_V2_REVIEW_ATTESTATION_SECRET", "test-secret")
+
+    provider = reviewer_from_env()
+
+    assert isinstance(provider, ReviewerPanel)
+    assert provider.allow_sparring_billing_skip is expected
+
+
+def test_reviewer_panel_billing_skip_requires_attestation_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
+    monkeypatch.setenv("RESEARKA_V2_SKIP_SPARRING_ON_BILLING_ERROR", "1")
+    monkeypatch.delenv("RESEARKA_V2_REVIEW_ATTESTATION_SECRET", raising=False)
+    monkeypatch.delenv("RESEARKA_V2_REVIEW_ATTESTATION_SECRET_PATH", raising=False)
+
+    with pytest.raises(RuntimeError, match="review_attestation_secret_required"):
+        reviewer_from_env()
 
 
 def test_reviewer_panel_from_env_can_select_mimo_primary(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2757,11 +2787,196 @@ def test_single_provider_accept_cannot_bypass_panel_quorum() -> None:
         WorkflowEngine(provider=SingleProvider())._review_submission(submission)
 
 
+def test_secondary_billing_failure_skips_without_backlogging_accept(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = 0
+    monkeypatch.setenv("RESEARKA_V2_REVIEW_ATTESTATION_SECRET", "test-secret")
+
+    def payment_required(*args: object, **kwargs: object) -> object:  # noqa: ARG001
+        nonlocal calls
+        calls += 1
+        raise urllib.error.HTTPError(
+            "https://openrouter.ai/api/v1/chat/completions",
+            402,
+            "Payment Required",
+            {},
+            None,
+        )
+
+    monkeypatch.setattr("runtime_core.providers.urllib.request.urlopen", payment_required)
+    primary = FallbackProvider(
+        primary=DeterministicProvider(provider="minimax", model="MiniMax-M3"),
+        fallback=OpenRouterProvider(api_key="test", model="mistralai/mistral-small-2603"),
+    )
+    sparring = FallbackProvider(
+        primary=OpenRouterProvider(api_key="test", model="google/gemma-4-31b-it"),
+        fallback=OpenRouterProvider(api_key="test", model="mistralai/mistral-small-2603"),
+    )
+    panel = ReviewerPanel(
+        primary=primary,
+        sparring=sparring,
+        fallback=OpenRouterProvider(api_key="test", model="mistralai/mistral-small-2603"),
+        allow_sparring_billing_skip=True,
+    )
+    repo = InMemoryRuntimeRepository()
+    submission = _calibration_submission(repo, recommendation="accept")
+    repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.REVIEW))
+
+    result = WorkerApp(repo, engine=WorkflowEngine(provider=panel)).run_once()
+    review = repo.list_objects(ObjectType.REVIEW)[0]
+    metadata = review.metadata
+
+    assert result["completed"] == 1
+    assert result["failed"] == 0
+    assert metadata["recommendation"] == "accept"
+    assert metadata["route"] == "sparring_billing_skipped_primary_used"
+    assert metadata["accept_quorum_count"] == 1
+    assert metadata["accept_quorum_waiver"] == "sparring_billing_unavailable"
+    assert metadata["secondary_review_skipped"] is True
+    assert metadata["accept_quorum_waiver_verified"] is True
+    assert str(metadata["accept_quorum_waiver_attestation"]).startswith("hmac-sha256:")
+    assert metadata["sparring_provider"] == "openrouter"
+    assert metadata["sparring_http_status"] == 402
+    assert metadata["primary_fallback_used"] is False
+    assert metadata["judge_release"]["settings"]["accept_quorum_min"] == 1
+    assert metadata["judge_release"]["settings"]["accept_quorum_waiver"] == "sparring_billing_unavailable"
+    assert calls == 1
+    assert not accept_quorum_satisfied(metadata)
+    assert accept_quorum_satisfied(metadata, allow_billing_waiver=True)
+
+    editorial = WorkerApp(repo, engine=WorkflowEngine(provider=panel)).run_once()
+    assert editorial["completed"] == 1
+    assert repo.list_objects(ObjectType.DECISION)[0].metadata["decision"] == "accept"
+    assert all(job.stage is not Stage.REVIEW for job in repo.queued_jobs())
+
+    metadata["accept_quorum_waiver_attestation"] = "hmac-sha256:forged"
+    with pytest.raises(ValueError, match="accept_quorum_missing"):
+        WorkflowEngine(provider=panel)._run_editorial(
+            RuntimeJob(
+                target_object_id=submission.id,
+                stage=Stage.EDITORIAL,
+                payload={"review_id": review.id},
+            ),
+            repo,
+        )
+
+    class TimedOutPrimary(DeterministicProvider):
+        def complete(self, request: ProviderRequest) -> ProviderResult:  # noqa: ARG002
+            return ProviderResult(
+                ok=False,
+                error=ProviderError(error_class=ProviderErrorClass.TIMEOUT, message="timed out"),
+            )
+
+    openrouter_primary = FallbackProvider(
+        primary=TimedOutPrimary(provider="minimax", model="MiniMax-M3"),
+        fallback=DeterministicProvider(provider="openrouter", model="mistralai/mistral-small-2603"),
+    )
+    unsafe = ReviewerPanel(
+        primary=openrouter_primary,
+        sparring=OpenRouterProvider(api_key="test", model="google/gemma-4-31b-it"),
+        fallback=OpenRouterProvider(api_key="test", model="mistralai/mistral-small-2603"),
+        allow_sparring_billing_skip=True,
+    ).complete(ProviderRequest(system_prompt="s", user_prompt="u", prompt_version="v"))
+    assert unsafe.ok is False
+
+
+def test_single_vote_waiver_requires_exact_billing_skip_receipt() -> None:
+    receipt = {
+        "provider": "reviewer-panel",
+        "route": "sparring_billing_skipped_primary_used",
+        "accept_quorum_count": 1,
+        "accept_quorum_models": ["MiniMax-M3"],
+        "accept_quorum_waiver": "sparring_billing_unavailable",
+        "ops_flag": "sparring_billing_skipped",
+        "secondary_review_skipped": True,
+        "sparring_provider": "openrouter",
+        "sparring_http_status": 402,
+        "primary_fallback_used": False,
+        "winner_provider": "minimax",
+    }
+
+    assert not accept_quorum_satisfied(receipt)
+    assert accept_quorum_satisfied(receipt, allow_billing_waiver=True)
+    assert not ReviewerPanel(
+        primary=DeterministicProvider(provider="minimax", model="MiniMax-M3"),
+        sparring=OpenRouterProvider(api_key="test", model="google/gemma-4-31b-it"),
+        fallback=OpenRouterProvider(api_key="test", model="mistralai/mistral-small-2603"),
+        allow_sparring_billing_skip=True,
+    ).billing_skip_receipt_valid(
+        {
+            "provider": "reviewer-panel",
+            "route": "consensus",
+            "accept_quorum_count": 2,
+            "accept_quorum_models": ["MiniMax-M3", "google/gemma-4-31b-it"],
+        }
+    )
+    assert not accept_quorum_satisfied({**receipt, "route": "sparring_failed_primary_used"})
+    assert not accept_quorum_satisfied(
+        {**receipt, "accept_quorum_waiver": "timeout"},
+        allow_billing_waiver=True,
+    )
+    assert not accept_quorum_satisfied(
+        {**receipt, "secondary_review_skipped": False},
+        allow_billing_waiver=True,
+    )
+    assert not accept_quorum_satisfied(
+        {**receipt, "provider": "single-reviewer"},
+        allow_billing_waiver=True,
+    )
+
+
+def test_non_openrouter_sparring_fallback_cannot_claim_billing_skip() -> None:
+    class UnavailableOpenRouter(OpenRouterProvider):
+        def complete(self, request: ProviderRequest) -> ProviderResult:  # noqa: ARG002
+            return ProviderResult(
+                ok=False,
+                error=ProviderError(
+                    error_class=ProviderErrorClass.PROVIDER_UNAVAILABLE,
+                    message="unavailable",
+                    status_code=503,
+                ),
+            )
+
+    class ForeignBillingProvider:
+        provider = "foreign"
+        model = "foreign"
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:  # noqa: ARG002
+            return ProviderResult(
+                ok=False,
+                error=ProviderError(
+                    error_class=ProviderErrorClass.BILLING,
+                    message="payment required",
+                    status_code=402,
+                ),
+            )
+
+    billing = ForeignBillingProvider()
+    result = ReviewerPanel(
+        primary=DeterministicProvider(provider="minimax", model="MiniMax-M3"),
+        sparring=FallbackProvider(
+            primary=UnavailableOpenRouter(api_key="test", model="google/gemma-4-31b-it"),
+            fallback=billing,
+        ),
+        fallback=billing,
+        allow_sparring_billing_skip=True,
+    ).complete(ProviderRequest(system_prompt="s", user_prompt="u", prompt_version="v"))
+
+    assert result.ok is False
+    assert result.error is not None
+    assert "panel_accept_quorum_unavailable" in result.error.message
+
+
 def test_duplicate_reviewer_models_cannot_forge_accept_quorum() -> None:
     class ForgedPanel:
         provider = "reviewer-panel"
         model = "same-model"
         enforces_accept_quorum = True
+
+        def __init__(self, metadata: dict[str, object] | None = None) -> None:
+            self.metadata = metadata or {
+                "accept_quorum_count": 2,
+                "accept_quorum_models": ["same-model", "same-model"],
+            }
 
         def complete(self, request: ProviderRequest) -> ProviderResult:
             return ProviderResult(
@@ -2771,16 +2986,27 @@ def test_duplicate_reviewer_models_cannot_forge_accept_quorum() -> None:
                     provider=self.provider,
                     model=self.model,
                     usage=ProviderUsage(),
-                    metadata={
-                        "accept_quorum_count": 2,
-                        "accept_quorum_models": ["same-model", "same-model"],
-                    },
+                    metadata=self.metadata,
                 ),
             )
 
     submission = _calibration_submission(InMemoryRuntimeRepository(), recommendation="accept")
     with pytest.raises(ValueError, match="accept_quorum_missing"):
         WorkflowEngine(provider=ForgedPanel())._review_submission(submission)
+    forged_waiver = {
+        "route": "sparring_billing_skipped_primary_used",
+        "ops_flag": "sparring_billing_skipped",
+        "secondary_review_skipped": True,
+        "accept_quorum_count": 1,
+        "accept_quorum_models": ["MiniMax-M3"],
+        "accept_quorum_waiver": "sparring_billing_unavailable",
+        "sparring_provider": "openrouter",
+        "sparring_http_status": 402,
+        "primary_fallback_used": False,
+        "winner_provider": "minimax",
+    }
+    with pytest.raises(ValueError, match="accept_quorum_missing"):
+        WorkflowEngine(provider=ForgedPanel(forged_waiver))._review_submission(submission)
 
 
 @pytest.mark.parametrize("count", ["invalid", [], {}])

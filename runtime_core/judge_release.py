@@ -12,7 +12,7 @@ from contracts.models import ArticleType, Decision
 
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 
-JUDGE_POLICY_VERSION = "judge-policy-v1"
+JUDGE_POLICY_VERSION = "judge-policy-v2"
 JUDGE_SETTINGS = {"accept_quorum_min": 2, "max_output_tokens": 3000, "response_format": "json_object"}
 JUDGE_RELEASE_IDENTITY_KEYS = (
     "code_sha",
@@ -204,6 +204,12 @@ def build_judge_release(
     observed = response_metadata.get("panel_models") or response_metadata.get("accept_quorum_models")
     observed_models = sorted({str(item).strip() for item in observed if str(item).strip()}) if isinstance(observed, list) else []
     configured_models = sorted({item.strip() for item in model.split("|") if item.strip()})
+    settings = dict(JUDGE_SETTINGS)
+    if response_metadata.get("accept_quorum_waiver_verified") is True:
+        settings.update(
+            accept_quorum_min=1,
+            accept_quorum_waiver="sparring_billing_unavailable",
+        )
     manifest: dict[str, object] = {
         "code_sha": JUDGE_CODE_SHA,
         "source_commit": SERVICE_GIT_SHA,
@@ -214,7 +220,7 @@ def build_judge_release(
         "provider": provider,
         "models": configured_models or [model],
         "observed_models": observed_models,
-        "settings": dict(JUDGE_SETTINGS),
+        "settings": settings,
         "calibration": {
             "artifact": calibration_path.name,
             "sha256": _file_sha256(calibration_path),
