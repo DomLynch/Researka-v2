@@ -2363,6 +2363,10 @@ def test_calibration_rejects_inconsistent_derived_metrics() -> None:
     del missing["summary"]["accept_blockers"]
     assert calibration_metrics_complete(missing) is False
 
+    extra = json.loads(json.dumps(artifact))
+    extra["summary"]["unverified_metric"] = 1
+    assert calibration_metrics_complete(extra) is False
+
 
 def _test_judge_release(code_sha: str) -> dict[str, Any]:
     release: dict[str, Any] = {

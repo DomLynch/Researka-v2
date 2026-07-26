@@ -14,25 +14,6 @@ from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 
 JUDGE_POLICY_VERSION = "judge-policy-v1"
 JUDGE_SETTINGS = {"accept_quorum_min": 2, "max_output_tokens": 3000, "response_format": "json_object"}
-CALIBRATION_METRIC_KEYS = {
-    "accept_blockers",
-    "accuracy",
-    "boolean_match_rates",
-    "confusion_matrix",
-    "class_metrics",
-    "correct",
-    "false_accept_count",
-    "false_accept_rate",
-    "cohen_kappa",
-    "cost",
-    "latency",
-    "mismatch_count",
-    "mismatches",
-    "rubric_mae",
-    "total",
-    "by_article_type",
-    "by_domain",
-}
 JUDGE_RELEASE_IDENTITY_KEYS = (
     "code_sha",
     "policy_version",
@@ -190,7 +171,7 @@ def _derived_metrics_valid(summary: dict, results: list[dict]) -> bool:
         expected = summarize_gold_results(results)
     except (KeyError, TypeError, ValueError):
         return False
-    return all(summary.get(key) == expected.get(key) for key in CALIBRATION_METRIC_KEYS)
+    return summary == expected
 
 
 def _accuracy_valid(accuracy: object, correct: object, total: int) -> bool:
@@ -236,8 +217,7 @@ def calibration_metrics_complete(raw: dict) -> bool:
     accuracy = summary.get("accuracy")
     diagonal = _confusion_diagonal(confusion, labels)
     return bool(
-        CALIBRATION_METRIC_KEYS.issubset(summary)
-        and total >= 100
+        total >= 100
         and all(
             isinstance(item, dict) and str(item.get("entry_id") or "").strip()
             for item in results
