@@ -109,59 +109,11 @@ def _finite_number(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
 
 
-def _nonnegative_int(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
-
-
 def _number_in_range(value: object, lower: float, upper: float) -> bool:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return False
     number = float(value)
     return math.isfinite(number) and lower <= number <= upper
-
-
-def _bucket_total(value: object) -> int | None:
-    if not isinstance(value, dict) or not all(
-        isinstance(stats, dict)
-        and _nonnegative_int(stats.get("count"))
-        and _nonnegative_int(stats.get("correct"))
-        and stats["correct"] <= stats["count"]
-        and _number_in_range(stats.get("accuracy"), 0, 1)
-        for stats in value.values()
-    ):
-        return None
-    return sum(stats["count"] for stats in value.values())
-
-
-def _confusion_total(value: object, labels: set[str]) -> int | None:
-    if not isinstance(value, dict) or set(value) != labels:
-        return None
-    if not all(
-        isinstance(value[label], dict)
-        and set(value[label]) == labels
-        and all(_nonnegative_int(count) for count in value[label].values())
-        for label in labels
-    ):
-        return None
-    return sum(sum(value[label].values()) for label in labels)
-
-
-def _confusion_diagonal(value: object, labels: set[str]) -> int | None:
-    if _confusion_total(value, labels) is None or not isinstance(value, dict):
-        return None
-    return sum(value[label][label] for label in labels)
-
-
-def _class_metrics_valid(value: object, confusion: object, labels: set[str]) -> bool:
-    if not isinstance(value, dict) or not isinstance(confusion, dict) or set(value) != labels:
-        return False
-    return all(
-        isinstance(value[label], dict)
-        and _nonnegative_int(value[label].get("count"))
-        and value[label]["count"] == sum(confusion[label].values())
-        and all(_number_in_range(value[label].get(key), 0, 1) for key in ("precision", "recall"))
-        for label in labels
-    )
 
 
 def _derived_metrics_valid(summary: dict, results: list[dict]) -> bool:
@@ -174,20 +126,25 @@ def _derived_metrics_valid(summary: dict, results: list[dict]) -> bool:
     return summary == expected
 
 
-def _accuracy_valid(accuracy: object, correct: object, total: int) -> bool:
-    if not isinstance(correct, int) or isinstance(correct, bool):
-        return False
-    if not isinstance(accuracy, (int, float)) or isinstance(accuracy, bool):
-        return False
-    return 0 <= correct <= total and _number_in_range(accuracy, 0, 1) and abs(float(accuracy) - correct / total) <= 0.001
-
-
-def _mismatch_count_valid(value: object, correct: object, total: int) -> bool:
-    return (
-        isinstance(correct, int)
-        and not isinstance(correct, bool)
-        and _nonnegative_int(value)
-        and value == total - correct
+def _calibration_results_valid(results: list[object]) -> bool:
+    labels = {item.value for item in Decision}
+    article_types = {item.value for item in ArticleType}
+    rows = [item for item in results if isinstance(item, dict)]
+    return bool(
+        len(rows) == len(results) >= 100
+        and all(
+            str(row.get("entry_id") or "").strip()
+            and row.get("expected_decision") in labels
+            and row.get("actual_decision") in labels
+            and row.get("article_type") in article_types
+            and str(row.get("domain_slug") or "").strip()
+            and _number_in_range(row.get("cost_usd"), 0, math.inf)
+            and _number_in_range(row.get("duration_s"), 0, math.inf)
+            for row in rows
+        )
+        and len({str(row["entry_id"]) for row in rows}) == len(rows)
+        and {str(row["article_type"]) for row in rows} == article_types
+        and len({str(row["domain_slug"]) for row in rows}) >= 8
     )
 
 
@@ -197,52 +154,10 @@ def calibration_metrics_complete(raw: dict) -> bool:
     results = raw.get("results")
     if not isinstance(run_meta, dict) or not isinstance(summary, dict) or not isinstance(results, list):
         return False
-    labels = {item.value for item in Decision}
-    article_types = {item.value for item in ArticleType}
-    confusion = summary.get("confusion_matrix")
-    class_metrics = summary.get("class_metrics")
-    by_type = summary.get("by_article_type")
-    by_domain = summary.get("by_domain")
-    cost = summary.get("cost")
-    latency = summary.get("latency")
-    total = len(results)
-    confusion_total = _confusion_total(confusion, labels)
-    type_total = _bucket_total(by_type)
-    domain_total = _bucket_total(by_domain)
     agreement = run_meta.get("inter_adjudicator_decision_agreement")
     adjudicator_kappa = run_meta.get("inter_adjudicator_kappa")
-    false_accept_rate = summary.get("false_accept_rate")
-    judge_kappa = summary.get("cohen_kappa")
-    correct = summary.get("correct")
-    accuracy = summary.get("accuracy")
-    diagonal = _confusion_diagonal(confusion, labels)
     return bool(
-        total >= 100
-        and all(
-            isinstance(item, dict) and str(item.get("entry_id") or "").strip()
-            for item in results
-        )
-        and len({str(item.get("entry_id")) for item in results if isinstance(item, dict)}) == total
-        and summary.get("total") == total
-        and confusion_total == total
-        and correct == diagonal
-        and _accuracy_valid(accuracy, correct, total)
-        and _mismatch_count_valid(summary.get("mismatch_count"), correct, total)
-        and _class_metrics_valid(class_metrics, confusion, labels)
-        and isinstance(by_type, dict)
-        and set(by_type) == article_types
-        and type_total == total
-        and isinstance(by_domain, dict)
-        and len(by_domain) >= 8
-        and domain_total == total
-        and isinstance(cost, dict)
-        and all(_number_in_range(cost.get(key), 0, math.inf) for key in ("total_usd", "mean_usd"))
-        and isinstance(latency, dict)
-        and all(_number_in_range(latency.get(key), 0, math.inf) for key in ("total_s", "mean_s", "p95_s"))
-        and isinstance(summary.get("mismatches"), list)
-        and summary.get("mismatch_count") == len(summary["mismatches"])
-        and _number_in_range(false_accept_rate, 0, 1)
-        and _number_in_range(judge_kappa, -1, 1)
+        _calibration_results_valid(results)
         and _derived_metrics_valid(summary, results)
         and run_meta.get("judge_release_consistent") is True
         and run_meta.get("judge_release_target_matched") is True

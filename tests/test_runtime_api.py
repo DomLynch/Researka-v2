@@ -2367,6 +2367,17 @@ def test_calibration_rejects_inconsistent_derived_metrics() -> None:
     extra["summary"]["unverified_metric"] = 1
     assert calibration_metrics_complete(extra) is False
 
+    for invalid_row in (
+        {"duration_s": -1},
+        {"cost_usd": -1},
+        {"domain_slug": ""},
+        {"actual_decision": "unknown"},
+    ):
+        invalid = json.loads(json.dumps(artifact))
+        invalid["results"][2].update(invalid_row)
+        invalid["summary"] = summarize_gold_results(invalid["results"])
+        assert calibration_metrics_complete(invalid) is False
+
 
 def _test_judge_release(code_sha: str) -> dict[str, Any]:
     release: dict[str, Any] = {
