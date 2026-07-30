@@ -262,8 +262,11 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
     required = max(1, int(count * minimum_ratio + 0.999))
     if exact < required:
         return [
-            f"Add exact source tokens, DOI/PMID links, or evidence spans to major claims; "
-            f"{exact}/{count} claims are exactly traceable (required {required})."
+            f"Cite inline, inside each quantitative claim sentence: an in-text token matching a bundle "
+            f"entry's cited_as (e.g. 'Author 2025'), a bracketed [n] bundle index, or the DOI/PMID itself. "
+            f"This check reads the claim sentences, not source_bundle metadata — enriching bundle fields "
+            f"will not satisfy it. {exact}/{count} claim sentences carry an inline citation "
+            f"(required {required})."
         ]
     conclusion = "\n".join(
         str(value)
