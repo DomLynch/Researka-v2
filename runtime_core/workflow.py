@@ -257,17 +257,17 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
     bundle = [item for item in raw_bundle if isinstance(item, dict)] if isinstance(raw_bundle, list) else []
     profile = evidence_profile(text=prose, source_bundle=bundle)
     count = int(profile.get("claim_trace_count") or 0)
+    cited = int(profile.get("citation_trace_count") or 0)
     exact = int(profile.get("exact_claim_trace_count") or 0)
     if not count:
         return ["Add at least one substantive, source-traceable claim before acceptance."]
     required = max(1, int(count * minimum_ratio + 0.999))
     if exact < required:
         return [
-            f"Cite inline, inside each substantive claim sentence: an in-text token matching a bundle "
-            f"entry's cited_as (e.g. 'Author 2025'), [bundle:n] or standard [n], or the DOI/PMID itself. "
-            f"This check reads the claim sentences, not source_bundle metadata — enriching bundle fields "
-            f"will not satisfy it. {exact}/{count} claim sentences carry an inline citation "
-            f"(required {required})."
+            f"Each substantive claim must identify a bundle source and align with that source's submitted "
+            f"quote, evidence span, or excerpt. {cited}/{count} claims identify a source; {exact}/{count} "
+            f"also align with its evidence text (required {required}). Correct the citation mapping or "
+            f"submit the matching evidence span; unrelated metadata will not satisfy this check."
         ]
     conclusion = "\n".join(
         str(value)

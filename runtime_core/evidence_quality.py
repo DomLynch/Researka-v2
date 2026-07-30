@@ -71,6 +71,9 @@ def evidence_profile(*, text: str, source_bundle: list[dict[str, Any]] | None = 
         direct_count = bundle_direct_count
     lower = text.lower()
     claims = claim_candidates(text)
+    citation_traces = sum(
+        1 for claim in claims if support_for_claim(claim, source_bundle, require_evidence_alignment=False)
+    )
     exact_traces = sum(1 for claim in claims if support_for_claim(claim, source_bundle))
     quantitative_claims = quantitative_claim_candidates(text)
     quantitative_traces = sum(
@@ -86,6 +89,7 @@ def evidence_profile(*, text: str, source_bundle: list[dict[str, Any]] | None = 
         "directness_coverage": round(directness_count / selected_count, 4) if selected_count else None,
         "risk_of_bias_coverage": round(appraised_count / primary_count, 4) if primary_count else None,
         "claim_trace_count": len(claims),
+        "citation_trace_count": citation_traces,
         "exact_claim_trace_count": exact_traces,
         "exact_claim_trace_ratio": round(exact_traces / len(claims), 4) if claims else None,
         "quantitative_claim_count": len(quantitative_claims),
@@ -249,6 +253,7 @@ def support_for_claim(
     sources: list[dict[str, Any]],
     *,
     require_quantitative_agreement: bool = False,
+    require_evidence_alignment: bool = True,
 ) -> list[dict[str, Any]]:
     claim = text.lower()
     bundle_indexes = {int(value) - 1 for value in BUNDLE_REFERENCE_PATTERN.findall(text)}
@@ -292,7 +297,7 @@ def support_for_claim(
         for index in sorted(
             bundle_indexes | numeric_indexes | doi_indexes | pmid_indexes | cited_as_indexes | span_indexes
         )
-        if _evidence_aligns(text, sources[index])
+        if not require_evidence_alignment or _evidence_aligns(text, sources[index])
     ]
     aligned_sources = [sources[index] for index in aligned_indexes]
     if require_quantitative_agreement and not _quantities_agree(text, aligned_sources):

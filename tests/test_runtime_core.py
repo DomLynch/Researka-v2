@@ -762,7 +762,9 @@ def test_claim_trace_guard_accepts_numeric_and_pmid_citations() -> None:
 
     assert workflow._claim_trace_guard_revisions(submission) == []
     submission.metadata["source_bundle"][0]["excerpt"] = "An unrelated source that does not support the claim."
-    assert workflow._claim_trace_guard_revisions(submission)
+    revision = workflow._claim_trace_guard_revisions(submission)[0]
+    assert "2/2 claims identify a source" in revision
+    assert "1/2 also align with its evidence text" in revision
 
 
 def test_claim_trace_guard_ignores_markdown_table_structure() -> None:
