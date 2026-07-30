@@ -898,6 +898,41 @@ def test_reviewer_panel_excludes_false_source_identifier_accusation() -> None:
     )
 
 
+def test_recovered_review_markdown_does_not_bypass_source_integrity_grounding() -> None:
+    invalid_payload = _review_payload(
+        major_issues=["The DOI citations appear fabricated."],
+        minor_issues=[],
+        required_revisions=["Replace the fabricated citations."],
+        review_markdown="",
+    )
+    valid_payload = _review_payload(
+        major_issues=["Methods do not explain the source inclusion criteria."],
+        minor_issues=[],
+        required_revisions=["Add explicit source inclusion criteria to Methods."],
+        review_markdown="",
+    )
+    panel = ReviewerPanel(
+        primary=_StaticReviewProvider(invalid_payload),
+        sparring=_StaticReviewProvider(valid_payload),
+        fallback=_StaticReviewProvider(valid_payload),
+    )
+
+    result = panel.complete(
+        ProviderRequest(
+            system_prompt="system",
+            user_prompt="user",
+            prompt_version="reviewer-v1",
+            response_format="json_object",
+        )
+    )
+
+    assert result.ok is True
+    assert result.response is not None
+    assert result.response.metadata["route"] == "primary_failed_sparring_used"
+    assert result.response.metadata["review_markdown_recovered"] is True
+    assert str(result.response.metadata["primary_error"]).endswith("source_integrity_finding_missing_id")
+
+
 def test_review_allows_verified_source_support_criticism() -> None:
     issue = "PMID 41536962 resolves, but it does not support the manuscript's broad causal claim."
     payload = _review_payload(

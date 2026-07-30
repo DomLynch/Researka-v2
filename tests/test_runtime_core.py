@@ -1422,6 +1422,7 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
     assert "accept = all scores >= 4" in prompt
     assert "Never assume unverifiable percentages" in prompt
     assert "required_revisions lists concrete fixes" in prompt
+    assert "review_markdown must be a non-empty rationale" in prompt
     assert "Do not label accept-quality papers as revise for minor wording polish only" in prompt
     assert "reject = structurally broken" in prompt
     empirical_prompt = WorkflowEngine()._review_system_prompt(ArticleType.EMPIRICAL_STUDY.value)
@@ -1919,7 +1920,13 @@ def test_reviewer_panel_retries_malformed_tiebreaker_once() -> None:
         "openrouter",
         "mistralai/mistral-small-2603",
         [
-            _review_payload("revise", review_markdown=""),
+            _review_payload(
+                "revise",
+                review_markdown="",
+                major_issues=[],
+                minor_issues=[],
+                required_revisions=[],
+            ),
             _review_payload("revise", review_markdown="Fallback revises on retry."),
         ],
     )
@@ -2086,6 +2093,49 @@ def test_reviewer_panel_treats_missing_review_markdown_as_failure() -> None:
     assert result.response.metadata["route"] == "single_reviewer_accept_overruled"
     assert result.response.metadata["accept_quorum_count"] == 1
     assert "missing_review_markdown" in str(result.response.metadata["primary_error"])
+
+
+def test_reviewer_panel_recovers_non_accept_review_markdown_from_structured_feedback() -> None:
+    class Provider:
+        provider = "stub"
+        model = "stub-model"
+
+        def __init__(self, payload: dict[str, object]) -> None:
+            self.payload = payload
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:  # noqa: ARG002
+            return ProviderResult(
+                ok=True,
+                response=ProviderResponse(
+                    text=json.dumps(self.payload),
+                    provider=self.provider,
+                    model=self.model,
+                    usage=ProviderUsage(input_tokens=10, output_tokens=5, cost_usd=0.1),
+                ),
+            )
+
+    missing_markdown = _review_payload("revise", review_markdown="")
+    panel = ReviewerPanel(
+        primary=Provider(missing_markdown),
+        sparring=Provider(_review_payload("revise")),
+        fallback=Provider(_review_payload("reject")),
+    )
+
+    result = panel.complete(
+        ProviderRequest(
+            system_prompt="system",
+            user_prompt="user",
+            prompt_version="reviewer-v1",
+            response_format="json_object",
+        )
+    )
+
+    assert result.ok is True
+    assert result.response is not None
+    payload = json.loads(result.response.text)
+    assert payload["recommendation"] == "revise"
+    assert "Required revisions:" in payload["review_markdown"]
+    assert result.response.metadata["review_markdown_recovered"] is True
 
 
 def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:

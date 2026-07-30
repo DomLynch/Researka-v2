@@ -321,6 +321,7 @@ class ReviewerPanel:
             "route": route,
             "winner_provider": winner.response.provider,
             "winner_model": winner.response.model,
+            "review_markdown_recovered": bool(winner.response.metadata.get("review_markdown_recovered")),
             "panel_models": sorted({
                 result.response.model for result in used if result.response and result.response.model.strip()
             }),
@@ -352,6 +353,7 @@ class ReviewerPanel:
             return result
         try:
             payload = self._payload_from_result(result)
+            result, payload = self._recover_review_markdown(result, payload)
             self._validate_payload_contract(payload)
             source_verification = request.context.get("source_verification")
             grounding_failure = review_grounding_failure(
@@ -370,6 +372,37 @@ class ReviewerPanel:
                 ),
             )
         return result
+
+    def _recover_review_markdown(
+        self,
+        result: ProviderResult,
+        payload: dict[str, object],
+    ) -> tuple[ProviderResult, dict[str, object]]:
+        if str(payload.get("review_markdown") or "").strip():
+            return result, payload
+        recommendation = str(payload.get("recommendation") or "").strip().lower()
+        if recommendation not in {"revise", "reject"}:
+            return result, payload
+        sections: list[str] = []
+        for label, field in (
+            ("Major issues", "major_issues"),
+            ("Minor issues", "minor_issues"),
+            ("Required revisions", "required_revisions"),
+        ):
+            values = payload.get(field)
+            items = [str(item).strip() for item in values if str(item).strip()] if isinstance(values, list) else []
+            if items:
+                sections.append(f"{label}:\n" + "\n".join(f"- {item}" for item in items))
+        if not sections or result.response is None:
+            return result, payload
+        repaired = {**payload, "review_markdown": "\n\n".join(sections)}
+        response = result.response.model_copy(
+            update={
+                "text": json.dumps(repaired),
+                "metadata": {**result.response.metadata, "review_markdown_recovered": True},
+            }
+        )
+        return result.model_copy(update={"response": response}), repaired
 
     def _recommendation_from(self, result: ProviderResult) -> str:
         payload = self._payload_from_result(result)
