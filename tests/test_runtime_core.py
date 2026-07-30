@@ -734,6 +734,66 @@ def test_research_synthesis_trace_guard_requires_eighty_percent_exact() -> None:
     assert workflow._claim_trace_guard_revisions(submission) == []
 
 
+def test_claim_trace_guard_accepts_numeric_and_pmid_citations() -> None:
+    submission = ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Research Synthesis: bounded outcomes",
+        metadata={
+            "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
+            "abstract": "\n".join(
+                [
+                    "The evidence supports a bounded endpoint-specific improvement in the tested population [1].",
+                    "The evidence suggests the second outcome remains uncertain outside that population (PMID: 22222222).",
+                ]
+            ),
+            "source_bundle": [
+                {
+                    "title": "Alpha trial",
+                    "excerpt": "The tested population had a bounded endpoint-specific improvement.",
+                },
+                {
+                    "title": "Beta trial",
+                    "pmid": "22222222",
+                    "excerpt": "The second outcome remained uncertain outside the tested population.",
+                },
+            ],
+        },
+    )
+
+    assert workflow._claim_trace_guard_revisions(submission) == []
+    submission.metadata["source_bundle"][0]["excerpt"] = "An unrelated source that does not support the claim."
+    assert workflow._claim_trace_guard_revisions(submission)
+
+
+def test_claim_trace_guard_ignores_markdown_table_structure() -> None:
+    submission = ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Research Synthesis: bounded outcome",
+        metadata={
+            "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
+            "sections": {
+                "Results": "\n".join(
+                    [
+                        "| Evidence domain | Evidence support summary | Main limitation |",
+                        "| --- | --- | --- |",
+                        "| Biomarker | The evidence supports a bounded signal across the retained corpus | Sparse data |",
+                        "The evidence supports a bounded endpoint-specific improvement in the tested population (Alpha 2026).",
+                    ]
+                )
+            },
+            "source_bundle": [
+                {
+                    "title": "Alpha trial",
+                    "cited_as": "Alpha 2026",
+                    "excerpt": "The tested population had a bounded endpoint-specific improvement.",
+                }
+            ],
+        },
+    )
+
+    assert workflow._claim_trace_guard_revisions(submission) == []
+
+
 def test_claim_trace_guard_checks_abstract_numbers_against_evidence() -> None:
     source = {
         "title": "Alpha trial",

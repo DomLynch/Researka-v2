@@ -15,6 +15,8 @@ BUNDLE_REFERENCE_PATTERN = re.compile(r"\[bundle:(\d+)\]", re.IGNORECASE)
 DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
 NUMERIC_CITATION_PATTERN = re.compile(r"\[(?:\d+[\s,;-]*)+\]|\b(?:source|ref(?:erence)?)\s*#?\d+\b", re.IGNORECASE)
 PMID_PATTERN = re.compile(r"\bPMID\s*:?\s*\d+\b", re.IGNORECASE)
+BRACKETED_CITATION_PATTERN = re.compile(r"\[((?:\d+[\s,;-]*)+)\]")
+PMID_VALUE_PATTERN = re.compile(r"\bPMID\s*:?\s*(\d+)\b", re.IGNORECASE)
 QUANTITY_PATTERN = re.compile(
     r"(?<![\w./])(?P<number>[+-]?(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+))(?:\s*-\s*|\s*)"
     r"(?P<unit>(?:%|percent(?:age)?(?:\s+points?)?|pp|mmol|mol|mmhg|bpm|hz|"
@@ -251,10 +253,22 @@ def support_for_claim(
     claim = text.lower()
     bundle_indexes = {int(value) - 1 for value in BUNDLE_REFERENCE_PATTERN.findall(text)}
     bundle_indexes = {index for index in bundle_indexes if 0 <= index < len(sources)}
+    numeric_indexes = {
+        int(value) - 1
+        for group in BRACKETED_CITATION_PATTERN.findall(text)
+        for value in re.findall(r"\d+", group)
+        if 0 < int(value) <= len(sources)
+    }
     doi_indexes = {
         index
         for index, source in enumerate(sources)
         if source.get("doi") and str(source["doi"]).lower().rstrip(".,") in claim
+    }
+    pmids = set(PMID_VALUE_PATTERN.findall(text))
+    pmid_indexes = {
+        index
+        for index, source in enumerate(sources)
+        if re.sub(r"\D", "", str(source.get("pmid") or "")) in pmids
     }
     cited_as_indexes = {
         index
@@ -275,7 +289,9 @@ def support_for_claim(
     }
     aligned_indexes = [
         index
-        for index in sorted(bundle_indexes | doi_indexes | cited_as_indexes | span_indexes)
+        for index in sorted(
+            bundle_indexes | numeric_indexes | doi_indexes | pmid_indexes | cited_as_indexes | span_indexes
+        )
         if _evidence_aligns(text, sources[index])
     ]
     aligned_sources = [sources[index] for index in aligned_indexes]
@@ -292,8 +308,12 @@ def support_for_claim(
             "support_kind": (
                 "bundle_reference"
                 if index in bundle_indexes
+                else "numeric_citation"
+                if index in numeric_indexes
                 else "direct_doi_match"
                 if index in doi_indexes
+                else "direct_pmid_match"
+                if index in pmid_indexes
                 else "cited_as_match"
                 if index in cited_as_indexes
                 else "evidence_span_match"

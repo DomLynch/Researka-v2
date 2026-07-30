@@ -252,6 +252,7 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
         ]
         prose = "\n".join([str(submission.metadata.get("abstract") or ""), *major_sections])
         minimum_ratio = 0.8
+    prose = "\n".join(line for line in prose.splitlines() if not line.lstrip().startswith("|"))
     raw_bundle = submission.metadata.get("source_bundle")
     bundle = [item for item in raw_bundle if isinstance(item, dict)] if isinstance(raw_bundle, list) else []
     profile = evidence_profile(text=prose, source_bundle=bundle)
@@ -262,8 +263,8 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
     required = max(1, int(count * minimum_ratio + 0.999))
     if exact < required:
         return [
-            f"Cite inline, inside each quantitative claim sentence: an in-text token matching a bundle "
-            f"entry's cited_as (e.g. 'Author 2025'), a bracketed [n] bundle index, or the DOI/PMID itself. "
+            f"Cite inline, inside each substantive claim sentence: an in-text token matching a bundle "
+            f"entry's cited_as (e.g. 'Author 2025'), [bundle:n] or standard [n], or the DOI/PMID itself. "
             f"This check reads the claim sentences, not source_bundle metadata — enriching bundle fields "
             f"will not satisfy it. {exact}/{count} claim sentences carry an inline citation "
             f"(required {required})."
