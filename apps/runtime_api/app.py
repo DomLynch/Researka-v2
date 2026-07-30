@@ -37,6 +37,7 @@ from runtime_core.osf import (
     verify_oauth_state,
     warn_if_osf_default_owner_missing,
 )
+from runtime_core.ops import operational_alerts, submission_lifecycle
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 from runtime_core.publication_sidecars import build_sidecar, sidecar_manifest
 
@@ -1073,6 +1074,7 @@ def _submission_decision_response(
         "publication_status": publication_status,
         "publication_failure": publication_failure,
         "publication": publication,
+        "pipeline": submission_lifecycle(repo, submission_id),
     }
     return response
 
@@ -1189,21 +1191,18 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         metadata = _submission_metadata_for_agent(payload, agent_id)
         _require_agent_enabled(metadata.get("authenticated_agent_id") or metadata.get("author_agent_id") or metadata.get("agent_id"))
         metadata["submission_content_hash"] = content_hash
-        submission = app.state.repository.create_object(
-            ResearchObject(
-                object_type=ObjectType.SUBMISSION,
-                title=payload.title,
-                body_markdown=payload.body_markdown or payload.abstract,
-                metadata=metadata,
-            )
+        submission = ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title=payload.title,
+            body_markdown=payload.body_markdown or payload.abstract,
+            metadata=metadata,
         )
-        job = app.state.repository.enqueue_job(
-            RuntimeJob(
-                target_object_id=submission.id,
-                stage=Stage.INTAKE,
-                payload={"domain_slug": payload.domain_slug},
-            )
+        job = RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": payload.domain_slug},
         )
+        submission, job = app.state.repository.create_object_and_enqueue_job(submission, job)
         return {"submission": submission.model_dump(mode="json"), "job": job.model_dump(mode="json")}
 
     @app.post("/agents/register", status_code=201)
@@ -1288,6 +1287,10 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
 
     @app.get("/submissions/{submission_id}/decision")
     def get_submission_decision(submission_id: str) -> dict:
+        submission = app.state.repository.get_object(submission_id)
+        if submission is None or submission.object_type != ObjectType.SUBMISSION:
+            raise HTTPException(status_code=404, detail="submission_not_found")
+        pipeline = submission_lifecycle(app.state.repository, submission_id)
         decisions = app.state.repository.children_of(submission_id, ObjectType.DECISION)
         if not decisions:
             failure = _terminal_submission_failure_feedback(app.state.repository, submission_id)
@@ -1300,8 +1303,9 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                     "failure_stage": failure["stage"],
                     "failure_category": failure["failure_class"],
                     "failed_checks": [failure["reason"]],
+                    "pipeline": pipeline,
                 }
-            return {"status": "pending", "decision": None, "notes": [], "gate_failures": []}
+            return {"status": "pending", "decision": None, "notes": [], "gate_failures": [], "pipeline": pipeline}
         latest = decisions[-1]
         return _submission_decision_response(repo=app.state.repository, submission_id=submission_id, decision=latest)
 
@@ -1614,6 +1618,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             "publications": [p.model_dump(mode="json") for p in publications],
             "jobs": [j.model_dump(mode="json") for j in jobs],
             "events": [e.model_dump(mode="json") for e in events],
+            "pipeline": submission_lifecycle(app.state.repository, submission_id),
         }
 
     @app.get("/ops/summary")
@@ -1668,6 +1673,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             "disagreement_rate": round(disagreement_rate, 3),
             "avg_cost_usd": round(total_cost / cost_count, 4) if cost_count else 0.0,
             "total_cost_usd": round(total_cost, 4),
+            "alerts": operational_alerts(repo),
         }
 
     @app.post("/ops/keys")

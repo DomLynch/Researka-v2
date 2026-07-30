@@ -24,6 +24,7 @@ class _InvalidSubmissionEngine:
 
 def test_provider_review_failure_retries_to_success(monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_REVIEW_JOB_MAX_RETRIES", "2")
+    monkeypatch.setenv("RESEARKA_V2_REVIEW_JOB_RETRY_BACKOFF_SEC", "0")
     repo = InMemoryRuntimeRepository()
     first = repo.enqueue_job(RuntimeJob(target_object_id="submission-1", stage=Stage.REVIEW))
     worker = WorkerApp(repo, engine=_FlakyReviewEngine(failures=2))
@@ -52,6 +53,7 @@ def test_provider_review_failure_retries_to_success(monkeypatch) -> None:
 
 def test_provider_review_retry_is_bounded(monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_REVIEW_JOB_MAX_RETRIES", "1")
+    monkeypatch.setenv("RESEARKA_V2_REVIEW_JOB_RETRY_BACKOFF_SEC", "0")
     repo = InMemoryRuntimeRepository()
     repo.enqueue_job(RuntimeJob(target_object_id="submission-1", stage=Stage.REVIEW))
     worker = WorkerApp(repo, engine=_FlakyReviewEngine(failures=99))
@@ -82,6 +84,26 @@ def test_provider_review_retry_enqueue_failure_is_terminal(monkeypatch) -> None:
     failure_event = [event for event in repo.list_events() if event.event_type == EventType.JOB_FAILED][-1]
     assert failure_event.payload["terminal"] is True
     assert failure_event.payload["reason"].endswith("retry_enqueue_failed: queue unavailable")
+
+
+def test_provider_review_retry_waits_for_backoff(monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_REVIEW_JOB_RETRY_BACKOFF_SEC", "3600")
+    repo = InMemoryRuntimeRepository()
+    repo.enqueue_job(RuntimeJob(target_object_id="submission-1", stage=Stage.REVIEW))
+
+    result = WorkerApp(repo, engine=_FlakyReviewEngine(failures=1)).run_once()
+
+    assert result["retried"] == 1
+    retry = repo.get_job(result["retry_job_id"])
+    assert retry is not None and retry.payload["retry_not_before"]
+    assert repo.claim_next_job() is None
+    failure = next(event for event in repo.list_events() if event.event_type == EventType.JOB_FAILED)
+    retry_queued = next(
+        event
+        for event in repo.list_events()
+        if event.event_type == EventType.JOB_QUEUED and event.job_id == retry.id
+    )
+    assert failure.ts <= retry_queued.ts
 
 
 def test_non_provider_failure_is_not_retried() -> None:

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Researka v2 publish canary daily
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=15m
+Unit=researka-v2-canary.service
+
+[Install]
+WantedBy=timers.target

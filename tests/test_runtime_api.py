@@ -515,10 +515,21 @@ def test_submission_decision_pending_before_review(client: TestClient) -> None:
     ).json()["submission"]
     response = client.get(f"/submissions/{submission['id']}/decision")
     assert response.status_code == 200
-    assert response.json()["status"] == "pending"
+    payload = response.json()
+    assert payload["status"] == "pending"
+    assert payload["pipeline"]["current_stage"] == Stage.INTAKE.value
+    assert payload["pipeline"]["attempt_count"] == 1
+
+
+def test_submission_decision_unknown_id_is_not_pending(client: TestClient) -> None:
+    response = client.get("/submissions/missing-submission/decision")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "submission_not_found"
 
 
 def test_submission_decision_reports_only_terminal_review_failure(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_REVIEW_JOB_RETRY_BACKOFF_SEC", "0")
     created = client.post("/submissions", json=_minimal_submission_payload()).json()
     submission_id = created["submission"]["id"]
     worker = cast(Any, client.app).state.worker
@@ -544,12 +555,6 @@ def test_submission_decision_reports_only_terminal_review_failure(client: TestCl
     repository.lease_ttl_seconds = -1
     retry_job = repository.claim_next_job(target_object_id=submission_id)
     assert retry_job is not None
-    repository.record_event(RuntimeEvent(
-        event_type=EventType.JOB_LEASED,
-        target_object_id=submission_id,
-        job_id=retry_job.id,
-        payload={"stage": Stage.REVIEW.value},
-    ))
     assert client.get(f"/submissions/{submission_id}/decision").json()["status"] == "pending"
 
     terminal_failure = client.post("/jobs/run-once", headers=_worker_headers()).json()
@@ -559,7 +564,16 @@ def test_submission_decision_reports_only_terminal_review_failure(client: TestCl
     failed_events = [event for event in repository.list_events() if event.event_type == EventType.JOB_FAILED]
     assert failed_events[-1].payload["terminal"] is True
     assert response.status_code == 200
-    assert response.json() == {
+    payload = response.json()
+    assert {key: payload[key] for key in (
+        "status",
+        "decision",
+        "notes",
+        "gate_failures",
+        "failure_stage",
+        "failure_category",
+        "failed_checks",
+    )} == {
         "status": "failed",
         "decision": None,
         "notes": [],
@@ -568,6 +582,8 @@ def test_submission_decision_reports_only_terminal_review_failure(client: TestCl
         "failure_category": "quality_gate",
         "failed_checks": ["quality_gate_failed: terminal review failure"],
     }
+    assert payload["pipeline"]["attempt_count"] == 3
+    assert payload["pipeline"]["attempts"][-1]["terminal"] is True
 
 
 def test_can_list_publications_after_processing(client: TestClient) -> None:

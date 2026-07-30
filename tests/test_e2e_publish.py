@@ -101,6 +101,9 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     assert decision_payload["publication_status"] == "published"
     assert decision_payload["publication_failure"] is None
     assert publication.metadata["judge_release_id"] == decision_payload["judge_release_id"]
+    assert decision_payload["pipeline"]["current_stage"] == Stage.PUBLISH.value
+    assert decision_payload["pipeline"]["attempt_count"] == 4
+    assert decision_payload["pipeline"]["attempts"][-1]["event"] == EventType.JOB_COMPLETED.value
 
     repository.enqueue_job(RuntimeJob(target_object_id=publication.parent_object_id, stage=Stage.PUBLISH))
     duplicate_publish = client.post("/jobs/run-once", headers=_worker_headers())

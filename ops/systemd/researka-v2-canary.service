@@ -1,0 +1,15 @@
+[Unit]
+Description=Researka v2 deterministic publish canary
+After=researka-v2.service researka-v2-worker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/Researka-v2
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/usr/bin/systemctl is-active --quiet researka-v2.service
+ExecStartPre=/usr/bin/systemctl is-active --quiet researka-v2-worker.service
+ExecStartPre=/usr/bin/curl --fail --silent --show-error http://127.0.0.1:8000/health
+ExecStart=/root/Researka-v2/.venv/bin/python -m pytest -q tests/test_e2e_publish.py::test_end_to_end_publish_happy_path
+User=root
+NoNewPrivileges=true
+PrivateTmp=true

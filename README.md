@@ -139,3 +139,18 @@ Clean old windows with:
 Public acceptance requires unique resolvable sources, a substantive receipt for every load-bearing source, exact claim-to-receipt traces, and a distinct-model reviewer quorum. DOI/source metadata, every supplied PMID, and integrity checks are enabled and fail closed by default: an unavailable verifier returns `revise`, while retracted sources or identifier conflicts return `reject`. Provider-only review failures create immutable, bounded retry jobs (`RESEARKA_V2_REVIEW_JOB_MAX_RETRIES`, default `2`) instead of weakening quorum or stranding the submission.
 
 Set `RESEARKA_DOI_CHECK_FAIL_CLOSED=0`, `RESEARKA_SOURCE_METADATA_FAIL_CLOSED=0`, or `RESEARKA_INTEGRITY_FAIL_CLOSED=0` only for isolated development. Production must keep all three at `1`.
+
+## Submission lifecycle reliability
+
+Submission intake stores the submission, first job, and queue event atomically. Provider retries use bounded exponential backoff (`RESEARKA_V2_REVIEW_JOB_RETRY_BACKOFF_SEC=15`, cap `RESEARKA_V2_REVIEW_JOB_RETRY_BACKOFF_CAP_SEC=300`), while expired leases are reclaimed by the existing worker claim.
+
+The worker reconciles interrupted stage handoffs after `RESEARKA_V2_RECONCILE_STALE_SEC=120` and emits structured alerts for old queues, repeated terminal failures, and publication stalls. Alert thresholds are controlled by:
+
+```bash
+RESEARKA_V2_ALERT_QUEUE_AGE_SEC=900
+RESEARKA_V2_ALERT_FAILURE_WINDOW_SEC=3600
+RESEARKA_V2_ALERT_FAILURE_THRESHOLD=3
+RESEARKA_V2_ALERT_PUBLICATION_STALL_SEC=86400
+```
+
+`GET /submissions/{id}/decision` includes the sanitized pipeline timestamps and attempt history. The daily `researka-v2-canary.timer` runs the deterministic submit-review-decide-publish receipt without external model or network spend.

@@ -15,6 +15,7 @@ from contracts import (
     AuditReview,
     AuditVerdict,
     ClaimCard,
+    EventType,
     FailureClass,
     JobStatus,
     ObjectType,
@@ -24,6 +25,19 @@ from contracts import (
 )
 
 OSF_TOKEN_METADATA_ENCRYPTION_PREFIX = "fernet:v1:"
+
+
+def _job_available(job: RuntimeJob, now: datetime) -> bool:
+    raw = job.payload.get("retry_not_before")
+    if not raw:
+        return True
+    try:
+        not_before = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if not_before.tzinfo is None:
+        not_before = not_before.replace(tzinfo=timezone.utc)
+    return not_before <= now
 
 
 def _claim_card_to_row(card: ClaimCard) -> tuple:
@@ -109,6 +123,7 @@ def _decode_osf_token_metadata(raw: str) -> dict | None:
 class RuntimeRepository(Protocol):
     def reset(self) -> None: ...
     def create_object(self, obj: ResearchObject) -> ResearchObject: ...
+    def create_object_and_enqueue_job(self, obj: ResearchObject, job: RuntimeJob) -> tuple[ResearchObject, RuntimeJob]: ...
     def get_object(self, object_id: str) -> ResearchObject | None: ...
     def update_object_metadata(self, object_id: str, metadata: dict) -> ResearchObject | None: ...
     def list_objects(self, object_type: ObjectType | str | None = None) -> list[ResearchObject]: ...
@@ -117,11 +132,25 @@ class RuntimeRepository(Protocol):
     def enqueue_job(self, job: RuntimeJob) -> RuntimeJob: ...
     def get_job(self, job_id: str) -> RuntimeJob | None: ...
     def queued_jobs(self, stage: str | None = None) -> list[RuntimeJob]: ...
-    def claim_next_job(self, *, target_object_id: str | None = None) -> RuntimeJob | None: ...
-    def complete_job(self, job_id: str) -> None: ...
-    def fail_job(self, job_id: str, *, reason: str, failure_class: FailureClass | None = None) -> None: ...
+    def active_jobs(self) -> list[RuntimeJob]: ...
+    def claim_next_job(
+        self,
+        *,
+        target_object_id: str | None = None,
+        worker_id: str | None = None,
+    ) -> RuntimeJob | None: ...
+    def complete_job(self, job_id: str, *, event: RuntimeEvent | None = None) -> None: ...
+    def fail_job(
+        self,
+        job_id: str,
+        *,
+        reason: str,
+        failure_class: FailureClass | None = None,
+        event: RuntimeEvent | None = None,
+    ) -> None: ...
     def record_event(self, event: RuntimeEvent) -> None: ...
     def list_events(self) -> list[RuntimeEvent]: ...
+    def events_for_target(self, target_object_id: str) -> list[RuntimeEvent]: ...
 
     # API key management
     def create_api_key(self, agent_id: str, *, label: str = "", daily_limit: int = 0) -> ApiKeyCreateResponse: ...
@@ -179,6 +208,18 @@ class InMemoryRuntimeRepository:
             self.publication_by_target[obj.parent_object_id] = obj.id
         return obj
 
+    def create_object_and_enqueue_job(self, obj: ResearchObject, job: RuntimeJob) -> tuple[ResearchObject, RuntimeJob]:
+        if job.target_object_id != obj.id:
+            raise ValueError("job_target_must_match_object")
+        self.create_object(obj)
+        try:
+            return obj, self.enqueue_job(job)
+        except Exception:
+            self.objects.pop(obj.id, None)
+            if obj.parent_object_id:
+                self.objects_by_parent[obj.parent_object_id].remove(obj.id)
+            raise
+
     def get_object(self, object_id: str) -> ResearchObject | None:
         return self.objects.get(object_id)
 
@@ -221,16 +262,24 @@ class InMemoryRuntimeRepository:
                 self.jobs[completed.id] = completed
                 self.jobs_by_target[completed.target_object_id].append(completed.id)
                 return completed
-            for existing_id in self.jobs_by_target[job.target_object_id]:
-                existing = self.jobs[existing_id]
-                if existing.stage == job.stage and existing.status in {
-                    JobStatus.QUEUED,
-                    JobStatus.LEASED,
-                    JobStatus.COMPLETED,
-                }:
-                    return existing
+        for existing_id in self.jobs_by_target[job.target_object_id]:
+            existing = self.jobs[existing_id]
+            if existing.stage == job.stage and existing.status in {
+                JobStatus.QUEUED,
+                JobStatus.LEASED,
+                JobStatus.COMPLETED,
+            }:
+                return existing
         self.jobs[job.id] = job
         self.jobs_by_target[job.target_object_id].append(job.id)
+        self.record_event(
+            RuntimeEvent(
+                event_type=EventType.JOB_QUEUED,
+                target_object_id=job.target_object_id,
+                job_id=job.id,
+                payload={"stage": job.stage.value, **job.payload},
+            )
+        )
         return job
 
     def get_job(self, job_id: str) -> RuntimeJob | None:
@@ -242,13 +291,36 @@ class InMemoryRuntimeRepository:
             return jobs
         return [job for job in jobs if job.stage.value == stage]
 
-    def claim_next_job(self, *, target_object_id: str | None = None) -> RuntimeJob | None:
+    def active_jobs(self) -> list[RuntimeJob]:
+        return [
+            job
+            for job in self.jobs.values()
+            if job.status in {JobStatus.QUEUED, JobStatus.LEASED}
+        ]
+
+    def claim_next_job(
+        self,
+        *,
+        target_object_id: str | None = None,
+        worker_id: str | None = None,
+    ) -> RuntimeJob | None:
         now = datetime.now(timezone.utc)
         for job in self.jobs.values():
             if job.status == JobStatus.LEASED and job.lease_expires_at and job.lease_expires_at <= now:
                 job.status = JobStatus.QUEUED
                 job.lease_expires_at = None
-        jobs = sorted(self.queued_jobs(), key=lambda job: job.created_at)
+                self.record_event(
+                    RuntimeEvent(
+                        event_type=EventType.JOB_QUEUED,
+                        target_object_id=job.target_object_id,
+                        job_id=job.id,
+                        payload={"stage": job.stage.value, "lease_reclaimed": True},
+                    )
+                )
+        jobs = sorted(
+            (job for job in self.queued_jobs() if _job_available(job, now)),
+            key=lambda job: job.created_at,
+        )
         if target_object_id is not None:
             jobs = [j for j in jobs if j.target_object_id == target_object_id]
         if not jobs:
@@ -256,24 +328,51 @@ class InMemoryRuntimeRepository:
         job = jobs[0]
         job.status = JobStatus.LEASED
         job.lease_expires_at = now + timedelta(seconds=self.lease_ttl_seconds)
+        self.record_event(
+            RuntimeEvent(
+                event_type=EventType.JOB_LEASED,
+                target_object_id=job.target_object_id,
+                job_id=job.id,
+                worker_id=worker_id,
+                payload={"stage": job.stage.value},
+                ts=now,
+            )
+        )
         return job
 
-    def complete_job(self, job_id: str) -> None:
+    def complete_job(self, job_id: str, *, event: RuntimeEvent | None = None) -> None:
         self.jobs[job_id].status = JobStatus.COMPLETED
         self.jobs[job_id].lease_expires_at = None
+        if event is not None:
+            self.record_event(event)
 
-    def fail_job(self, job_id: str, *, reason: str, failure_class: FailureClass | None = None) -> None:
+    def fail_job(
+        self,
+        job_id: str,
+        *,
+        reason: str,
+        failure_class: FailureClass | None = None,
+        event: RuntimeEvent | None = None,
+    ) -> None:
         self.jobs[job_id].status = JobStatus.FAILED
         self.jobs[job_id].lease_expires_at = None
         self.jobs[job_id].payload["failure_reason"] = reason
         if failure_class is not None:
             self.jobs[job_id].payload["failure_class"] = failure_class.value
+        if event is not None:
+            self.record_event(event)
 
     def record_event(self, event: RuntimeEvent) -> None:
         self.events.append(event)
 
     def list_events(self) -> list[RuntimeEvent]:
         return list(self.events)
+
+    def events_for_target(self, target_object_id: str) -> list[RuntimeEvent]:
+        return sorted(
+            (event for event in self.events if event.target_object_id == target_object_id),
+            key=lambda event: event.ts,
+        )
 
     # --- API key management (in-memory) ---
 
@@ -558,6 +657,22 @@ class PostgresRuntimeRepository:
                 "CREATE INDEX IF NOT EXISTS idx_claim_cards_publication_id "
                 "ON claim_cards(publication_id)"
             )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_runtime_events_target_ts "
+                "ON runtime_events(target_object_id, ts)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_runtime_jobs_status_created "
+                "ON runtime_jobs(status, created_at)"
+            )
+            cur.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_jobs_active_target_stage "
+                "ON runtime_jobs(target_object_id, stage) WHERE status IN ('queued', 'leased')"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_research_objects_parent_type "
+                "ON research_objects(parent_object_id, object_type, created_at)"
+            )
             cur.execute("SELECT pg_advisory_unlock(62004201)")
             conn.commit()
 
@@ -624,6 +739,50 @@ class PostgresRuntimeRepository:
             )
             conn.commit()
         return obj
+
+    def create_object_and_enqueue_job(self, obj: ResearchObject, job: RuntimeJob) -> tuple[ResearchObject, RuntimeJob]:
+        if job.target_object_id != obj.id:
+            raise ValueError("job_target_must_match_object")
+        event = RuntimeEvent(
+            event_type=EventType.JOB_QUEUED,
+            target_object_id=job.target_object_id,
+            job_id=job.id,
+            payload={"stage": job.stage.value, **job.payload},
+        )
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO research_objects (id, object_type, parent_object_id, title, body_markdown, metadata, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    obj.id,
+                    obj.object_type,
+                    obj.parent_object_id,
+                    obj.title,
+                    obj.body_markdown,
+                    json.dumps(obj.metadata),
+                    obj.created_at,
+                ),
+            )
+            cur.execute(
+                """
+                INSERT INTO runtime_jobs (id, target_object_id, stage, status, payload, lease_expires_at, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    job.id,
+                    job.target_object_id,
+                    job.stage.value,
+                    job.status.value,
+                    json.dumps(job.payload),
+                    job.lease_expires_at,
+                    job.created_at,
+                ),
+            )
+            self._insert_event(cur, event)
+            conn.commit()
+        return obj, job
 
     def get_object(self, object_id: str) -> ResearchObject | None:
         with self._connect() as conn, conn.cursor() as cur:
@@ -694,24 +853,31 @@ class PostgresRuntimeRepository:
                 )
                 self._insert_job(completed)
                 return completed
-            with self._connect() as conn, conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT * FROM runtime_jobs
-                    WHERE target_object_id = %s AND stage = %s AND status IN ('queued', 'leased', 'completed')
-                    ORDER BY created_at ASC
-                    LIMIT 1
-                    """,
-                    (job.target_object_id, job.stage.value),
-                )
-                existing = cur.fetchone()
-                if existing is not None:
-                    existing_job = self._job_from_row(existing)
-                    if existing_job is None:
-                        raise RuntimeError("existing_job_decode_failed")
-                    return existing_job
-        self._insert_job(job)
+        existing_job = self._existing_job_for_stage(job)
+        if existing_job is not None:
+            return existing_job
+        try:
+            self._insert_job(job)
+        except self._psycopg.errors.UniqueViolation:
+            existing_job = self._existing_job_for_stage(job)
+            if existing_job is None:
+                raise
+            return existing_job
         return job
+
+    def _existing_job_for_stage(self, job: RuntimeJob) -> RuntimeJob | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT * FROM runtime_jobs
+                WHERE target_object_id = %s AND stage = %s
+                  AND status IN ('queued', 'leased', 'completed')
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (job.target_object_id, job.stage.value),
+            )
+            return self._job_from_row(cur.fetchone())
 
     def _insert_job(self, job: RuntimeJob) -> None:
         with self._connect() as conn, conn.cursor() as cur:
@@ -730,6 +896,16 @@ class PostgresRuntimeRepository:
                     job.created_at,
                 ),
             )
+            if job.status == JobStatus.QUEUED:
+                self._insert_event(
+                    cur,
+                    RuntimeEvent(
+                        event_type=EventType.JOB_QUEUED,
+                        target_object_id=job.target_object_id,
+                        job_id=job.id,
+                        payload={"stage": job.stage.value, **job.payload},
+                    ),
+                )
             conn.commit()
 
     def get_job(self, job_id: str) -> RuntimeJob | None:
@@ -749,7 +925,20 @@ class PostgresRuntimeRepository:
             jobs = [self._job_from_row(row) for row in cur.fetchall()]
             return [job for job in jobs if job is not None]
 
-    def claim_next_job(self, *, target_object_id: str | None = None) -> RuntimeJob | None:
+    def active_jobs(self) -> list[RuntimeJob]:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM runtime_jobs WHERE status IN ('queued', 'leased') ORDER BY created_at ASC"
+            )
+            jobs = [self._job_from_row(row) for row in cur.fetchall()]
+            return [job for job in jobs if job is not None]
+
+    def claim_next_job(
+        self,
+        *,
+        target_object_id: str | None = None,
+        worker_id: str | None = None,
+    ) -> RuntimeJob | None:
         now = datetime.now(timezone.utc)
         lease_expires_at = now + timedelta(seconds=self.lease_ttl_seconds)
         with self._connect() as conn, conn.cursor() as cur:
@@ -759,16 +948,29 @@ class PostgresRuntimeRepository:
                 UPDATE runtime_jobs
                 SET status = 'queued', lease_expires_at = NULL
                 WHERE status = 'leased' AND lease_expires_at IS NOT NULL AND lease_expires_at <= %s
+                RETURNING id, target_object_id, stage
                 """,
                 (now,),
             )
+            for reclaimed in cur.fetchall():
+                self._insert_event(
+                    cur,
+                    RuntimeEvent(
+                        event_type=EventType.JOB_QUEUED,
+                        target_object_id=reclaimed["target_object_id"],
+                        job_id=reclaimed["id"],
+                        payload={"stage": reclaimed["stage"], "lease_reclaimed": True},
+                    ),
+                )
             if target_object_id is not None:
                 cur.execute(
                     """
                     WITH next_job AS (
                         SELECT id
                         FROM runtime_jobs
-                        WHERE status = 'queued' AND target_object_id = %s
+                        WHERE status = 'queued'
+                          AND target_object_id = %s
+                          AND COALESCE(NULLIF(payload::jsonb ->> 'retry_not_before', '')::timestamptz, '-infinity') <= %s
                         ORDER BY created_at ASC
                         FOR UPDATE SKIP LOCKED
                         LIMIT 1
@@ -778,7 +980,7 @@ class PostgresRuntimeRepository:
                     WHERE id = (SELECT id FROM next_job)
                     RETURNING *
                     """,
-                    (target_object_id, lease_expires_at),
+                    (target_object_id, now, lease_expires_at),
                 )
             else:
                 cur.execute(
@@ -787,6 +989,7 @@ class PostgresRuntimeRepository:
                         SELECT id
                         FROM runtime_jobs
                         WHERE status = 'queued'
+                          AND COALESCE(NULLIF(payload::jsonb ->> 'retry_not_before', '')::timestamptz, '-infinity') <= %s
                         ORDER BY created_at ASC
                         FOR UPDATE SKIP LOCKED
                         LIMIT 1
@@ -796,56 +999,95 @@ class PostgresRuntimeRepository:
                     WHERE id = (SELECT id FROM next_job)
                     RETURNING *
                     """,
-                    (lease_expires_at,),
+                    (now, lease_expires_at),
                 )
             row = cur.fetchone()
             if row is None:
                 conn.commit()
                 return None
+            job = self._job_from_row(row)
+            if job is None:
+                raise RuntimeError("claimed_job_decode_failed")
+            self._insert_event(
+                cur,
+                RuntimeEvent(
+                    event_type=EventType.JOB_LEASED,
+                    target_object_id=job.target_object_id,
+                    job_id=job.id,
+                    worker_id=worker_id,
+                    payload={"stage": job.stage.value},
+                    ts=now,
+                ),
+            )
             conn.commit()
-            return self._job_from_row(row)
+            return job
 
-    def complete_job(self, job_id: str) -> None:
+    def complete_job(self, job_id: str, *, event: RuntimeEvent | None = None) -> None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute("UPDATE runtime_jobs SET status = 'completed', lease_expires_at = NULL WHERE id = %s", (job_id,))
+            if event is not None:
+                self._insert_event(cur, event)
             conn.commit()
 
-    def fail_job(self, job_id: str, *, reason: str, failure_class: FailureClass | None = None) -> None:
-        job = self.get_job(job_id)
-        if job is None:
-            return
-        payload = dict(job.payload)
-        payload["failure_reason"] = reason
-        if failure_class is not None:
-            payload["failure_class"] = failure_class.value
+    def fail_job(
+        self,
+        job_id: str,
+        *,
+        reason: str,
+        failure_class: FailureClass | None = None,
+        event: RuntimeEvent | None = None,
+    ) -> None:
         with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT payload FROM runtime_jobs WHERE id = %s FOR UPDATE", (job_id,))
+            row = cur.fetchone()
+            if row is None:
+                conn.commit()
+                return
+            payload = json.loads(row["payload"])
+            payload["failure_reason"] = reason
+            if failure_class is not None:
+                payload["failure_class"] = failure_class.value
             cur.execute(
                 "UPDATE runtime_jobs SET status = 'failed', payload = %s, lease_expires_at = NULL WHERE id = %s",
                 (json.dumps(payload), job_id),
             )
+            if event is not None:
+                self._insert_event(cur, event)
             conn.commit()
 
     def record_event(self, event: RuntimeEvent) -> None:
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO runtime_events (ts, event_type, target_object_id, job_id, worker_id, payload)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    event.ts,
-                    event.event_type.value,
-                    event.target_object_id,
-                    event.job_id,
-                    event.worker_id,
-                    json.dumps(event.payload),
-                ),
-            )
+            self._insert_event(cur, event)
             conn.commit()
+
+    @staticmethod
+    def _insert_event(cur, event: RuntimeEvent) -> None:
+        cur.execute(
+            """
+            INSERT INTO runtime_events (ts, event_type, target_object_id, job_id, worker_id, payload)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (
+                event.ts,
+                event.event_type.value,
+                event.target_object_id,
+                event.job_id,
+                event.worker_id,
+                json.dumps(event.payload),
+            ),
+        )
 
     def list_events(self) -> list[RuntimeEvent]:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT * FROM runtime_events ORDER BY ts ASC")
+            return [self._event_from_row(row) for row in cur.fetchall()]
+
+    def events_for_target(self, target_object_id: str) -> list[RuntimeEvent]:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM runtime_events WHERE target_object_id = %s ORDER BY ts ASC",
+                (target_object_id,),
+            )
             return [self._event_from_row(row) for row in cur.fetchall()]
 
     # --- API key management (postgres) ---

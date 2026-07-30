@@ -1,8 +1,20 @@
 import threading
 
+import pytest
 from cryptography.fernet import Fernet
 
-from contracts import ClaimCard, ContradictionStatus, EvidenceGrade, FailureClass, JobStatus, RuntimeJob, Stage
+from contracts import (
+    ClaimCard,
+    ContradictionStatus,
+    EvidenceGrade,
+    EventType,
+    FailureClass,
+    JobStatus,
+    ObjectType,
+    ResearchObject,
+    RuntimeJob,
+    Stage,
+)
 from runtime_core.repos import (
     InMemoryRuntimeRepository,
     PostgresRuntimeRepository,
@@ -35,6 +47,48 @@ def test_inmemory_claim_sets_lease_and_reclaims_expired_job() -> None:
     reclaimed = repo.claim_next_job()
     assert reclaimed is not None
     assert reclaimed.id == job.id
+    assert any(event.payload.get("lease_reclaimed") is True for event in repo.list_events())
+    assert repo.list_events()[-1].event_type == EventType.JOB_LEASED
+
+
+def test_inmemory_creates_submission_job_and_queue_event_together() -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = ResearchObject(object_type=ObjectType.SUBMISSION, title="Atomic submission")
+    job = RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE)
+
+    stored_submission, stored_job = repo.create_object_and_enqueue_job(submission, job)
+
+    assert repo.get_object(stored_submission.id) == stored_submission
+    assert repo.get_job(stored_job.id) == stored_job
+    assert repo.list_events()[-1].event_type == EventType.JOB_QUEUED
+
+
+def test_inmemory_atomic_create_rolls_back_if_enqueue_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = ResearchObject(object_type=ObjectType.SUBMISSION, title="Atomic rollback")
+    job = RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE)
+
+    def fail_enqueue(_job: RuntimeJob) -> RuntimeJob:
+        raise RuntimeError("queue unavailable")
+
+    monkeypatch.setattr(repo, "enqueue_job", fail_enqueue)
+
+    with pytest.raises(RuntimeError, match="queue unavailable"):
+        repo.create_object_and_enqueue_job(submission, job)
+
+    assert repo.get_object(submission.id) is None
+
+
+def test_inmemory_enqueue_is_idempotent_until_stage_fails() -> None:
+    repo = InMemoryRuntimeRepository()
+    first = repo.enqueue_job(RuntimeJob(target_object_id="obj-idempotent", stage=Stage.REVIEW))
+
+    assert repo.enqueue_job(RuntimeJob(target_object_id="obj-idempotent", stage=Stage.REVIEW)) == first
+    repo.fail_job(first.id, reason="provider_error", failure_class=FailureClass.PROVIDER_ERROR)
+    retry = repo.enqueue_job(RuntimeJob(target_object_id="obj-idempotent", stage=Stage.REVIEW))
+
+    assert retry.id != first.id
+    assert len(repo.jobs) == 2
 
 
 def test_inmemory_fail_job_persists_failure_class() -> None:
@@ -112,6 +166,26 @@ def test_postgres_claim_sets_lease_and_reclaims_expired_job() -> None:
     reclaimed = repo.claim_next_job()
     assert reclaimed is not None
     assert reclaimed.id == job.id
+    assert any(event.payload.get("lease_reclaimed") is True for event in repo.list_events())
+    assert repo.list_events()[-1].event_type == EventType.JOB_LEASED
+
+
+def test_postgres_atomic_create_rolls_back_if_job_insert_fails() -> None:
+    if not postgres_runtime_available():
+        return
+    dsn = postgres_dsn_from_env()
+    assert dsn is not None
+    repo = PostgresRuntimeRepository(dsn)
+    repo.reset()
+    submission = ResearchObject(object_type=ObjectType.SUBMISSION, title="Atomic rollback")
+    job = RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE)
+    repo.enqueue_job(job)
+
+    with pytest.raises(repo._psycopg.errors.UniqueViolation):
+        repo.create_object_and_enqueue_job(submission, job)
+
+    assert repo.get_object(submission.id) is None
+    assert repo.get_job(job.id) == job
 
 
 def test_postgres_fail_job_persists_failure_class() -> None:
