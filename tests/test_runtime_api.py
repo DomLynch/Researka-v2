@@ -13,7 +13,7 @@ import pytest
 import starlette.testclient as starlette_testclient
 from fastapi.testclient import TestClient
 
-from contracts import ArticleType, ClaimCard, ContradictionStatus, Decision, EventType, EvidenceGrade, ObjectType, ResearchObject, RuntimeEvent
+from contracts import ArticleType, ClaimCard, ContradictionStatus, Decision, EventType, EvidenceGrade, ObjectType, ResearchObject, RuntimeEvent, Stage
 from runtime_core.goldset import summarize_gold_results
 from runtime_core.judge_release import calibration_metrics_complete, judge_release_id
 from runtime_core.osf import sign_oauth_state
@@ -516,6 +516,58 @@ def test_submission_decision_pending_before_review(client: TestClient) -> None:
     response = client.get(f"/submissions/{submission['id']}/decision")
     assert response.status_code == 200
     assert response.json()["status"] == "pending"
+
+
+def test_submission_decision_reports_only_terminal_review_failure(client: TestClient, monkeypatch) -> None:
+    created = client.post("/submissions", json=_minimal_submission_payload()).json()
+    submission_id = created["submission"]["id"]
+    worker = cast(Any, client.app).state.worker
+    handle_job = worker.engine.handle_job
+
+    def fail_review(job, repository):
+        if job.stage != Stage.REVIEW:
+            return handle_job(job, repository)
+        if not job.payload.get("provider_retry_count"):
+            raise RuntimeError("provider_error: temporary reviewer outage")
+        raise RuntimeError("quality_gate_failed: terminal review failure")
+
+    monkeypatch.setattr(worker.engine, "handle_job", fail_review)
+    client.post("/jobs/run-once", headers=_worker_headers())
+    first_failure = client.post("/jobs/run-once", headers=_worker_headers()).json()
+
+    assert first_failure["retried"] == 1
+    repository = _repository(client)
+    failed_events = [event for event in repository.list_events() if event.event_type == EventType.JOB_FAILED]
+    assert failed_events[-1].payload["terminal"] is False
+    assert client.get(f"/submissions/{submission_id}/decision").json()["status"] == "pending"
+
+    repository.lease_ttl_seconds = -1
+    retry_job = repository.claim_next_job(target_object_id=submission_id)
+    assert retry_job is not None
+    repository.record_event(RuntimeEvent(
+        event_type=EventType.JOB_LEASED,
+        target_object_id=submission_id,
+        job_id=retry_job.id,
+        payload={"stage": Stage.REVIEW.value},
+    ))
+    assert client.get(f"/submissions/{submission_id}/decision").json()["status"] == "pending"
+
+    terminal_failure = client.post("/jobs/run-once", headers=_worker_headers()).json()
+    response = client.get(f"/submissions/{submission_id}/decision")
+
+    assert terminal_failure["retried"] == 0
+    failed_events = [event for event in repository.list_events() if event.event_type == EventType.JOB_FAILED]
+    assert failed_events[-1].payload["terminal"] is True
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "failed",
+        "decision": None,
+        "notes": [],
+        "gate_failures": [],
+        "failure_stage": Stage.REVIEW.value,
+        "failure_category": "quality_gate",
+        "failed_checks": ["quality_gate_failed: terminal review failure"],
+    }
 
 
 def test_can_list_publications_after_processing(client: TestClient) -> None:

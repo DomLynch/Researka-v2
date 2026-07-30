@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contracts import JobStatus, RuntimeJob, Stage
+from contracts import EventType, JobStatus, RuntimeJob, Stage
 from apps.worker.main import WorkerApp
 from runtime_core.repos import InMemoryRuntimeRepository, RuntimeRepository
 
@@ -62,6 +62,26 @@ def test_provider_review_retry_is_bounded(monkeypatch) -> None:
     assert exhausted["retried"] == 0
     assert exhausted["retry_job_id"] is None
     assert worker.run_once() == {"claimed": 0, "completed": 0, "failed": 0}
+
+
+def test_provider_review_retry_enqueue_failure_is_terminal(monkeypatch) -> None:
+    repo = InMemoryRuntimeRepository()
+    first = repo.enqueue_job(RuntimeJob(target_object_id="submission-1", stage=Stage.REVIEW))
+
+    def fail_enqueue(job: RuntimeJob) -> RuntimeJob:
+        raise RuntimeError("queue unavailable")
+
+    monkeypatch.setattr(repo, "enqueue_job", fail_enqueue)
+
+    result = WorkerApp(repo, engine=_FlakyReviewEngine(failures=1)).run_once()
+
+    assert result["retried"] == 0
+    failed = repo.get_job(first.id)
+    assert failed is not None
+    assert failed.payload["failure_reason"].endswith("retry_enqueue_failed: queue unavailable")
+    failure_event = [event for event in repo.list_events() if event.event_type == EventType.JOB_FAILED][-1]
+    assert failure_event.payload["terminal"] is True
+    assert failure_event.payload["reason"].endswith("retry_enqueue_failed: queue unavailable")
 
 
 def test_non_provider_failure_is_not_retried() -> None:

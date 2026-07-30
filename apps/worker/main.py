@@ -62,19 +62,6 @@ class WorkerApp:
         except Exception as exc:
             failure_class = classify_failure(str(exc))
             self.repository.fail_job(job.id, reason=str(exc), failure_class=failure_class)
-            self.repository.record_event(
-                RuntimeEvent(
-                    event_type=EventType.JOB_FAILED,
-                    target_object_id=job.target_object_id,
-                    job_id=job.id,
-                    worker_id=self.worker_id,
-                    payload={
-                        "stage": job.stage.value,
-                        "reason": str(exc),
-                        "failure_class": failure_class.value,
-                    },
-                )
-            )
             retry_job = None
             try:
                 retry_count = max(0, int(job.payload.get("provider_retry_count", 0) or 0))
@@ -84,16 +71,37 @@ class WorkerApp:
                 retry_limit = min(10, max(0, int(os.getenv("RESEARKA_V2_REVIEW_JOB_MAX_RETRIES", "2"))))
             except ValueError:
                 retry_limit = 2
+            retry_error = None
             if job.stage == Stage.REVIEW and failure_class == FailureClass.PROVIDER_ERROR and retry_count < retry_limit:
-                retry_job = self.repository.enqueue_job(RuntimeJob(
-                    target_object_id=job.target_object_id,
-                    stage=job.stage,
-                    payload={
-                        **job.payload,
-                        "provider_retry_count": retry_count + 1,
-                        "retry_of_job_id": job.id,
-                    },
-                ))
+                try:
+                    retry_job = self.repository.enqueue_job(RuntimeJob(
+                        target_object_id=job.target_object_id,
+                        stage=job.stage,
+                        payload={
+                            **job.payload,
+                            "provider_retry_count": retry_count + 1,
+                            "retry_of_job_id": job.id,
+                        },
+                    ))
+                except Exception as retry_exc:
+                    retry_error = retry_exc
+            failure_reason = str(exc)
+            if retry_error is not None:
+                failure_reason = f"{failure_reason}; retry_enqueue_failed: {retry_error}"
+                self.repository.fail_job(job.id, reason=failure_reason, failure_class=failure_class)
+            self.repository.record_event(RuntimeEvent(
+                event_type=EventType.JOB_FAILED,
+                target_object_id=job.target_object_id,
+                job_id=job.id,
+                worker_id=self.worker_id,
+                payload={
+                    "stage": job.stage.value,
+                    "reason": failure_reason,
+                    "failure_class": failure_class.value,
+                    "terminal": retry_job is None,
+                },
+            ))
+            if retry_job is not None:
                 self.repository.record_event(RuntimeEvent(
                     event_type=EventType.JOB_QUEUED,
                     target_object_id=job.target_object_id,

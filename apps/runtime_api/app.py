@@ -996,6 +996,23 @@ def _publication_failure_feedback(repo: RuntimeRepository, submission_id: str) -
     return None
 
 
+def _terminal_submission_failure_feedback(repo: RuntimeRepository, submission_id: str) -> dict | None:
+    lifecycle_events = {EventType.JOB_QUEUED, EventType.JOB_LEASED, EventType.JOB_COMPLETED, EventType.JOB_FAILED}
+    for event in reversed(repo.list_events()):
+        if event.target_object_id != submission_id or event.event_type not in lifecycle_events:
+            continue
+        if event.event_type != EventType.JOB_FAILED or event.payload.get("terminal") is False:
+            return None
+        reason = str(event.payload.get("reason") or "")
+        failure_class = event.payload.get("failure_class")
+        return {
+            "stage": event.payload.get("stage"),
+            "reason": reason,
+            "failure_class": classify_failure_reason(reason).value if failure_class in {None, "other"} else failure_class,
+        }
+    return None
+
+
 def _submission_decision_response(
     *,
     repo: RuntimeRepository,
@@ -1273,6 +1290,17 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     def get_submission_decision(submission_id: str) -> dict:
         decisions = app.state.repository.children_of(submission_id, ObjectType.DECISION)
         if not decisions:
+            failure = _terminal_submission_failure_feedback(app.state.repository, submission_id)
+            if failure:
+                return {
+                    "status": "failed",
+                    "decision": None,
+                    "notes": [],
+                    "gate_failures": [],
+                    "failure_stage": failure["stage"],
+                    "failure_category": failure["failure_class"],
+                    "failed_checks": [failure["reason"]],
+                }
             return {"status": "pending", "decision": None, "notes": [], "gate_failures": []}
         latest = decisions[-1]
         return _submission_decision_response(repo=app.state.repository, submission_id=submission_id, decision=latest)
