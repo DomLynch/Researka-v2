@@ -24,6 +24,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 URL = "http://49.12.7.18:8000"
 ADMIN_KEY = "ResearkaAdmin2026!"
@@ -221,7 +222,7 @@ def main() -> None:
     print(f"Key: pilot-house-bot ({api_key[:10]}...{api_key[-4:]})")
     print()
 
-    submissions = []
+    submissions: list[dict[str, Any]] = []
     for i, path in enumerate(DRAFTS, 1):
         print(f"[{i}/5] {path.name}")
         if not path.exists():

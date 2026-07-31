@@ -50,8 +50,8 @@ def test_postgres_connect_has_bounded_timeout(monkeypatch) -> None:
 
     monkeypatch.setenv("RESEARKA_V2_POSTGRES_CONNECT_TIMEOUT_SEC", "7")
     repo = PostgresRuntimeRepository.__new__(PostgresRuntimeRepository)
-    repo._psycopg = _Psycopg
-    repo._dict_row = object()
+    monkeypatch.setattr(repo, "_psycopg", _Psycopg, raising=False)
+    monkeypatch.setattr(repo, "_dict_row", object(), raising=False)
     repo.dsn = "postgresql://example"
     repo.connect_timeout_seconds = _postgres_connect_timeout_seconds()
 
