@@ -20,6 +20,7 @@ from runtime_core.repos import (
     PostgresRuntimeRepository,
     _decode_osf_token_metadata,
     _encode_osf_token_metadata,
+    _postgres_connect_timeout_seconds,
     postgres_dsn_from_env,
     postgres_runtime_available,
 )
@@ -35,6 +36,32 @@ def _sample_claim(publication_id: str, claim_text: str = "Metformin extends medi
         source_ids=["src-1"],
         dw_chain_url="https://provenance.researka.org/chain/abc",
     )
+
+
+def test_postgres_connect_has_bounded_timeout(monkeypatch) -> None:
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _Psycopg:
+        @staticmethod
+        def connect(dsn: str, **kwargs: object) -> object:
+            calls.append((dsn, kwargs))
+            return object()
+
+    monkeypatch.setenv("RESEARKA_V2_POSTGRES_CONNECT_TIMEOUT_SEC", "7")
+    repo = PostgresRuntimeRepository.__new__(PostgresRuntimeRepository)
+    repo._psycopg = _Psycopg
+    repo._dict_row = object()
+    repo.dsn = "postgresql://example"
+    repo.connect_timeout_seconds = _postgres_connect_timeout_seconds()
+
+    repo._connect()
+
+    assert calls == [
+        (
+            "postgresql://example",
+            {"row_factory": repo._dict_row, "connect_timeout": 7},
+        )
+    ]
 
 
 def test_inmemory_claim_sets_lease_and_reclaims_expired_job() -> None:

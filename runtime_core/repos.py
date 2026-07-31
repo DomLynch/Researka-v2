@@ -494,6 +494,11 @@ def postgres_runtime_available() -> bool:
     return True
 
 
+def _postgres_connect_timeout_seconds() -> int:
+    raw = os.environ.get("RESEARKA_V2_POSTGRES_CONNECT_TIMEOUT_SEC", "5").strip()
+    return max(1, int(raw)) if raw.isdigit() else 5
+
+
 class PostgresRuntimeRepository:
     def __init__(self, dsn: str, *, lease_ttl_seconds: int = 300) -> None:
         try:
@@ -505,10 +510,15 @@ class PostgresRuntimeRepository:
         self._dict_row = dict_row
         self.dsn = dsn
         self.lease_ttl_seconds = lease_ttl_seconds
+        self.connect_timeout_seconds = _postgres_connect_timeout_seconds()
         self._ensure_schema()
 
     def _connect(self):
-        return self._psycopg.connect(self.dsn, row_factory=self._dict_row)
+        return self._psycopg.connect(
+            self.dsn,
+            row_factory=self._dict_row,
+            connect_timeout=self.connect_timeout_seconds,
+        )
 
     def _ensure_schema(self) -> None:
         if self._alembic_manages_schema():

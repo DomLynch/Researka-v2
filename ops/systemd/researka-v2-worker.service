@@ -13,6 +13,7 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart=/root/Researka-v2/.venv/bin/python -m apps.worker.loop
 Restart=always
 RestartSec=5
+TimeoutStopSec=20
 User=root
 
 [Install]

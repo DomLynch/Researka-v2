@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import signal
+
+from apps.worker import loop as worker_loop
 from contracts import EventType, JobStatus, RuntimeJob, Stage
 from apps.worker.main import WorkerApp
 from runtime_core.repos import InMemoryRuntimeRepository, RuntimeRepository
@@ -20,6 +23,29 @@ class _FlakyReviewEngine:
 class _InvalidSubmissionEngine:
     def handle_job(self, job: RuntimeJob, repository: RuntimeRepository) -> dict:
         raise ValueError("structure_gate:missing_conclusion")
+
+
+def test_worker_sigterm_interrupts_idle_wait(monkeypatch) -> None:
+    handlers: dict[int, object] = {}
+
+    class _StoppingWorker:
+        def run_once(self) -> dict[str, int]:
+            handler = handlers[signal.SIGTERM]
+            assert callable(handler)
+            handler(signal.SIGTERM, None)
+            return {"claimed": 0, "completed": 0, "failed": 0}
+
+    monkeypatch.setattr(worker_loop, "warn_if_osf_default_owner_missing", lambda: None)
+    monkeypatch.setattr(worker_loop, "postgres_dsn_from_env", lambda: "postgresql://example")
+    monkeypatch.setattr(worker_loop, "PostgresRuntimeRepository", lambda _dsn: object())
+    monkeypatch.setattr(worker_loop, "WorkflowEngine", lambda: object())
+    monkeypatch.setattr(worker_loop, "WorkerApp", lambda *_args, **_kwargs: _StoppingWorker())
+    monkeypatch.setattr(worker_loop, "reconcile_stalled_submissions", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(worker_loop, "operational_alerts", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(worker_loop.signal, "signal", lambda sig, handler: handlers.setdefault(sig, handler))
+    monkeypatch.setattr(worker_loop.time, "sleep", lambda _seconds: (_ for _ in ()).throw(AssertionError("sleep")))
+
+    worker_loop.main()
 
 
 def test_provider_review_failure_retries_to_success(monkeypatch) -> None:

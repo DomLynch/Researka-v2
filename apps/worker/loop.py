@@ -4,6 +4,7 @@ import json
 import os
 import signal
 import time
+from threading import Event
 
 from apps.worker.main import WorkerApp
 from runtime_core import WorkflowEngine
@@ -39,16 +40,15 @@ def main() -> None:
     error_sleep = _sleep_seconds("RESEARKA_V2_WORKER_ERROR_SLEEP_SEC", 10.0)
     maintenance_interval = _sleep_seconds("RESEARKA_V2_MAINTENANCE_INTERVAL_SEC", 60.0)
     next_maintenance = 0.0
-    should_stop = False
+    stop_event = Event()
 
     def _stop(_signum: int, _frame: object) -> None:
-        nonlocal should_stop
-        should_stop = True
+        stop_event.set()
 
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
 
-    while not should_stop:
+    while not stop_event.is_set():
         if time.monotonic() >= next_maintenance:
             try:
                 repaired = reconcile_stalled_submissions(
@@ -75,10 +75,10 @@ def main() -> None:
             result = worker.run_once()
             print(json.dumps({"event": "worker_run_once", **result}, sort_keys=True), flush=True)
             if not result.get("claimed"):
-                time.sleep(idle_sleep)
+                stop_event.wait(idle_sleep)
         except Exception as exc:
             print(json.dumps({"event": "worker_error", "error": str(exc)}, sort_keys=True), flush=True)
-            time.sleep(error_sleep)
+            stop_event.wait(error_sleep)
 
 
 if __name__ == "__main__":
