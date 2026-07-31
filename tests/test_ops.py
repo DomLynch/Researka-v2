@@ -57,6 +57,32 @@ def test_reconciler_does_not_restart_terminal_failure() -> None:
     assert repo.queued_jobs() == []
 
 
+def test_reconciler_skips_completed_terminal_editorial_decision() -> None:
+    class _NoChildLookupRepo(InMemoryRuntimeRepository):
+        def publication_for_target(self, target_object_id: str) -> ResearchObject | None:
+            raise AssertionError(f"unexpected child lookup for {target_object_id}")
+
+    repo = _NoChildLookupRepo()
+    now = datetime.now(timezone.utc)
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Terminal revise",
+            created_at=now - timedelta(minutes=10),
+        )
+    )
+    repo.record_event(
+        RuntimeEvent(
+            event_type=EventType.JOB_COMPLETED,
+            target_object_id=submission.id,
+            payload={"stage": Stage.EDITORIAL.value, "terminal_decision": Decision.REVISE.value},
+            ts=now - timedelta(minutes=5),
+        )
+    )
+
+    assert reconcile_stalled_submissions(repo, now=now) == []
+
+
 def test_reconciler_restores_missing_editorial_job() -> None:
     repo = InMemoryRuntimeRepository()
     now = datetime.now(timezone.utc)

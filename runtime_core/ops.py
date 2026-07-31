@@ -67,7 +67,7 @@ def reconcile_stalled_submissions(
     active_targets = {job.target_object_id for job in repo.active_jobs()}
     repaired = []
 
-    for submission in repo.list_objects(ObjectType.SUBMISSION):
+    for submission in repo.list_objects(ObjectType.SUBMISSION, summaries_only=True):
         target_events = sorted(events_by_target.get(submission.id, []), key=lambda event: event.ts)
         last_activity = target_events[-1].ts if target_events else submission.created_at
         if (now - last_activity).total_seconds() < stale_after_seconds:
@@ -76,6 +76,13 @@ def reconcile_stalled_submissions(
             continue
         if target_events and target_events[-1].event_type == EventType.JOB_FAILED:
             if target_events[-1].payload.get("terminal") is not False:
+                continue
+        if target_events and target_events[-1].event_type == EventType.JOB_COMPLETED:
+            last_payload = target_events[-1].payload
+            if last_payload.get("stage") == Stage.EDITORIAL.value and last_payload.get("terminal_decision") in {
+                Decision.REVISE.value,
+                Decision.REJECT.value,
+            }:
                 continue
         if repo.publication_for_target(submission.id) is not None or any(
             event.event_type == EventType.JOB_COMPLETED
@@ -137,8 +144,8 @@ def operational_alerts(
     if len(terminal_failures) >= failure_threshold:
         alerts.append({"code": "repeated_terminal_failures", "count": len(terminal_failures)})
 
-    submissions = repo.list_objects(ObjectType.SUBMISSION)
-    publications = repo.list_objects(ObjectType.PUBLICATION)
+    submissions = repo.list_objects(ObjectType.SUBMISSION, summaries_only=True)
+    publications = repo.list_objects(ObjectType.PUBLICATION, summaries_only=True)
     latest_submission = max((item.created_at for item in submissions), default=None)
     latest_publication = max((item.created_at for item in publications), default=None)
     publication_reference = latest_publication or min((item.created_at for item in submissions), default=None)

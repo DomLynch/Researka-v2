@@ -126,7 +126,12 @@ class RuntimeRepository(Protocol):
     def create_object_and_enqueue_job(self, obj: ResearchObject, job: RuntimeJob) -> tuple[ResearchObject, RuntimeJob]: ...
     def get_object(self, object_id: str) -> ResearchObject | None: ...
     def update_object_metadata(self, object_id: str, metadata: dict) -> ResearchObject | None: ...
-    def list_objects(self, object_type: ObjectType | str | None = None) -> list[ResearchObject]: ...
+    def list_objects(
+        self,
+        object_type: ObjectType | str | None = None,
+        *,
+        summaries_only: bool = False,
+    ) -> list[ResearchObject]: ...
     def children_of(self, parent_object_id: str, object_type: ObjectType | str | None = None) -> list[ResearchObject]: ...
     def publication_for_target(self, target_object_id: str) -> ResearchObject | None: ...
     def enqueue_job(self, job: RuntimeJob) -> RuntimeJob: ...
@@ -231,7 +236,12 @@ class InMemoryRuntimeRepository:
         self.objects[object_id] = updated
         return updated
 
-    def list_objects(self, object_type: ObjectType | str | None = None) -> list[ResearchObject]:
+    def list_objects(
+        self,
+        object_type: ObjectType | str | None = None,
+        *,
+        summaries_only: bool = False,  # noqa: ARG002 - already in memory
+    ) -> list[ResearchObject]:
         objects = list(self.objects.values())
         if object_type is None:
             return objects
@@ -814,12 +824,25 @@ class PostgresRuntimeRepository:
             conn.commit()
             return self._object_from_row(row)
 
-    def list_objects(self, object_type: ObjectType | str | None = None) -> list[ResearchObject]:
+    def list_objects(
+        self,
+        object_type: ObjectType | str | None = None,
+        *,
+        summaries_only: bool = False,
+    ) -> list[ResearchObject]:
+        fields = (
+            "id, object_type, parent_object_id, title, '' AS body_markdown, '{}'::jsonb AS metadata, created_at"
+            if summaries_only
+            else "*"
+        )
         with self._connect() as conn, conn.cursor() as cur:
             if object_type is None:
-                cur.execute("SELECT * FROM research_objects ORDER BY created_at ASC")
+                cur.execute(f"SELECT {fields} FROM research_objects ORDER BY created_at ASC")
             else:
-                cur.execute("SELECT * FROM research_objects WHERE object_type = %s ORDER BY created_at ASC", (str(object_type),))
+                cur.execute(
+                    f"SELECT {fields} FROM research_objects WHERE object_type = %s ORDER BY created_at ASC",
+                    (str(object_type),),
+                )
             objects = [self._object_from_row(row) for row in cur.fetchall()]
             return [obj for obj in objects if obj is not None]
 
