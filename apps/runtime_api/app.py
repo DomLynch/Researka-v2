@@ -1320,6 +1320,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                 raise HTTPException(status_code=400, detail="invalid_surface")
             publications = [publication for publication in publications if _publication_surface(publication) == normalized]
         listed = [publication for publication in publications if _is_publicly_listed(publication)]
+        listed.sort(key=lambda publication: (publication.created_at, publication.id), reverse=True)
         page = listed[offset : offset + limit]
         has_more = offset + len(page) < len(listed)
         return {

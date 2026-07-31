@@ -905,11 +905,12 @@ def test_publications_surface_filter_splits_alpha_and_papers(client: TestClient)
 
 def test_publications_listing_is_bounded_and_paginated(client: TestClient) -> None:
     repo = _repository(client)
-    for index in range(3):
+    for index in (0, 2, 1):
         repo.create_object(
             ResearchObject(
                 object_type=ObjectType.PUBLICATION,
                 title=f"Publication {index}",
+                created_at=datetime(2026, 1, index + 1, tzinfo=timezone.utc),
                 metadata={
                     "article_type": "research_synthesis",
                     "judge_release_id": f"sha256:{index}",
@@ -918,8 +919,10 @@ def test_publications_listing_is_bounded_and_paginated(client: TestClient) -> No
             )
         )
 
+    first_page = client.get("/publications?limit=1").json()
     page = client.get("/publications?limit=1&offset=1").json()
 
+    assert [item["title"] for item in first_page["publications"]] == ["Publication 2"]
     assert [item["title"] for item in page["publications"]] == ["Publication 1"]
     assert page["total"] == 3
     assert page["limit"] == 1
@@ -929,6 +932,7 @@ def test_publications_listing_is_bounded_and_paginated(client: TestClient) -> No
     assert page["publications"][0]["judge_release_id"] == "sha256:1"
 
     final_page = client.get("/publications?limit=1&offset=2").json()
+    assert [item["title"] for item in final_page["publications"]] == ["Publication 0"]
     assert final_page["has_more"] is False
     assert final_page["next_offset"] is None
 
