@@ -48,8 +48,8 @@ class ReviewerPanel:
         self.model = f"{getattr(primary, 'model', 'primary')}|{getattr(sparring, 'model', 'sparring')}|{getattr(fallback, 'model', 'fallback')}"
 
     def complete(self, request: ProviderRequest) -> ProviderResult:
-        primary = self._validated_result(self.primary.complete(request), request=request)
-        sparring = self._validated_result(self.sparring.complete(request), request=request)
+        primary = self._validated_slot(self.primary, request=request)
+        sparring = self._validated_slot(self.sparring, request=request)
         slot_flags = self._slot_fallback_flags(primary, sparring)
 
         if primary.ok and sparring.ok:
@@ -372,6 +372,21 @@ class ReviewerPanel:
                 ),
             )
         return result
+
+    def _validated_slot(self, provider: LanguageModelProvider, *, request: ProviderRequest) -> ProviderResult:
+        result = self._validated_result(provider.complete(request), request=request)
+        if (
+            result.ok
+            or not isinstance(provider, FallbackProvider)
+            or result.error is None
+            or result.error.error_class is not ProviderErrorClass.BAD_REQUEST
+            or not result.error.message.startswith("invalid_panel_response:")
+        ):
+            return result
+        fallback = self._validated_result(provider.fallback.complete(request), request=request)
+        if not fallback.ok:
+            return result
+        return FallbackProvider._tag(fallback, fallback_used=True, primary_error=result.error)
 
     def _recover_review_markdown(
         self,

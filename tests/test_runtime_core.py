@@ -254,6 +254,27 @@ def _review_payload(
     return payload
 
 
+class _ReviewPayloadProvider:
+    provider = "stub"
+
+    def __init__(self, model: str, payload: dict[str, object]) -> None:
+        self.model = model
+        self.payload = payload
+        self.calls = 0
+
+    def complete(self, request: ProviderRequest) -> ProviderResult:  # noqa: ARG002
+        self.calls += 1
+        return ProviderResult(
+            ok=True,
+            response=ProviderResponse(
+                text=json.dumps(self.payload),
+                provider=self.provider,
+                model=self.model,
+                usage=ProviderUsage(input_tokens=10, output_tokens=5, cost_usd=0.1),
+            ),
+        )
+
+
 def test_revise_is_terminal_for_external_author() -> None:
     engine = WorkflowEngine()
     context = WorkflowContext(
@@ -2044,6 +2065,61 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
     assert result.response.metadata["accept_quorum_count"] == 2
     assert result.response.metadata["ops_flag"] == "primary_failed"
     assert "invalid_panel_response" in str(result.response.metadata["primary_error"])
+
+
+def test_reviewer_panel_uses_slot_fallback_for_invalid_model_output() -> None:
+    unsupported_allegation = _review_payload(
+        "revise",
+        major_issues=["The DOI citations appear fabricated."],
+        required_revisions=["Replace the fabricated citations."],
+        review_markdown="The DOI citations appear fabricated.",
+    )
+    slot_fallback = _ReviewPayloadProvider("mistralai/mistral-small-2603", _review_payload("accept"))
+    panel_fallback = _ReviewPayloadProvider("fallback-unused", _review_payload("accept", review_markdown=""))
+    panel = ReviewerPanel(
+        primary=FallbackProvider(
+            primary=_ReviewPayloadProvider("MiniMax-M3", unsupported_allegation),
+            fallback=slot_fallback,
+        ),
+        sparring=_ReviewPayloadProvider("google/gemma-4-31b-it", _review_payload("accept")),
+        fallback=panel_fallback,
+    )
+
+    result = panel.complete(
+        ProviderRequest(system_prompt="system", user_prompt="user", prompt_version="reviewer-v1")
+    )
+
+    assert result.ok is True
+    assert result.response is not None
+    assert result.response.metadata["route"] == "consensus"
+    assert result.response.metadata["primary_fallback_used"] is True
+    assert result.response.metadata["accept_quorum_count"] == 2
+    assert result.response.metadata["accept_quorum_models"] == [
+        "google/gemma-4-31b-it",
+        "mistralai/mistral-small-2603",
+    ]
+    assert slot_fallback.calls == 1
+    assert panel_fallback.calls == 0
+
+
+def test_invalid_slot_fallback_cannot_duplicate_accept_quorum() -> None:
+    invalid = _review_payload("accept", review_markdown="")
+    panel = ReviewerPanel(
+        primary=FallbackProvider(
+            primary=_ReviewPayloadProvider("MiniMax-M3", invalid),
+            fallback=_ReviewPayloadProvider("same-model", _review_payload("accept")),
+        ),
+        sparring=_ReviewPayloadProvider("same-model", _review_payload("accept")),
+        fallback=_ReviewPayloadProvider("same-model", _review_payload("accept")),
+    )
+
+    result = panel.complete(
+        ProviderRequest(system_prompt="system", user_prompt="user", prompt_version="reviewer-v1")
+    )
+
+    assert result.ok is False
+    assert result.error is not None
+    assert "panel_accept_quorum_unavailable" in result.error.message
 
 
 def test_reviewer_panel_treats_missing_review_markdown_as_failure() -> None:

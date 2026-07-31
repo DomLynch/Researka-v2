@@ -386,10 +386,8 @@ class FallbackProvider:
     (typically Mistral) takes over so the panel doesn't lose that slot entirely.
 
     A 4xx (BAD_REQUEST — including missing API key) is NOT considered transient and
-    short-circuits without trying the fallback. A response that's structurally bad
-    after parsing (caught by the panel's _validated_result, not us) is also not
-    treated as transient — the fallback is for network/availability issues, not for
-    "the model said something weird".
+    short-circuits without trying the fallback. ReviewerPanel separately invokes the
+    configured fallback when an HTTP-successful review fails its response contract.
     """
 
     def __init__(self, *, primary: LanguageModelProvider, fallback: LanguageModelProvider) -> None:
