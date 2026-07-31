@@ -1,4 +1,5 @@
 import threading
+from datetime import datetime, timezone
 
 import pytest
 from cryptography.fernet import Fernet
@@ -62,6 +63,24 @@ def test_postgres_connect_has_bounded_timeout(monkeypatch) -> None:
             {"row_factory": repo._dict_row, "connect_timeout": 7},
         )
     ]
+
+
+def test_postgres_object_row_accepts_decoded_json_metadata() -> None:
+    repo = PostgresRuntimeRepository.__new__(PostgresRuntimeRepository)
+
+    obj = repo._object_from_row(
+        {
+            "id": "summary-1",
+            "object_type": ObjectType.SUBMISSION.value,
+            "parent_object_id": None,
+            "title": "Summary",
+            "body_markdown": "",
+            "metadata": {},
+            "created_at": datetime.now(timezone.utc),
+        }
+    )
+
+    assert obj is not None and obj.metadata == {}
 
 
 def test_inmemory_claim_sets_lease_and_reclaims_expired_job() -> None:

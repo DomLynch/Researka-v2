@@ -707,13 +707,14 @@ class PostgresRuntimeRepository:
     def _object_from_row(self, row: dict | None) -> ResearchObject | None:
         if row is None:
             return None
+        raw_metadata = row["metadata"]
         return ResearchObject(
             id=row["id"],
             object_type=row["object_type"],
             parent_object_id=row["parent_object_id"],
             title=row["title"],
             body_markdown=row["body_markdown"],
-            metadata=json.loads(row["metadata"]),
+            metadata=raw_metadata if isinstance(raw_metadata, dict) else json.loads(raw_metadata),
             created_at=row["created_at"],
         )
 
@@ -831,7 +832,7 @@ class PostgresRuntimeRepository:
         summaries_only: bool = False,
     ) -> list[ResearchObject]:
         fields = (
-            "id, object_type, parent_object_id, title, '' AS body_markdown, '{}'::jsonb AS metadata, created_at"
+            "id, object_type, parent_object_id, title, '' AS body_markdown, '{}' AS metadata, created_at"
             if summaries_only
             else "*"
         )
