@@ -79,16 +79,16 @@ def reconcile_stalled_submissions(
                 continue
         if target_events and target_events[-1].event_type == EventType.JOB_COMPLETED:
             last_payload = target_events[-1].payload
-            if last_payload.get("stage") == Stage.EDITORIAL.value and last_payload.get("terminal_decision") in {
+            if last_payload.get("terminal_decision") in {
                 Decision.REVISE.value,
                 Decision.REJECT.value,
             }:
                 continue
-        if repo.publication_for_target(submission.id) is not None or any(
+        if any(
             event.event_type == EventType.JOB_COMPLETED
             and event.payload.get("stage") == Stage.PUBLISH.value
             for event in target_events
-        ):
+        ) or repo.publication_for_target(submission.id) is not None:
             continue
 
         decisions = repo.children_of(submission.id, ObjectType.DECISION)

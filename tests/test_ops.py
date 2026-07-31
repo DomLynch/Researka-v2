@@ -57,7 +57,7 @@ def test_reconciler_does_not_restart_terminal_failure() -> None:
     assert repo.queued_jobs() == []
 
 
-def test_reconciler_skips_completed_terminal_editorial_decision() -> None:
+def test_reconciler_skips_completed_terminal_decision() -> None:
     class _NoChildLookupRepo(InMemoryRuntimeRepository):
         def publication_for_target(self, target_object_id: str) -> ResearchObject | None:
             raise AssertionError(f"unexpected child lookup for {target_object_id}")
@@ -75,7 +75,7 @@ def test_reconciler_skips_completed_terminal_editorial_decision() -> None:
         RuntimeEvent(
             event_type=EventType.JOB_COMPLETED,
             target_object_id=submission.id,
-            payload={"stage": Stage.EDITORIAL.value, "terminal_decision": Decision.REVISE.value},
+            payload={"stage": Stage.INTAKE.value, "terminal_decision": Decision.REVISE.value},
             ts=now - timedelta(minutes=5),
         )
     )
@@ -184,7 +184,11 @@ def test_reconciler_respects_latest_non_accept_decision() -> None:
 
 
 def test_reconciler_does_not_republish_completed_deduped_job() -> None:
-    repo = InMemoryRuntimeRepository()
+    class _NoPublicationLookupRepo(InMemoryRuntimeRepository):
+        def publication_for_target(self, target_object_id: str) -> ResearchObject | None:
+            raise AssertionError(f"unexpected publication lookup for {target_object_id}")
+
+    repo = _NoPublicationLookupRepo()
     now = datetime.now(timezone.utc)
     submission = repo.create_object(
         ResearchObject(
