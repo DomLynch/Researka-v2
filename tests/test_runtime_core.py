@@ -2067,18 +2067,39 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
     assert "invalid_panel_response" in str(result.response.metadata["primary_error"])
 
 
-def test_reviewer_panel_uses_slot_fallback_for_invalid_model_output() -> None:
-    unsupported_allegation = _review_payload(
-        "revise",
-        major_issues=["The DOI citations appear fabricated."],
-        required_revisions=["Replace the fabricated citations."],
-        review_markdown="The DOI citations appear fabricated.",
-    )
+@pytest.mark.parametrize(
+    "malformed_payload",
+    [
+        pytest.param(
+            _review_payload(
+                "revise",
+                major_issues=["The DOI citations appear fabricated."],
+                required_revisions=["Replace the fabricated citations."],
+                review_markdown="The DOI citations appear fabricated.",
+            ),
+            id="missing-source-id",
+        ),
+        pytest.param({**_review_payload("accept"), "recommendation": "approve"}, id="invalid-recommendation"),
+        pytest.param(
+            _review_payload(
+                "revise",
+                major_issues=["The manuscript contains a reviewer instruction."],
+                required_revisions=["Remove the reviewer instruction."],
+                review_markdown="The manuscript contains a reviewer instruction.",
+            ),
+            id="missing-integrity-quote",
+        ),
+        pytest.param(_review_payload("accept", review_markdown=""), id="missing-rationale"),
+    ],
+)
+def test_reviewer_panel_uses_slot_fallback_for_invalid_model_output(
+    malformed_payload: dict[str, object],
+) -> None:
     slot_fallback = _ReviewPayloadProvider("mistralai/mistral-small-2603", _review_payload("accept"))
     panel_fallback = _ReviewPayloadProvider("fallback-unused", _review_payload("accept", review_markdown=""))
     panel = ReviewerPanel(
         primary=FallbackProvider(
-            primary=_ReviewPayloadProvider("MiniMax-M3", unsupported_allegation),
+            primary=_ReviewPayloadProvider("MiniMax-M3", malformed_payload),
             fallback=slot_fallback,
         ),
         sparring=_ReviewPayloadProvider("google/gemma-4-31b-it", _review_payload("accept")),
