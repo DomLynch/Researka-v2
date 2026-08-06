@@ -1189,3 +1189,16 @@ def test_reviewer_prompt_forbids_style_only_required_revisions() -> None:
     for term in ("narrative flow", "repetitive", "formatting", "readability"):
         assert term in prompt, term
     assert "belong in minor_issues" in prompt
+
+
+def test_publish_presentation_defects_are_revisable_but_unfinished_work_is_not() -> None:
+    """Publish-stage gates fire during intake. Stray pipeline text and count
+    bookkeeping are author-correctable; unresolved core claims are not."""
+    from contracts import intake_failures_are_revisable
+
+    assert intake_failures_are_revisable(["leakage_blocker"])
+    assert intake_failures_are_revisable(["count_reconciliation"])
+    assert intake_failures_are_revisable(["leakage_blocker", "doi_sanity"])
+    # Unfinished work stays terminal, alone or mixed with correctable defects.
+    assert not intake_failures_are_revisable(["core_claims_resolved"])
+    assert not intake_failures_are_revisable(["leakage_blocker", "core_claims_resolved"])

@@ -383,6 +383,13 @@ REVISABLE_INTAKE_GATES = frozenset({
     "citation_membership",
     "research_question_word_budget",
     "minimum_body_word_count",
+    # Publish-gate defects evaluated during intake (runtime_core.gates): stray
+    # pipeline text in the body and count bookkeeping are both presentation
+    # errors the author can strip or correct. "core_claims_resolved" is
+    # deliberately absent — unresolved title/abstract/conclusion claims mean
+    # the work itself is unfinished, not mispresented, so it stays terminal.
+    "leakage_blocker",
+    "count_reconciliation",
 })
 
 
