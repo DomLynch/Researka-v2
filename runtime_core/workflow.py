@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import Any
 
-from contracts import ArticleType, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, WorkflowContext, WorkflowOutcome, run_submission_template_checks
+from contracts import ArticleType, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, WorkflowContext, WorkflowOutcome, intake_failures_are_revisable, run_submission_template_checks
 
 from .compiler import compile_publication
 from .derivation_web import emit_decision_to_derivation_web, emit_publication_to_derivation_web
@@ -679,6 +679,9 @@ class WorkflowEngine:
             "If any score is below 4 or major_issues is non-empty, recommendation must be revise or reject, never accept.\n"
             "revise = at least one score < 4 or non-empty major_issues, but the manuscript is still salvageable with bounded edits and required_revisions lists concrete fixes.\n"
             "Do not label accept-quality papers as revise for minor wording polish only; put polish in minor_issues and recommend accept.\n"
+            "Every required_revisions entry must name a specific evidence, claim, numeric, citation, or structural-integrity defect. "
+            "Style is never a required revision: repetitive or template-like phrasing, narrative flow, tone, readability, section ordering, and formatting "
+            "belong in minor_issues, even when you find them jarring. A manuscript whose only faults are stylistic has no required_revisions.\n"
             "reject = structurally broken, needs scope reset, or claims materially unsupported beyond bounded edits.\n\n"
             '{"recommendation":"accept|revise|reject","rubric_scores":{'
             '"research_question_quality":1-5,"synthesis_quality":1-5,'
@@ -1024,18 +1027,26 @@ class WorkflowEngine:
                     ),
                 }]
         if failed:
+            # Author-correctable defects (a source missing its DOI, a citation
+            # absent from the bundle) earn a revise: the evidence is there, its
+            # presentation is not. Insufficient or mismatched evidence stays a
+            # terminal reject.
+            revisable = intake_failures_are_revisable([str(gate.get("name") or "") for gate in failed])
+            outcome = Decision.REVISE.value if revisable else Decision.REJECT.value
             return self._terminal_intake_decision(
                 repository,
                 submission,
-                body_markdown="Submission rejected at intake.",
+                body_markdown=(
+                    "Submission returned for revision at intake." if revisable else "Submission rejected at intake."
+                ),
                 metadata={
-                    "decision": Decision.REJECT.value,
-                    "notes": ["intake gate rejection"],
+                    "decision": outcome,
+                    "notes": ["intake gate revision" if revisable else "intake gate rejection"],
                     "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
                     "gate_failures": failed,
                     **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
                 },
-                terminal=Decision.REJECT.value,
+                terminal=outcome,
             )
         if doi_resolution and not doi_resolution.get("available") and doi_resolution.get("recommendation") == Decision.REVISE.value:
             return self._terminal_intake_decision(

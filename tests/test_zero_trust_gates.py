@@ -1154,3 +1154,38 @@ def test_submission_fence_literal_cannot_truncate_grounding() -> None:
     _, _, metadata = WorkflowEngine(provider=_StaticReviewProvider(payload))._review_submission(submission)
 
     assert metadata["integrity_findings"] == [{"category": "reviewer_directive", "quote": directive}]
+
+
+# --- Intake penalty proportionality + style-neutrality --------------------------
+
+
+def test_url_only_primary_source_earns_revise_not_terminal_reject() -> None:
+    """Regression for the live Semaglutide reject: one URL-only primary source
+    among many killed an otherwise reviewable paper before any review ran."""
+    from contracts import intake_failures_are_revisable
+
+    assert intake_failures_are_revisable(["primary_source_identity"])
+    assert intake_failures_are_revisable(["doi_sanity", "citation_membership"])
+
+
+def test_evidence_insufficiency_stays_a_terminal_reject() -> None:
+    # Too few / too old / off-topic sources are not paperwork defects — the
+    # corpus itself is inadequate, so these must remain terminal.
+    from contracts import intake_failures_are_revisable
+
+    assert not intake_failures_are_revisable(["minimum_citations"])
+    assert not intake_failures_are_revisable(["recency_ratio"])
+    assert not intake_failures_are_revisable(["topic_coherence"])
+    # Mixed: any non-revisable gate keeps the whole outcome terminal.
+    assert not intake_failures_are_revisable(["doi_sanity", "minimum_citations"])
+    assert not intake_failures_are_revisable([])
+
+
+def test_reviewer_prompt_forbids_style_only_required_revisions() -> None:
+    """Regression for the live Immune Checkpoint revise, whose sole required
+    revision was 'remove repetitive template-style language / smoother flow'."""
+    prompt = WorkflowEngine()._review_system_prompt(ArticleType.RESEARCH_SYNTHESIS.value)
+    assert "Style is never a required revision" in prompt
+    for term in ("narrative flow", "repetitive", "formatting", "readability"):
+        assert term in prompt, term
+    assert "belong in minor_issues" in prompt

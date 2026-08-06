@@ -2569,7 +2569,7 @@ def test_short_research_question_fails_template_gate() -> None:
     engine = WorkflowEngine()
     result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
     decision = repo.list_objects(ObjectType.DECISION)[0]
-    assert result.get("terminal_decision") == Decision.REJECT.value
+    assert result.get("terminal_decision") == Decision.REVISE.value  # author-correctable intake defect
     assert {failure["name"] for failure in decision.metadata["gate_failures"]} == {"research_question_word_budget"}
 
 
@@ -2644,7 +2644,7 @@ def test_invalid_source_bundle_schema_fails_intake() -> None:
     engine = WorkflowEngine()
     result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
     decision = repo.list_objects(ObjectType.DECISION)[0]
-    assert result.get("terminal_decision") == Decision.REJECT.value
+    assert result.get("terminal_decision") == Decision.REVISE.value  # author-correctable intake defect
     assert {failure["name"] for failure in decision.metadata["gate_failures"]} == {"source_bundle_schema"}
 
 
@@ -2668,7 +2668,7 @@ def test_missing_evidence_type_fails_intake() -> None:
     )
     engine = WorkflowEngine()
     result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
-    assert result.get("terminal_decision") == Decision.REJECT.value
+    assert result.get("terminal_decision") == Decision.REVISE.value  # author-correctable intake defect
 
 
 def test_calibration_revise_decision() -> None:
@@ -3605,7 +3605,7 @@ def test_malformed_doi_fails_intake() -> None:
     )
     engine = WorkflowEngine()
     result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
-    assert result.get("terminal_decision") == Decision.REJECT.value
+    assert result.get("terminal_decision") == Decision.REVISE.value  # author-correctable intake defect
     decision = repo.list_objects(ObjectType.DECISION)[0]
     assert "doi_sanity" in {f["name"] for f in decision.metadata["gate_failures"]}
 

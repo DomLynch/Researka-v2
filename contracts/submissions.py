@@ -367,6 +367,30 @@ def _alpha_source_exception(
     return bound >= 2
 
 
+# Intake gates the author can clear by correcting the submission itself — the
+# evidence exists, its presentation or identification is wrong. Failing only
+# these earns a revise (resubmittable) rather than a terminal reject. Gates
+# absent from this set signal insufficient or mismatched evidence, where the
+# corpus itself is inadequate, and stay terminal.
+REVISABLE_INTAKE_GATES = frozenset({
+    "source_bundle_schema",
+    "source_identity",
+    "primary_source_identity",
+    "source_uniqueness",
+    "source_role",
+    "source_evidence_receipt",
+    "doi_sanity",
+    "citation_membership",
+    "research_question_word_budget",
+    "minimum_body_word_count",
+})
+
+
+def intake_failures_are_revisable(gate_names: list[str]) -> bool:
+    """True when every failed intake gate is author-correctable."""
+    return bool(gate_names) and all(name in REVISABLE_INTAKE_GATES for name in gate_names)
+
+
 def run_submission_template_checks(
     *,
     title: str = "",
