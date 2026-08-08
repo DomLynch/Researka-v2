@@ -1,6 +1,7 @@
 import os
 from typing import Any, cast
 
+import pytest
 from fastapi.testclient import TestClient
 
 from contracts import Decision, EventType, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob, Stage
@@ -286,17 +287,21 @@ def test_end_to_end_publish_happy_path_postgres(postgres_client: TestClient) -> 
     _assert_publish_happy_path(postgres_client)
 
 
-def test_leakage_submission_is_rejected_at_intake(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    "leakage", ("The Search Summary is incomplete and lacks reproducibility.", "[TBD] Add search methods.")
+)
+def test_leakage_submission_is_revisable_at_intake(client: TestClient, leakage: str) -> None:
     response = client.post(
         "/submissions",
-        json=_submission_payload("The Search Summary is incomplete and lacks reproducibility."),
+        json=_submission_payload(leakage),
     )
     submission_id = response.json()["submission"]["id"]
     client.post("/jobs/run-once", headers=_worker_headers())
     decision = client.get(f"/submissions/{submission_id}/decision").json()
     assert decision["status"] == "complete"
-    assert decision["decision"] == "reject"
-    assert decision["gate_failures"]
+    assert decision["decision"] == "revise"
+    assert [gate["name"] for gate in decision["gate_failures"]] == ["leakage_blocker"]
+    assert decision["resubmission"]["allowed"] is True
     assert _repository(client).list_objects("review") == []
 
 

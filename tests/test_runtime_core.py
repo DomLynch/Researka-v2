@@ -413,7 +413,7 @@ def test_reject_is_terminal() -> None:
     assert outcome.next_jobs == []
 
 
-def test_compile_publication_strips_leakage_lines() -> None:
+def test_compile_publication_flags_leakage_before_sanitizing() -> None:
     artifact = compile_publication(
         title="Test",
         abstract="A",
@@ -425,8 +425,7 @@ def test_compile_publication_strips_leakage_lines() -> None:
         ),
         source_bundle=[{"evidence_type": "review", "year": 2024}],
     )
-    assert "the search summary is incomplete" not in artifact.body_markdown.lower()
-    assert "Legit retained summary line" in artifact.body_markdown
+    assert next(gate for gate in artifact.gates if gate.name == "leakage_blocker").passed is False
 
 
 def test_compile_publication_supports_empirical_study_sections() -> None:
@@ -1537,11 +1536,7 @@ def test_compile_publication_blocks_real_v1_leakage_samples() -> None:
             ),
         source_bundle=[{"evidence_type": "review", "year": 2024}],
     )
-    body = artifact.body_markdown.lower()
-    assert "search summary is incomplete" not in body
-    assert "deterministic review records" not in body
-    assert "leaves semantic support for llm review" not in body
-    assert "legit retained line describing the databases" in body
+    assert next(gate for gate in artifact.gates if gate.name == "leakage_blocker").passed is False
 
 
 def test_structure_gate_rejects_missing_required_sections() -> None:

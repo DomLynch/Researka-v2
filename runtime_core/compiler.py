@@ -56,21 +56,23 @@ def compile_publication(
         for name, text in _ordered_sections(sections, required_sections=template.required_sections):
             ordered_sections.append(f"## {name}\n\n{text.strip()}".strip())
         compiled_body = "\n\n".join(ordered_sections).strip()
-    compiled_body, _ = sanitize_publication_body(compiled_body)
-    if body_markdown and body_markdown.strip():
-        if template.article_type == ArticleType.ALPHA_MEMO.value:
-            if not compiled_body.strip():
-                raise ValueError("structure_gate: alpha memo body empty")
-        else:
-            _validate_full_manuscript_body(compiled_body)
-    else:
-        validate_template_structure(compiled_body, template.required_sections)
     counts = canonical_bundle_facts(source_bundle)
     gates: list[GateResult] = run_publish_gates(
         body_markdown=compiled_body,
         counts=counts,
         core_claims_resolved=core_claims_resolved,
     )
+    leakage_failed = any(gate.name == "leakage_blocker" and not gate.passed for gate in gates)
+    if not leakage_failed:
+        compiled_body, _ = sanitize_publication_body(compiled_body)
+        if body_markdown and body_markdown.strip():
+            if template.article_type == ArticleType.ALPHA_MEMO.value:
+                if not compiled_body.strip():
+                    raise ValueError("structure_gate: alpha memo body empty")
+            else:
+                _validate_full_manuscript_body(compiled_body)
+        else:
+            validate_template_structure(compiled_body, template.required_sections)
     return PublicationArtifact(
         title=title,
         abstract=abstract.strip(),
