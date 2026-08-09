@@ -229,6 +229,15 @@ def test_operational_alerts_cover_queue_failures_and_publication_stall() -> None
             created_at=now - timedelta(days=2),
         )
     )
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=submission.id,
+            title="Accept decision",
+            metadata={"decision": Decision.ACCEPT.value},
+            created_at=now - timedelta(days=2),
+        )
+    )
     repo.enqueue_job(
         RuntimeJob(
             target_object_id=submission.id,
@@ -254,6 +263,53 @@ def test_operational_alerts_cover_queue_failures_and_publication_stall() -> None
         "repeated_terminal_failures",
         "publication_stall",
     }
+
+
+def test_operational_alerts_ignore_rejected_and_completed_submissions() -> None:
+    repo = InMemoryRuntimeRepository()
+    now = datetime.now(timezone.utc)
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Rejected submission",
+            created_at=now - timedelta(days=2),
+        )
+    )
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=submission.id,
+            title="Reject decision",
+            metadata={"decision": Decision.REJECT.value},
+            created_at=now - timedelta(days=2),
+        )
+    )
+    accepted = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Completed accepted submission",
+            created_at=now - timedelta(days=2),
+        )
+    )
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=accepted.id,
+            title="Accept decision",
+            metadata={"decision": Decision.ACCEPT.value},
+            created_at=now - timedelta(days=2),
+        )
+    )
+    repo.record_event(
+        RuntimeEvent(
+            event_type=EventType.JOB_COMPLETED,
+            target_object_id=accepted.id,
+            payload={"stage": Stage.PUBLISH.value, "deduped": True},
+            ts=now - timedelta(days=2),
+        )
+    )
+
+    assert operational_alerts(repo, now=now) == []
 
 
 def test_submission_lifecycle_reports_attempt_timestamps() -> None:

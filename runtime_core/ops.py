@@ -135,8 +135,9 @@ def operational_alerts(
         alerts.append({"code": "queue_age", "count": len(old_jobs), "oldest_job_id": old_jobs[0].id})
 
     cutoff = now - timedelta(seconds=failure_window_seconds)
+    events = repo.list_events()
     terminal_failures = [
-        event for event in repo.list_events()
+        event for event in events
         if event.event_type == EventType.JOB_FAILED
         and event.ts >= cutoff
         and event.payload.get("terminal") is not False
@@ -144,16 +145,25 @@ def operational_alerts(
     if len(terminal_failures) >= failure_threshold:
         alerts.append({"code": "repeated_terminal_failures", "count": len(terminal_failures)})
 
-    submissions = repo.list_objects(ObjectType.SUBMISSION, summaries_only=True)
-    publications = repo.list_objects(ObjectType.PUBLICATION, summaries_only=True)
-    latest_submission = max((item.created_at for item in submissions), default=None)
-    latest_publication = max((item.created_at for item in publications), default=None)
-    publication_reference = latest_publication or min((item.created_at for item in submissions), default=None)
-    if (
-        latest_submission
-        and publication_reference
-        and latest_submission > (latest_publication or datetime.min.replace(tzinfo=timezone.utc))
-        and (now - publication_reference).total_seconds() >= publication_stall_seconds
-    ):
-        alerts.append({"code": "publication_stall", "since": publication_reference.isoformat()})
+    decisions = repo.list_objects(ObjectType.DECISION, summaries_only=True)
+    published_targets = {
+        item.parent_object_id
+        for item in repo.list_objects(ObjectType.PUBLICATION, summaries_only=True)
+    } | {
+        event.target_object_id
+        for event in events
+        if event.event_type == EventType.JOB_COMPLETED
+        and event.payload.get("stage") == Stage.PUBLISH.value
+    }
+    latest_decisions = {item.parent_object_id: item for item in decisions}
+    stalled_accepts = [
+        item
+        for target_id, item in latest_decisions.items()
+        if target_id not in published_targets
+        and item.metadata.get("decision") == Decision.ACCEPT.value
+        and (now - item.created_at).total_seconds() >= publication_stall_seconds
+    ]
+    if stalled_accepts:
+        oldest = min(stalled_accepts, key=lambda item: item.created_at)
+        alerts.append({"code": "publication_stall", "count": len(stalled_accepts), "since": oldest.created_at.isoformat()})
     return alerts
