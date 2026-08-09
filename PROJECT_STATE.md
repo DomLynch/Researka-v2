@@ -17,10 +17,10 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Reviewer panel judge stack
 - [x] Baseline Alembic migration scaffold
 - [x] End-to-end publish flow with real persistence
-- [x] Live accept/revise/reject proven on VPS (49.12.7.18)
+- [x] Live accept/revise/reject proven on the production VPS
 - [x] Per-agent pilot keys (Postgres-backed, hashed, daily limits)
 - [x] `/ops/summary` endpoint (submissions, decisions, disagreement rate, costs)
-- [x] Wire Alembic into deploy (auto-schema-migration on restart)
+- [x] Run Alembic migrations as an explicit deploy step before service restart
 - [x] Structured scoring/provenance on papers (GET /submissions/{id}/provenance)
 - [x] Public `/calibration` endpoint (benchmark trust data)
 - [x] External auditor endpoints (POST/GET /audit, GET /audit-summary)
@@ -68,7 +68,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 499 passing, 1 skipped (latest local full suite on 2026-08-09)
+- Tests: 504 passing, 1 skipped (latest local full suite on 2026-08-09)
 
 ## VPS Deployment
 - Checkout: `/opt/researka-v2` under the dedicated `researka` service account after this release
