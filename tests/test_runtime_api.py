@@ -80,6 +80,17 @@ def test_create_app_warns_when_osf_default_owner_missing(monkeypatch, caplog) ->
     assert "osf_default_owner_agent_missing" in caplog.text
 
 
+def test_production_api_requires_postgres_dsn(monkeypatch: pytest.MonkeyPatch) -> None:
+    from apps.runtime_api.app import create_app
+
+    monkeypatch.setenv("RESEARKA_V2_ENV", "production")
+    monkeypatch.delenv("RESEARKA_V2_POSTGRES_DSN", raising=False)
+    monkeypatch.delenv("TEST_POSTGRES_DSN", raising=False)
+
+    with pytest.raises(RuntimeError, match="researka_v2_postgres_dsn_required_in_production"):
+        create_app()
+
+
 def _run_until_idle(client: TestClient, limit: int = 12) -> None:
     for _ in range(limit):
         queue = client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]

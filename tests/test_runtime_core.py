@@ -28,6 +28,7 @@ from runtime_core.providers import (
     ProviderRequest,
     ProviderResponse,
     ProviderResult,
+    provider_from_env,
 )
 from runtime_core.publication_sidecars import publication_sources
 from runtime_core.review_contract import accept_quorum_satisfied
@@ -2253,6 +2254,18 @@ def test_reviewer_panel_from_env_uses_minimax_gemma_mistral(
     assert provider.primary.fallback.model == "mistralai/mistral-small-2603"
     assert provider.sparring.fallback.model == "mistralai/mistral-small-2603"
     assert provider.allow_sparring_billing_skip is False
+
+
+def test_production_forbids_deterministic_provider_and_reviewer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ENV", "production")
+    monkeypatch.setenv("RESEARKA_V2_PROVIDER", "deterministic")
+
+    with pytest.raises(RuntimeError, match="deterministic_provider_forbidden_in_production"):
+        provider_from_env()
+    with pytest.raises(RuntimeError, match="deterministic_reviewer_forbidden_in_production"):
+        reviewer_from_env()
 
 
 def test_reviewer_panel_from_env_can_disable_per_slot_fallback(
