@@ -408,6 +408,16 @@ def test_production_rejects_insecure_service_url(monkeypatch: pytest.MonkeyPatch
         validated_service_url("http://service.internal", label="test_service")
 
 
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "127.42.0.9", "[::1]"])
+def test_production_allows_loopback_http_service_url(
+    monkeypatch: pytest.MonkeyPatch,
+    host: str,
+) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ENV", "production")
+
+    assert validated_service_url(f"http://{host}:9000", label="test_service") == f"http://{host}:9000"
+
+
 def test_production_startup_rejects_insecure_integrity_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_ENV", "production")
     monkeypatch.setenv("RESEARKA_INTEGRITY_URL", "http://integrity.internal")
