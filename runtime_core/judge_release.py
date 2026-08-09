@@ -30,10 +30,11 @@ JUDGE_RELEASE_IDENTITY_KEYS = (
 
 
 def resolve_git_sha() -> str:
+    root = Path(__file__).resolve().parents[1]
     try:
         result = subprocess.run(  # nosec B603 B607 - fixed executable and arguments
-            ["git", "rev-parse", "HEAD"],
-            cwd=Path(__file__).resolve().parents[1],
+            ["git", "-c", f"safe.directory={root}", "rev-parse", "HEAD"],
+            cwd=root,
             capture_output=True,
             text=True,
             timeout=2,

@@ -152,6 +152,26 @@ def test_resolve_git_sha_prefers_live_checkout_to_stale_file(monkeypatch) -> Non
     assert release_module.resolve_git_sha() == "a" * 40
 
 
+def test_resolve_git_sha_marks_only_checkout_as_safe(monkeypatch) -> None:
+    import runtime_core.judge_release as release_module
+
+    captured: dict = {}
+
+    class GitResult:
+        returncode = 0
+        stdout = "b" * 40
+
+    def run(command, **kwargs):
+        captured["command"] = command
+        captured["cwd"] = kwargs["cwd"]
+        return GitResult()
+
+    monkeypatch.setattr(release_module.subprocess, "run", run)
+
+    assert release_module.resolve_git_sha() == "b" * 40
+    assert captured["command"][1:3] == ["-c", f"safe.directory={captured['cwd']}"]
+
+
 def test_architecture(client: TestClient) -> None:
     response = client.get("/architecture")
     assert response.status_code == 200
