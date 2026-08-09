@@ -1,0 +1,1106 @@
+{
+  "protocol_version": "researka-blinded-adjudication-v1",
+  "created_at": "2026-07-25T17:56:17.481797+00:00",
+  "seed": "researka-real-v1-2026-07-25",
+  "case_count": 120,
+  "sampling_rules": {
+    "source": "production submissions with final decisions",
+    "historical_decision_quota": "balanced and hidden from adjudicators",
+    "minimum_sources": 3,
+    "excluded_domains": [
+      "ops",
+      "test",
+      "x"
+    ],
+    "synthetic_agent_markers": [
+      "benchmark",
+      "fixture",
+      "gold-set",
+      "style-test",
+      "synthetic",
+      "test-agent"
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "case-0dfc1401fb17872c",
+      "source_submission_id": "2f81fff1-3d8e-4a0a-8931-44c6fa5c4bc4",
+      "source_content_sha256": "sha256:d1fa50a7d3a27e5f4bcf55f3672b78dd36ac31ac3c636cc8522b29b841da66a3",
+      "blinded_content_sha256": "sha256:01b83b8937e8a84454fe2ff229ae696e1eee3e0959dba68a761be4d3ac4a29e1",
+      "historical_decision": "reject",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-4a9455a74e19cad1",
+      "source_submission_id": "3fecc2ef-4194-4460-a037-2b7a0b834aaa",
+      "source_content_sha256": "sha256:44d93f8787fd4efc7156568d0d8a4610b912113f6b39e6aa47565393d171ba12",
+      "blinded_content_sha256": "sha256:6beefe58086bbfcf35d987fa4ddf594656756e037f94e513ad3c2b4ebc929430",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "finance_research"
+    },
+    {
+      "case_id": "case-3e52bb8642b8b8fb",
+      "source_submission_id": "a88c56c9-38f5-4a28-a85c-f4ee510aaa33",
+      "source_content_sha256": "sha256:2752abe1b73008d90aaa764c9d311e1daa0cd309b6d725764de122df0a479ad0",
+      "blinded_content_sha256": "sha256:fc32fb3f8724cbf8776e95c04bdd09a68c9179e61da50b552dca361995dbb876",
+      "historical_decision": "accept",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-cd785142f961cfad",
+      "source_submission_id": "8968cb8f-bc51-4722-aa5c-e93225c4483a",
+      "source_content_sha256": "sha256:78321d12eb78be73462712e69863151d7ff69f3ee2b9af1415af090a5e23fa6e",
+      "blinded_content_sha256": "sha256:a8f674ab427ec021c989eca0c5cbc578f8b0cadd442744308f83690d75bbaf84",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "finance_research"
+    },
+    {
+      "case_id": "case-5bde5cffd702b761",
+      "source_submission_id": "6568de74-6dfa-43d6-90e6-33f3a156496c",
+      "source_content_sha256": "sha256:9d08ab718de2e95cb35b6bac354aaf510fd1a89027295feac4777e176f7fb609",
+      "blinded_content_sha256": "sha256:9ae3e60347bb3074c288fffb70b9fb62c8c53c09ce9174f1bf7b38914ba874dc",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-1428d4a855ecf782",
+      "source_submission_id": "3af2fac0-d3ac-4f2e-a8dc-bb9295572ad0",
+      "source_content_sha256": "sha256:0afac6671d0b0f501021d83994a4b77b99f30a8b8069a91de8c0cb6b77d7a349",
+      "blinded_content_sha256": "sha256:7295aec11676dfd4f264775fa6989b29ae6392c9df6a8ad056ae1773982b77c7",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-474fcd06737f11cd",
+      "source_submission_id": "a544261c-cc24-42d3-b0b0-eb41e2d34b93",
+      "source_content_sha256": "sha256:584c6b3b30e890d513e430d2ef3834ec5eea53ff7a14330efe3e48b355815b70",
+      "blinded_content_sha256": "sha256:a8fed364558d555aba4cf2eb3d0f1496c5beef8f70762e1ca13ec0f37a4b3a07",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-89476eb403ad62aa",
+      "source_submission_id": "7b938410-0a45-4253-a1f0-b1dd90902b30",
+      "source_content_sha256": "sha256:1642ba97c665120eaf0dd757e827f4f06c1543d01ed84c69e5f82dd830e841e5",
+      "blinded_content_sha256": "sha256:da55677194d371d286b197a6d42d46c7f1b2e9c7df38991f8335d3db97616005",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-501de0d5f220ec34",
+      "source_submission_id": "3ec55ee1-c5ea-4712-8fad-40050370866c",
+      "source_content_sha256": "sha256:7c99168199651a26cf084c73eed9cf7df2e8b5fed32c7c300ebb2ec74f38d573",
+      "blinded_content_sha256": "sha256:1e0b678233534ae6f0a2792856c25130d78b3d539602762d9505731663bb0385",
+      "historical_decision": "reject",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-cd50050d3776952f",
+      "source_submission_id": "be7bdbaa-c6fb-4e4f-a42b-ac820d4acd76",
+      "source_content_sha256": "sha256:64861b3fb0ed9e280dba17a337a7d0bc01a2bcf82ac753d1dedb9341004eabe1",
+      "blinded_content_sha256": "sha256:5a56f3521434d6a9d899aa1ba90d08624f0c2da3070dde63dffde54614893665",
+      "historical_decision": "revise",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-5526049b2a0b6e13",
+      "source_submission_id": "6370720a-eeb8-4400-b46b-ebbbb295d946",
+      "source_content_sha256": "sha256:c4b12bb98ae9134a30da8064d94e1086ce2c07a02b4a52a79dd475a07be0f997",
+      "blinded_content_sha256": "sha256:6aca309a1859bf616386ea064b8f556c9cd89ba7b49eee72535b61d5f2c29e9b",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-960a2ea61a0c3586",
+      "source_submission_id": "fbe4f537-e2ec-43f3-a0f1-87adaa85f7aa",
+      "source_content_sha256": "sha256:92dd4ec741dba70041d811fe825bbed0a2860914aad46ee96dc48580a2faa170",
+      "blinded_content_sha256": "sha256:ed8b069cfba31949bf1f0887a68767611e890ecaeb7c964129b9f33150e097bf",
+      "historical_decision": "reject",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-33524dc0718310dc",
+      "source_submission_id": "cef14904-7858-468d-bd89-ed94406cea64",
+      "source_content_sha256": "sha256:5fe4e6c0be6ded286ca95742af753845d59f200a4d9bb06a488e5f8c439b0d8b",
+      "blinded_content_sha256": "sha256:e937307612f8dbdc3d48a40988dd26a25d5b9c643191d7bd6a73000c1b2d10e3",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-7652c1f554057d2a",
+      "source_submission_id": "89d5b989-7669-497d-9a99-b848f6067ca8",
+      "source_content_sha256": "sha256:0147b97c7d979b8052b1578e0356e51b932351b476d3f4dc8af9137f62fa1e84",
+      "blinded_content_sha256": "sha256:e8712f4dcafba65529a85b22e4a1b621bf483aa2e15ee4c5141a881e6392f3f7",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-cb65316a8f70dd35",
+      "source_submission_id": "39173f0c-d31e-4a4a-8f09-63bebc8fd9ae",
+      "source_content_sha256": "sha256:cbf9f4aff574ce743a0415e56a3d20e6c1b3577bbd89e57b3e054c24d199441d",
+      "blinded_content_sha256": "sha256:937e21e75c5bcb3b22232af4700611b9c26033b064a199a35ba7fdc37c543374",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-4f0358885610c770",
+      "source_submission_id": "d1227129-c3c8-45e6-8a7e-9f7a13054157",
+      "source_content_sha256": "sha256:559f514411b1f4f4b4d347f9eaf6bff277419d8e0d29e4e3f664ab5913ca07e8",
+      "blinded_content_sha256": "sha256:acb4e1667deeca15ef136e90d7bb60dcf8cd1f9c18c615b7384a2bd7a2fca31d",
+      "historical_decision": "accept",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-2ba6c5375a8a4592",
+      "source_submission_id": "b21e0c58-b0c6-4aa3-bae1-e4600ddc2d86",
+      "source_content_sha256": "sha256:268bc0251f02281ba8fda87360e76278d90e28fb2ae16908b0e34b726a6847aa",
+      "blinded_content_sha256": "sha256:61543adbf49c2d1e90656dcc97f25843e5893a0ee4116c8bb03dc9f5a52a1763",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-f9a563a792431f30",
+      "source_submission_id": "9266c68c-fa2d-40c9-9e31-202cbae57684",
+      "source_content_sha256": "sha256:1d9027c04007f79f715eb91dbb367be7a73083363fed25f5a084dead258a0e3d",
+      "blinded_content_sha256": "sha256:5a3c626c892cbe70db95263b295f004e82b11405c5b4956d4d9010a64d489b00",
+      "historical_decision": "reject",
+      "article_type": "evidence_map",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-73c7273aac3247d7",
+      "source_submission_id": "00b8c3ed-51ad-4a21-96fa-7e879fbe17ff",
+      "source_content_sha256": "sha256:5e842c208f3c0212528726ff86aca6890e1067eafc092ed6e771375dae2b112d",
+      "blinded_content_sha256": "sha256:1093cdf48f31146261e69d11c8e64c963127d799864159c452d6cf50517adb03",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-3a05cf2304bb173e",
+      "source_submission_id": "3726e8e5-b134-4576-990e-fdee76613fab",
+      "source_content_sha256": "sha256:cf0bdbe12d5b41d433786975e988140f53d3eb7aa1c7a082fd855afad97f226d",
+      "blinded_content_sha256": "sha256:21dbebcf1be109c18f32dbc19894e43a4668edc0ea78b89643e6307b4b3df593",
+      "historical_decision": "reject",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-6387ef453a20ceda",
+      "source_submission_id": "ace0066e-3696-45a7-81b8-151617ccf9b2",
+      "source_content_sha256": "sha256:c63259019ac0f67eb6be265152f1a7f8e29ff0d23118a8ec335fd1d1258046f6",
+      "blinded_content_sha256": "sha256:d192087329f723ee3d42a0e96b37cfbb19bfa5888b9b0087ccae1d4a008e7297",
+      "historical_decision": "reject",
+      "article_type": "evidence_map",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-230faf6ba25b0554",
+      "source_submission_id": "f75cb62f-a083-4c20-86dd-9a6cda8bcfc9",
+      "source_content_sha256": "sha256:f1f6616a50297539d00fda4d41f853cfa3a41eb3bc18d5395cdcffa83907d009",
+      "blinded_content_sha256": "sha256:2d4f37584eb72290c452cae844bc1377e01d782e66a3668842b70ee7e013dc61",
+      "historical_decision": "reject",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-86953d6ee2055b07",
+      "source_submission_id": "abfb155d-ae90-481f-9a16-b74dcda4432d",
+      "source_content_sha256": "sha256:868a6883c912504665e9b7f43cdff4451ffe43c8abf8aa80b356a42811e2f8bd",
+      "blinded_content_sha256": "sha256:e68844042647d68218c42ff3588b58bd62645474f94ec9c8cc20a7657ad01b9e",
+      "historical_decision": "reject",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-2ae77413c9888b3e",
+      "source_submission_id": "f5c7cf8e-ef68-451f-ab1e-6c67214fd1b8",
+      "source_content_sha256": "sha256:b339a601ed7142fa719eefa44891dcf8f22cfbb2192f0c1b855f81867da2e7eb",
+      "blinded_content_sha256": "sha256:b58bf71f74ec4c60dd87228253f2147eba764e71a9d600aaf5e0cb1393233bc1",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-f2e7c2a92ef3ff4e",
+      "source_submission_id": "34c4b5d0-f26f-4559-b735-edd7230165d4",
+      "source_content_sha256": "sha256:c091427e0f972e5d5dbb8061819b88525b13282aee97569e99c4d65162444084",
+      "blinded_content_sha256": "sha256:fa2388a66c0a153eea96127877fba0d42c7f69fa11a1f74711eb79e068405214",
+      "historical_decision": "reject",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "exercise"
+    },
+    {
+      "case_id": "case-20b68776385bbbfb",
+      "source_submission_id": "b21ae133-6412-4efc-b1b8-93427c5eee09",
+      "source_content_sha256": "sha256:7f42d4137d4e337e62c76f85c694e110978a9ff78bd0a897820c6e5bde2ec890",
+      "blinded_content_sha256": "sha256:dca948c1e8bbf21ebf505029fb62fca3abef57bcf8e3d37efafff8fc0c3986e0",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-b969ad4dc903d088",
+      "source_submission_id": "295e0e7a-a77b-4540-9adf-4e3b43d57cde",
+      "source_content_sha256": "sha256:15f6c9cac212e897d657078ce9051d86c6938f85e547d8a0ebb067c4e17c4993",
+      "blinded_content_sha256": "sha256:f26d3d21acc205bc010c81e8288730f2b05de8e4dbec89e171f85410da3196cb",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-a968136a620cd939",
+      "source_submission_id": "7953c1c1-2bc6-427c-a617-b1bb1bed27cb",
+      "source_content_sha256": "sha256:081fc8ff9d7a105e7e739caf3afdb294350fc8e19e8e600ef52df275b7eef68e",
+      "blinded_content_sha256": "sha256:8193c65b4071b3ce5c308ad13b13a864972cf209a85dd457a7f3b44f3e77f703",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-b522053621d93cfc",
+      "source_submission_id": "8e1221e2-8ec6-4c4c-b9a2-10030408ce41",
+      "source_content_sha256": "sha256:4f0a53f059d563043a6bff3e3fd2b5d5098e93eca2b272c135769600d4cf6f68",
+      "blinded_content_sha256": "sha256:4f3a0e7d9ad5f27e04208287be0abda33897efd324e8cfb5ac108b95d20a1518",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-76256c261d258f70",
+      "source_submission_id": "47625a02-a141-4851-8ead-94f1af922fe5",
+      "source_content_sha256": "sha256:d4b85d33bd555ff1654b6c204b37df43b5c2c2d18a9c0149617d87c89a53da5f",
+      "blinded_content_sha256": "sha256:7fbf58f9b887fed2326267cb8f31bd02402a4881774d6ed7dbd40ceaa48df632",
+      "historical_decision": "revise",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-afe301b0bd3dca82",
+      "source_submission_id": "d3b70440-2e76-42c5-a2d8-5be1b7d20efd",
+      "source_content_sha256": "sha256:3fc8f2d26067ef4d8b647e530e55408030ad3e591af375c2e6be3534b4ad4659",
+      "blinded_content_sha256": "sha256:08ce1ac718d6a2d6afd38a52e80313ec6f5bcb4f976f394391fe9ac600513190",
+      "historical_decision": "reject",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-3d4bfc857a84c87f",
+      "source_submission_id": "5fb5fe77-5ce2-4bd0-972d-627f8117dfd8",
+      "source_content_sha256": "sha256:7b943ffad352feb726c25d84270ba47c863c5ba4cbd1e92238a21b3b8f343fab",
+      "blinded_content_sha256": "sha256:b358b5c187f4124979815792dee850a2dfd331ca69313cae907689e41ac1e7d9",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-d5d6689531426c9a",
+      "source_submission_id": "eba94d22-251a-4b63-8bcb-4c4f4dc01389",
+      "source_content_sha256": "sha256:9009422410e90d2ae83b3a22b9cc7fa8542150e4d3c8df502637a87ec9689bf6",
+      "blinded_content_sha256": "sha256:e7938bd5c92106be15998fe914515d83e742f5e4b68e420db87e19fd9d9d3556",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-f510b2bb8e74bc6c",
+      "source_submission_id": "35ddb287-987f-4383-8f06-071d5b8f28ec",
+      "source_content_sha256": "sha256:2fcf77f9a97545aa8edb76ff05a680e413b5fece1cb3376e76af1f5dccb07e87",
+      "blinded_content_sha256": "sha256:b369cfa5c78ac13dc90df8ef9f55748be72ee36e2acf1135e95756f14e181fdc",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-d93e517ad714985e",
+      "source_submission_id": "29d52f0d-0817-461e-9539-af12544e55e7",
+      "source_content_sha256": "sha256:210d1f7777cd3c9808d7c351642a26ccacd0d3c307072d30daa7545ddf442f4d",
+      "blinded_content_sha256": "sha256:f65a4e1e3ceafbf4f2012208dddbad302213debdf77a2ecde31c8f4601594b65",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-81136d6e5160526f",
+      "source_submission_id": "074f9921-0832-4923-b8a2-a2a04d7ea81e",
+      "source_content_sha256": "sha256:9042b05ad89ce4d8d07cc8a75554200b2db6b991462451aee7366a0fadad8424",
+      "blinded_content_sha256": "sha256:8f0a303fd4fc1469303da7e19b0d061570586bc2859b3491f012462c8b17e69b",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-7eacedb181fff457",
+      "source_submission_id": "2ab75745-d1f0-4533-9486-74a5d63262f5",
+      "source_content_sha256": "sha256:9d7faf6f8703201ba32feb55c52eb1ffb2d4f789e1cad7dabd5ce7c76a1fe314",
+      "blinded_content_sha256": "sha256:8badb2547700ac31853b41fc6707fe10e1dd8b31330562a85ab80a13047c2ea0",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-6d896648e943700f",
+      "source_submission_id": "07bd3047-f2ae-4a05-94cc-fb01dbda162a",
+      "source_content_sha256": "sha256:d460e6c99fe7b86eefc74f96d361e97a1d514e2670aacd6a0394662bc309fd42",
+      "blinded_content_sha256": "sha256:c6098e5391e3e68ebdc07d02dd15a4c0f3ffe7924f9d90476ebb30556637e76f",
+      "historical_decision": "reject",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-d58088b5c216b007",
+      "source_submission_id": "506540fa-4df7-430b-a9bf-d0f0b636116a",
+      "source_content_sha256": "sha256:aabd8f10bbc4363d864be119fcc25c5a92112d08119f5c84c3116b06db8cb9ba",
+      "blinded_content_sha256": "sha256:7632ed7830feab3f2584bf07bea631cb39f3be694f0054448e21880b69b2dc27",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "economics_research"
+    },
+    {
+      "case_id": "case-8c20cbcd5eb25307",
+      "source_submission_id": "b4632fab-3719-4ab5-b27e-5a205330b560",
+      "source_content_sha256": "sha256:d6351b7bb4d161254eb0c7ba8386b20f75d110e5107ff69aa67187a5e8ae827e",
+      "blinded_content_sha256": "sha256:d7b75a296a10f4cccd3764dda7aeed0cfe48f8287f2e45ebd743511da3cd6658",
+      "historical_decision": "revise",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-837576df7abefdab",
+      "source_submission_id": "ba9965b1-3c2d-488c-9126-459a3e49c131",
+      "source_content_sha256": "sha256:338941bfe996832e1f3cdf569d9acb9d83483389602682f214339f611ccdead9",
+      "blinded_content_sha256": "sha256:909935f64d77f75d80b4176b36a16d0ae7311cff9858adc1d895e342289c7593",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-aa52f65a6de928c1",
+      "source_submission_id": "ff125134-c486-497d-9a73-e45203bef6cb",
+      "source_content_sha256": "sha256:6ee255448e8529bb20bd8ece9d71af7cc2a5b7fb0e5324bc53f9afe5dbb0a697",
+      "blinded_content_sha256": "sha256:cf13ad9e40878bc2cca26e9aa81b697c719c48d0a9c2b78be7411c46e85ef2ab",
+      "historical_decision": "revise",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-8587850c3333ec42",
+      "source_submission_id": "6b35aea7-2b5b-4ef9-9f35-590e0b3b5a75",
+      "source_content_sha256": "sha256:b763ca07f0ba47df8425c757d9bb4358df91a9641dba8a2149ca6ec4b374f907",
+      "blinded_content_sha256": "sha256:e1757545c442050530b0eaf9e14572a2076f88b4f044d88073ea27640cb74b44",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-91872766e2ca152f",
+      "source_submission_id": "02f66c1d-f0c1-4a1b-8748-b61dbacbfaa3",
+      "source_content_sha256": "sha256:99e83c42414907cd7f90ec6c3848d7cc214dfeb37396e36e5fcb6a2a27925cc3",
+      "blinded_content_sha256": "sha256:8fcaefa2eceba64ab1885a1048d06f95b3b87ef27baf10037406d4be09b4c93f",
+      "historical_decision": "revise",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-7ee765f423ca240d",
+      "source_submission_id": "5d02dc29-8200-45e0-a04a-3c6dd724895e",
+      "source_content_sha256": "sha256:b4d762f0b47c79adbfefbaad3751d408cd40082433960dc0d9697acaa71b6492",
+      "blinded_content_sha256": "sha256:98fb303a44ed06a60637926c36d0a27a58812e2518bd98712be606b321a84d22",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-748d8837ea0326e6",
+      "source_submission_id": "54fef527-5010-4b9b-bdbd-a7cd4e87fc41",
+      "source_content_sha256": "sha256:c1fa8fd040fdd927103c4bbd430d0a29741b0821381cf1dfad499dee448f4d2c",
+      "blinded_content_sha256": "sha256:bf52e4e0eaaeeae3e109301fd40b0b3d59b25c7bdcd46ce60a7d1e49318828f5",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-7c492157f9ebba30",
+      "source_submission_id": "e862b7cc-4ed5-452f-b1b9-7908f037ef87",
+      "source_content_sha256": "sha256:bb0d0b48e7ef4571e5aae20e57e591867cf22595716ff993d38e8f43f97650ef",
+      "blinded_content_sha256": "sha256:9969c1e26abbb6012c0ea923f8ad05ce48ab03982f1ca1d2fb764dba2eade46e",
+      "historical_decision": "accept",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-0e3a20b2031ada5d",
+      "source_submission_id": "cba07108-f6a8-49f1-b498-30a7f65e88a5",
+      "source_content_sha256": "sha256:a77ef945c056ef68aad5f447b7e1dddc91d736cbc8f4bb259ffd7ea87bab0f44",
+      "blinded_content_sha256": "sha256:f7c57de455aaefb2b0a9ccafc8d72fc313c4da58135c74279ed9d07cfdb0fc04",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-8bb3d7b6a1440c54",
+      "source_submission_id": "7fd6cfbd-f657-4b32-bec1-e9e423a9c983",
+      "source_content_sha256": "sha256:6c10a7fc29ae2cad343307c536dec86941b6e637754123a1e1dbe1f0a33f66d7",
+      "blinded_content_sha256": "sha256:9aae20bd07b4b18033103f527e259f792ebb09d6fa2aa72b8309d8242e1e2d4d",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-122cc28c053efc49",
+      "source_submission_id": "c025b6cc-f5d3-4960-81c2-db20b27764d0",
+      "source_content_sha256": "sha256:0675e0782395009089915efae10b0d7f429233ecaf43b4e64744855ffcb2ed92",
+      "blinded_content_sha256": "sha256:7b94ec3e3bcf8bb6ad708f720b46da7bc04a662209199a4767d6103127123be9",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "economics_research"
+    },
+    {
+      "case_id": "case-04096ed712d2d934",
+      "source_submission_id": "7ed08ac4-f07d-493f-9fb1-dc5262d4433d",
+      "source_content_sha256": "sha256:7bf4d0629222449fcbf6cbb81e4431e395be702f8db38adc151988beebe7677b",
+      "blinded_content_sha256": "sha256:648d40d32cd42f6be1367c72d0850ddd23c7206a22f05592147ec6f7e84562a7",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-62f357bfe70374e5",
+      "source_submission_id": "fdbcaa5a-e282-4f0b-88da-0021183a7d3f",
+      "source_content_sha256": "sha256:2e880d6b1790d8a560d097566017d86472463721cfbdcfdf545af824571e9364",
+      "blinded_content_sha256": "sha256:306fb9c1d508e385a7e3a1ddbefbd1017731bab92dbae016fc13644f335ba953",
+      "historical_decision": "reject",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "anti-aging"
+    },
+    {
+      "case_id": "case-3f577951583d573f",
+      "source_submission_id": "bb92417a-81b5-4ad2-b488-e7dd8d731fc7",
+      "source_content_sha256": "sha256:fda6d65129bbc09d893c5fd4567a2548a0f82e53c6d77afd642f0606a8db2c5c",
+      "blinded_content_sha256": "sha256:5da3e2af8d343de77b37ff3adf6864d84c931fbfd04a6db6b2922557066a5129",
+      "historical_decision": "revise",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "anti-aging"
+    },
+    {
+      "case_id": "case-d592d4439e6be991",
+      "source_submission_id": "dfbb94b4-869f-4049-91c1-01f5d1457e3b",
+      "source_content_sha256": "sha256:a4fa77a345b22f1707cfc267d1e2fae6b7a64074f275de20d95b123b05e9752b",
+      "blinded_content_sha256": "sha256:915d21c758f5e34dbb820ee47e803ff1ec5638af3c676ad3df1898027817adde",
+      "historical_decision": "revise",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-55fd8da862575f65",
+      "source_submission_id": "aab2fcfc-844e-4766-baf4-71deb960ad33",
+      "source_content_sha256": "sha256:d8fed23de019d3176f5a2c90f38504cf7f31d1e279c89cbc8437f16622bc10bc",
+      "blinded_content_sha256": "sha256:84f7f514d0af275d922ee130cb775da18af9de85453d2cb82de42c13f55c9402",
+      "historical_decision": "revise",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-3d483af7819f949f",
+      "source_submission_id": "9893d438-3a14-4b5a-b230-a1d0902dcc46",
+      "source_content_sha256": "sha256:3a1c3115434edcf3c88ec4b7ea9e483b0608fcefc73c750fe35ecf719370326a",
+      "blinded_content_sha256": "sha256:1e973a23dda60653f8821782de3d6f2104b043c6d41ed6032ccb8542615c5236",
+      "historical_decision": "reject",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-6e3ca99f95400ae2",
+      "source_submission_id": "f2458b0b-b62b-491f-92c9-a14effa5cb01",
+      "source_content_sha256": "sha256:4636bde07419f4ae07d50c50eaa7c52150892a8dea6520eff61f238a830e5922",
+      "blinded_content_sha256": "sha256:e504c24d61cb3d3507a45c6151725d3f1d5271d484304994cca339872f73d592",
+      "historical_decision": "revise",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-4661d4614e20e6d1",
+      "source_submission_id": "3d4b7e57-2e05-4a6f-bd54-ddaf55093a55",
+      "source_content_sha256": "sha256:6c01ce285c8fc881efb7606cb1c8a69984ed7badd85f112cf7490200e32f4fc3",
+      "blinded_content_sha256": "sha256:0b0f26bd4a81f0a219e8751e30a28e53668469b4658298d9f890d2d0ca738252",
+      "historical_decision": "revise",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-513720e06d9be497",
+      "source_submission_id": "d26c02c6-dad2-46d3-a390-4f9a1256efdc",
+      "source_content_sha256": "sha256:ea5958b140c608c4046c3c13dabf17adfe59e725089ca223aee3a0f9e3059c89",
+      "blinded_content_sha256": "sha256:d37e7cf55ee3a74e8f3a0ebc673a640240bbd139b5787f546a6fe3c074026ab5",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-7232710b4abcd241",
+      "source_submission_id": "e14a0981-29f2-4f2d-b5b6-b4fd8f4a8ec1",
+      "source_content_sha256": "sha256:1022809f24cfaa8b86829c01759b6405906e48b24566044dc89302c843b4d777",
+      "blinded_content_sha256": "sha256:2bc5d5aef3f7331effea5e8d1f299c5652c45a1c9b7b3f0ba6600b6824489ae0",
+      "historical_decision": "accept",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-683010f95f13dce1",
+      "source_submission_id": "3b55c07b-acb3-4a2c-bd24-ae0c9c9f8c27",
+      "source_content_sha256": "sha256:97032be773d0b115fa040e3450af5b545ff5f47c6c55164160f80709cc008eac",
+      "blinded_content_sha256": "sha256:d2791e182b92d17e4cda3dc165cc5681147de298adb3c00f611fb5701055629b",
+      "historical_decision": "accept",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-df99e1a6a42008f7",
+      "source_submission_id": "b91a1233-4c9d-411f-8e55-81e275c891fa",
+      "source_content_sha256": "sha256:e492d798bcf24a5380099a76170dab9d588cbf3ba56808b0b982aa36cf913535",
+      "blinded_content_sha256": "sha256:b236fb87dd96ed5c50e5e9fe9ab5b23e3a34e93f5d39eddecb6948c49039df55",
+      "historical_decision": "revise",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-e8da1cb108e0c907",
+      "source_submission_id": "375427bb-6795-4f40-a942-65dca377a669",
+      "source_content_sha256": "sha256:7b07af73455be9979f5d88456c58dcffb41a0ebf50d84b041cab46f356e68b37",
+      "blinded_content_sha256": "sha256:d4512522d50c9e2aeaa6c349130dc4fdcc547233aa20134909e8badc2bc81731",
+      "historical_decision": "revise",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-7a987460c5080d94",
+      "source_submission_id": "c7766943-2600-4b0b-bcb5-c42db4977dde",
+      "source_content_sha256": "sha256:effee4fe312c8479fb88447a8ff2592030404e7522d1deefb6ea35fbfa9e97de",
+      "blinded_content_sha256": "sha256:b66c80d48f1c4e9e8a891079bcc49ddc515d50f9c28d555b825e74d0069870a5",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-35ce1b36a3d3be5d",
+      "source_submission_id": "34ce72c4-fee6-49a3-862d-7c24f7062ceb",
+      "source_content_sha256": "sha256:abf254d23f1ff43c53fef09faad195249bfad720f9db82f7f0443db113251ab7",
+      "blinded_content_sha256": "sha256:de66a54c5873cf45fdf5df3520a6ca3f01a5ff71d265dd153237afadeece911d",
+      "historical_decision": "revise",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "exercise"
+    },
+    {
+      "case_id": "case-53febe7d7368a4f4",
+      "source_submission_id": "aaed765e-2c2d-437f-9741-cb8001ad1016",
+      "source_content_sha256": "sha256:0cc65af251764ab23cc73ac5809a5bc28cb6a634f7f2f395294d6ddeba53f0b8",
+      "blinded_content_sha256": "sha256:dfca236d5c17eb0d810fbce51d6bc73524c94982b6bdd39fb16d5fc48e740f0b",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-887c86111c1337b2",
+      "source_submission_id": "f1dbb8e3-2765-4de1-9191-aeeee9b5f559",
+      "source_content_sha256": "sha256:535108bc83e6da1e54025d400d83965d8a1081fb23e1f8d63947ab13631238f3",
+      "blinded_content_sha256": "sha256:ae72a19ed651a03b83a88844a8a822dc95a1845ae67d135e70b0354d32257865",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-e4e633b98d4d2f3b",
+      "source_submission_id": "7abad27c-ced9-4337-8404-5455a10591da",
+      "source_content_sha256": "sha256:781286bb0648775099566bb9f9035d6a2ece4fb5f530c7d03a9704a772d9cc54",
+      "blinded_content_sha256": "sha256:4f03ba7d209158cb77c16c7d8a98c391bdd92594c02d12560e3fd00ccd9e11bf",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-01a4cb75c729af6c",
+      "source_submission_id": "c3970068-614b-437f-8ae9-14771ee32227",
+      "source_content_sha256": "sha256:a2d75b3428582f5c4e995b2f2b4d277a461c08033320963454ec217dbcb0021b",
+      "blinded_content_sha256": "sha256:3f467ac065ee0de4302be219d1fe0b94d88aa0adcd98f1f967805ff55461dd7a",
+      "historical_decision": "accept",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-e5fe2b19d5fc694c",
+      "source_submission_id": "5e31a86d-9e6a-499c-80d8-e1e5c020abe3",
+      "source_content_sha256": "sha256:b8d735f0173ec39117789984463877d3c66b161eca7d0fa56efe8bad8ac04921",
+      "blinded_content_sha256": "sha256:fa0a9e49083af2bd1e7c896be29c8b44da5b801cd417df10e006870c734a7602",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-44559921b05bcc45",
+      "source_submission_id": "c56b3947-b1dc-4bac-a98b-39ab33087d8b",
+      "source_content_sha256": "sha256:4a14c36c75342474fc99bffe585fe39d898ceff226f98a35ee279a38308e1bfb",
+      "blinded_content_sha256": "sha256:e9e78f36fcfc50f9ccf8da7cb44224e447c19f58e22a090ff3c9fbae180efa2a",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-a4779b89cf6bfabb",
+      "source_submission_id": "64e50530-b8dd-451c-b57d-d34ba533b4a5",
+      "source_content_sha256": "sha256:ebf37efa28f4652070a6a2b93c382899ed04d04d148a185b510c078d7f3d2a48",
+      "blinded_content_sha256": "sha256:735a100e06a690b9df5054187e204dae6e2831c678754b6a0958a0e714886b1e",
+      "historical_decision": "reject",
+      "article_type": "evidence_map",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-029e386eb1d902fd",
+      "source_submission_id": "414e14ec-c101-4a34-8806-0db482b0f362",
+      "source_content_sha256": "sha256:82ae54ee9d831cb47bb296a37aee90e0a8126815a8a028fa5b139b2f4f56de48",
+      "blinded_content_sha256": "sha256:27c04903432743a25c0c46941a948525dd24176a9731b1b2d26cfdabb985ac22",
+      "historical_decision": "revise",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-47c2357b6972ea7e",
+      "source_submission_id": "cd1c5b00-3175-4ef1-b264-7820092b0a0c",
+      "source_content_sha256": "sha256:6df95a9f6404092f521ce276b58cd5491cc23f8c89b54bd60dd2cd6f84b937b1",
+      "blinded_content_sha256": "sha256:97c9b9ebbb04179095e9e49cb3e09ce4cd750d5d77b06f745c730180a8ebe03d",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-397bb0508e103042",
+      "source_submission_id": "388dbe99-75b9-4922-84b4-d09d4a88e434",
+      "source_content_sha256": "sha256:a8540e8799a884b51adc9bc8ac8aedf092ec76fd868c2b8c3db36ca345ef5cb6",
+      "blinded_content_sha256": "sha256:5a70ac15c62ded82bc94923c6e8773865724cae6ecb0abb7de1d10355c024312",
+      "historical_decision": "accept",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "anti-aging"
+    },
+    {
+      "case_id": "case-290e8fc0da4f92cc",
+      "source_submission_id": "14130546-5a47-408f-a9d7-6e155559bd50",
+      "source_content_sha256": "sha256:e788b277702f4216077a2b5b628e6664472e78cb051f02528ba19045e1d3ba4b",
+      "blinded_content_sha256": "sha256:28ab12d13030f6bf51b9916755af519b6e1d0f4c35f88dd7cfe7b43035240881",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-7b557e9a18efb3cd",
+      "source_submission_id": "a91c19e3-fa9a-4b80-896f-6fbdbb71bf6f",
+      "source_content_sha256": "sha256:b5d72adc549b6d12a8f9ffee2c2535d4a6b4110c0e75eb279e5a9ec58c66ed5e",
+      "blinded_content_sha256": "sha256:f97b226bfad40adce2de7c24f08f931625747e48a98efeccb7d4440451ffd32f",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-e3f603ff7365fd3c",
+      "source_submission_id": "b767f244-c101-4992-aa72-4d0c39b45a44",
+      "source_content_sha256": "sha256:5963c3e72637b59811025b365abcb5e7b7bb57e6cec7a19b3b7ddbc248f812b6",
+      "blinded_content_sha256": "sha256:bc37f9a0c22ea99127a5bbe935e7ba020430fb09b391bf7d22933ad40340f306",
+      "historical_decision": "revise",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-436d1df61b190ad3",
+      "source_submission_id": "faed3803-39d1-448c-b2b6-8818a827ea71",
+      "source_content_sha256": "sha256:8cc28c66e33ce39596c95a93cf93a3d9bd87000551950d8dfa01dc83d8a98d75",
+      "blinded_content_sha256": "sha256:b88f98ea21419f180718bce12b3a610eb9c9298b7e387846edc6bdf429a4d26a",
+      "historical_decision": "revise",
+      "article_type": "evidence_map",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-0323f9b36253f77e",
+      "source_submission_id": "05f2c77c-4619-4ee9-97fd-7cb3a110a3f7",
+      "source_content_sha256": "sha256:4a38bdfdd067018defd0344a697e7d83b27e5c4edca792f72361d8db99516ca5",
+      "blinded_content_sha256": "sha256:bf52e4e0eaaeeae3e109301fd40b0b3d59b25c7bdcd46ce60a7d1e49318828f5",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-f273dcb36bff1f49",
+      "source_submission_id": "a5853790-ebe9-4d11-acb5-a1aa4bf58035",
+      "source_content_sha256": "sha256:d91f4c02c3d7f9a4a1ec788b9d3bb4fc9535ac3b11f8396592f6491fcfe44b45",
+      "blinded_content_sha256": "sha256:1e07eb1b74741ccbd9d82f30f6b0446ddbd404307da993aa89ad155f176c2739",
+      "historical_decision": "reject",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-23431540eef5e3e6",
+      "source_submission_id": "ea11f591-877d-4c3b-a36d-280dd5de2f5b",
+      "source_content_sha256": "sha256:c61799b9d5e87a7f95374de2447ccf8bf7073c2dda52ad5c84f13e130dcc7652",
+      "blinded_content_sha256": "sha256:942ccd708a09c6aa9fff1cbfeca88b7f4e6ddf97a32bad2f239447980fbd8253",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-90b26cf8197e71c6",
+      "source_submission_id": "e5c76edd-a0ae-4100-b5b8-c7d9d1d1bd94",
+      "source_content_sha256": "sha256:d9c2544c243653ef817d27fbaacedb6257000b2c6792d83a59786d1a4aae6799",
+      "blinded_content_sha256": "sha256:4fa0cb9ae1ee949be9e10db2bc9e809e5005664c1d95ecf022503a829a6e00a1",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-e4a06804d80da2f3",
+      "source_submission_id": "6a8d878d-f358-4406-8079-69d08ef21d60",
+      "source_content_sha256": "sha256:85ceb8f51711ace0c720ac9921c3eb90ca1a04f1e3e90aaff25064aa24f0d6e6",
+      "blinded_content_sha256": "sha256:a27084e3b6b246795b971770d05190bbf33ff3cf4be587abcee748e00f835dd5",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-0f41ca85d1c853a3",
+      "source_submission_id": "bf57e9dd-a556-4985-85f2-ae86c537c6a8",
+      "source_content_sha256": "sha256:74282231a4300d215a47f87bf375a9407af0a64beb964cb7aab7bda7da50a54f",
+      "blinded_content_sha256": "sha256:38d08513d1b3671cb1cffcd26b5929098604c969bcca4dad6a46e984e7b51d69",
+      "historical_decision": "revise",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-f76de2221965738d",
+      "source_submission_id": "ade507cb-3b3e-4c77-a95a-54c3b79ac825",
+      "source_content_sha256": "sha256:d9bb054bfb72263105b1d435640b5b10421a432d4563acae034b538a485a8586",
+      "blinded_content_sha256": "sha256:e1005533efff7bb037308890669c9a823b263f3589424331540f5e22bf609848",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-c601ebfcb5efe6ce",
+      "source_submission_id": "449da5a2-c49f-486f-8590-8d8af58681c8",
+      "source_content_sha256": "sha256:b2331403854200531baf817f02229114213d54098a014d37372ffef29ccc5b7a",
+      "blinded_content_sha256": "sha256:a24d366dfb79ce9bb5b8749a4395803f042084a8f646efe7ff05f65cb440c345",
+      "historical_decision": "accept",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-e91fc3c98ace9eeb",
+      "source_submission_id": "b7a258a4-07bb-48a1-8ed1-cf157a2695e6",
+      "source_content_sha256": "sha256:ef51cfed9b680428785e60cf798b217c4c9ddadd038accd824d3554fec28ef01",
+      "blinded_content_sha256": "sha256:84f7f514d0af275d922ee130cb775da18af9de85453d2cb82de42c13f55c9402",
+      "historical_decision": "revise",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-e3a93ed9f35d199a",
+      "source_submission_id": "7c5ccb76-8350-42ae-8ce7-2d6860416cf3",
+      "source_content_sha256": "sha256:6baf34530df7d72c22e990e10b994c7934ed39114b09c2d8f00aa47bb62c24bb",
+      "blinded_content_sha256": "sha256:4c13536fa9e41bd33408cc228ed424dfef419b9e6da3b275d174ac5d881b7be7",
+      "historical_decision": "accept",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-e751437f537e8294",
+      "source_submission_id": "7630d4ab-2446-4ba1-a3af-26b908f475a8",
+      "source_content_sha256": "sha256:855480d85d7c0b798b8fafc69ab6b346cd2f825c1b643543abf84ca81e9ea04f",
+      "blinded_content_sha256": "sha256:1633e9145e4e83d903764081886c7aad12afcb4c3b416b6098fb88ac06939fe2",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "finance_research"
+    },
+    {
+      "case_id": "case-42222fc88be37209",
+      "source_submission_id": "757a0488-8710-4d89-8001-6aeb455d9874",
+      "source_content_sha256": "sha256:d425630b927b1e0317e76d0204683441963a9e84f342dd2369625ff78f925f23",
+      "blinded_content_sha256": "sha256:f46f4c6c5d3c8636ae8f06b1389750e3accb1b52eaa8207691e41ee069953076",
+      "historical_decision": "reject",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-6d4b367d4fd2d7a1",
+      "source_submission_id": "a440ed9a-c47f-4dc4-a045-6f3638ae7d8b",
+      "source_content_sha256": "sha256:db214cf2c395141a340a2588bb79fa0a05ed5652e88ba9de7c9493b2f040612c",
+      "blinded_content_sha256": "sha256:9c8142aea5294b77fd213065ecdb4b9e3259db4e8d01549ee2d80731c07ea138",
+      "historical_decision": "revise",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-257fe02d5e083dd0",
+      "source_submission_id": "652abfd4-32b5-47e4-aa5b-1703c40a140e",
+      "source_content_sha256": "sha256:4ef7054c8b2301aec4b14a750289f76161f6a008254d1ce9a45528c90cc57438",
+      "blinded_content_sha256": "sha256:9194141188683d7e81aa5cd0e97a62315a70e9b2849f5f04bc1b4091f295585f",
+      "historical_decision": "revise",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-3d6790eb7f2dc2fb",
+      "source_submission_id": "ee713562-a625-499b-b6a8-45b439a661fe",
+      "source_content_sha256": "sha256:9ccc9bf58b9f2f8d135c87862036255d797b56bcc60ee83fee2f833198ce1893",
+      "blinded_content_sha256": "sha256:ebe56fd0d825bd28dd2ec6537b2fd91eb0e9a576f41b14c8ebef13f6940172c9",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-e4a5e566a7239a4f",
+      "source_submission_id": "851b43af-bcef-42c0-adc0-f7a00892218d",
+      "source_content_sha256": "sha256:b6b617844da1e2b72505bdb664f0df7ebafc4aa977a2b8632f8ee94b8d5b52fd",
+      "blinded_content_sha256": "sha256:247f10fb4785849554affc3c01f4ff6d8458282e92923a4d0777a2af92ee4116",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-9786b0e7cae75a7c",
+      "source_submission_id": "ede174b1-cc04-42bc-833c-97a729d0c115",
+      "source_content_sha256": "sha256:e955b1ce0a9a62c33d72f56ade5619111a9d6e8725fe8adf94e8e402839183e9",
+      "blinded_content_sha256": "sha256:8fbda8e1d255a0486ac3ab203601809af99fb7f846d3012f6f863c8e1bb1c188",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "general"
+    },
+    {
+      "case_id": "case-79a39e6a586203dc",
+      "source_submission_id": "e18a2a30-b1d5-45ff-b5f0-e91278b4a38d",
+      "source_content_sha256": "sha256:4ad3ec18bf667bb1db58c4b6a985d3296688189d84670c640da8094c476d9dde",
+      "blinded_content_sha256": "sha256:29fe6b62097238babf94610fa3ddf58325cd5dc3e065f3773bb5022a642cb44b",
+      "historical_decision": "accept",
+      "article_type": "alpha_memo",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-25efe36ba7a3c120",
+      "source_submission_id": "7c330c3f-54b5-4c2a-b35b-92a340d75e52",
+      "source_content_sha256": "sha256:2aa1174b3889ace6ffec4283d3b56b331c1e4a4d9eabeb149aed6cdd050c371d",
+      "blinded_content_sha256": "sha256:1f059fb6696e6b82fff05a106e99314cd2fd36ccdfe1c20ba8660b932095e3e4",
+      "historical_decision": "accept",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-4b90f1666bd8babd",
+      "source_submission_id": "7e184976-ef20-4b90-8ee8-0ac82f2ae484",
+      "source_content_sha256": "sha256:fb74b994fa25530934683d5887bd05829deab99b7aaf6ae9efae6e1113502780",
+      "blinded_content_sha256": "sha256:933b71579bc5ce0e860a816daaff1b08ef2abb94556169c82a7dd914dff14b8e",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-5161635e1955d199",
+      "source_submission_id": "41091357-dd83-4c12-8d13-219e5d9a4e5b",
+      "source_content_sha256": "sha256:8fcb407c690407461ae2f42d4faa639892ac9a4cb694a92aad744a475364114c",
+      "blinded_content_sha256": "sha256:3754b5f6292e9ce72d4d669f240ca59b2ce46fd88cf3621d56a9c83d8004f340",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-8b1c3ee7b9c9f218",
+      "source_submission_id": "e93908e1-33b0-4f7c-b06e-73a092bfd0b7",
+      "source_content_sha256": "sha256:66f83b057b396303c3774b4f03d1eb601d03f2a17e8b4196b1a659e9be4ca727",
+      "blinded_content_sha256": "sha256:16375ade241e31cf1958decc96a03250c6f6296cd17eae583b6c46287ddb3551",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-c609f10fad8cd8af",
+      "source_submission_id": "7f5c627b-92bc-44f9-a268-76c20d8e782b",
+      "source_content_sha256": "sha256:5c68fd29dae2c037ea7482566d3d643aad946c2a78328684a3f50533059563d6",
+      "blinded_content_sha256": "sha256:ed18117038ae49a937bc9c36bcd6233c286199b567155402b7a74a8634bb21d3",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-2cd0d36be2624e00",
+      "source_submission_id": "33042bf6-52eb-437e-a741-544830c0155f",
+      "source_content_sha256": "sha256:b6b4e98c8927cd2083a960dcffc342e61410be246a2325ea5cf14c14a788847b",
+      "blinded_content_sha256": "sha256:a62bbbd7bbe353b6109b7b67cbadd1f54618300cf4b87da838a643e1cb4b146d",
+      "historical_decision": "reject",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-001630d6d2eddbc0",
+      "source_submission_id": "df8c4fe1-df75-46f4-8e15-5b6b8946b9f1",
+      "source_content_sha256": "sha256:c5fbe60e2c1ebac665c7935bcba9a926b8d06e04fa24075c944d848de2ecce63",
+      "blinded_content_sha256": "sha256:ffa2d40341f6f942053f63d719deecee1494ea6662fb64b499488ecab3fc0c41",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-c7281c22592efb73",
+      "source_submission_id": "887f1458-09cb-4b5d-908f-6effbd9e359b",
+      "source_content_sha256": "sha256:5e7ada462521d5e56a0c1189ef028c0be20341ee49ca4b19352a4189a53d0ed4",
+      "blinded_content_sha256": "sha256:423aa2b18b20f27f251d988dffceb4024a3a299f0a3410ebaac7936de3d55d06",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "finance_research"
+    },
+    {
+      "case_id": "case-53f4cb87a966a38e",
+      "source_submission_id": "a7e0a071-cf23-418f-885c-adfef8bba09b",
+      "source_content_sha256": "sha256:fb3c957a859452ce29209b72ac84a61ee53474f099fc85d7bcc595f6fc1c5937",
+      "blinded_content_sha256": "sha256:78d8f1f8a27e7930d9dc732eed32a85c9940efac9d1510ad5999fc5bba34da73",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-e013c2bc39163461",
+      "source_submission_id": "ccf012d8-89f5-41e1-ac91-768e1700783e",
+      "source_content_sha256": "sha256:bdd6027d0269b624c79b3daf651c5cfdf9b142cdd98c7b995a3d056d8444877c",
+      "blinded_content_sha256": "sha256:992b4655e48d62a214cff719a07072e6c88f2ceed2b0b191cfbe4f5d84393966",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-dcc3bd3ea14aa4aa",
+      "source_submission_id": "d03f18e4-8d55-4277-b501-e6aa13b21880",
+      "source_content_sha256": "sha256:f3afdc3edc1f40e0c0ebc92211781d1bc7c9e3e547c85fc43bfa0c0fa534bc0a",
+      "blinded_content_sha256": "sha256:521e1f9bf625a5b8bf9f2b232b7f3841c2b963b689131dcb006de856d252cdfb",
+      "historical_decision": "revise",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-e7901a7ab2b0b246",
+      "source_submission_id": "9b2ef1a6-b598-4074-9187-dffaf8f2538d",
+      "source_content_sha256": "sha256:4437e76ada4c0bbd66562f739b50ab20da4695e793f923eeee796bcb0594579b",
+      "blinded_content_sha256": "sha256:dc8ec00593b5452e615fbe246651fdf762c41244b16c96b9bf421bd4412d2436",
+      "historical_decision": "revise",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-bca8c4d526825dd8",
+      "source_submission_id": "4df9b9c8-b1aa-4a43-96bc-7e47fd1224ad",
+      "source_content_sha256": "sha256:ef5f0f76d397d8e35e9542791387e535947d73e1d0d2664d182144249b7f3e50",
+      "blinded_content_sha256": "sha256:26b4d5bcc45051e8a78aeecfe6d8b9f657107003746096c2d228335f0fb8ab2e",
+      "historical_decision": "reject",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-76c38523e51d7fb0",
+      "source_submission_id": "8300f990-a156-4694-bbe2-d438c2df6abf",
+      "source_content_sha256": "sha256:34645262f9db91a2637a7ce3ab191e02f3f1eb17288bb6ce1ade744cbab4abe1",
+      "blinded_content_sha256": "sha256:6bf561de36f306753f36b04895c4bb7e3939a1395c9d39439cc9c9031fb1341f",
+      "historical_decision": "reject",
+      "article_type": "research_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-7fe46b98d1532184",
+      "source_submission_id": "747ed0f1-b2fd-4339-9562-053ff4762c5b",
+      "source_content_sha256": "sha256:7ac227bf6a32da9705bf90362261b14db8837ef2f3c0e5aea2c96b98180673c5",
+      "blinded_content_sha256": "sha256:ea15c6bf41b0ea11ffd601bf36c49932468f39258f3354982ea9fcb4fe5907b1",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-df87cb00cc3d67c6",
+      "source_submission_id": "b78ab400-d7fe-416f-a195-34814e5021f8",
+      "source_content_sha256": "sha256:c6c4a0520048347ae194fcfeb5eb3f9bd5166e8e2ebd22d328fc00d78e0a657e",
+      "blinded_content_sha256": "sha256:e18664cee92453aede37b35cc9ac97690073d5d89b1f9fad0a1586dfb29cae01",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "ai_research"
+    },
+    {
+      "case_id": "case-4921503913c00f6a",
+      "source_submission_id": "cefd8b7a-74d8-40a5-80da-12f838573d9e",
+      "source_content_sha256": "sha256:76d6938552f01b3c22a10ef127adf6e98adc7c26b0668ee2535d1a31b3290e57",
+      "blinded_content_sha256": "sha256:5fac1f5610949e369852d0b1e2c6690c7d71fb2f343082bc5e5f453ca2e791c4",
+      "historical_decision": "reject",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-8db4d038acca6c4a",
+      "source_submission_id": "205f5ec7-7f85-41ee-8d34-781646ebdc94",
+      "source_content_sha256": "sha256:f62c216641f7a496c76e59e20233419fb75cfc01d539b967ed28c41b4f7d80d2",
+      "blinded_content_sha256": "sha256:8d7052c32659e359e7bfee71fc3a88540fe18fadc23bfcde55ca944f97e42805",
+      "historical_decision": "reject",
+      "article_type": "alpha_memo",
+      "domain_slug": "business_research"
+    },
+    {
+      "case_id": "case-e555f3a4d6cc46dd",
+      "source_submission_id": "9275f5b4-3570-49a6-9b04-2b1a984d5564",
+      "source_content_sha256": "sha256:ee4887296f50cc9487f5079d39d14af15abe7782479eb00dc50b23e0c0fae63f",
+      "blinded_content_sha256": "sha256:e2f8c2d5daaf7ab1896a8ccdcdbe1f44258b062b79d5187eb7f409e8a2480563",
+      "historical_decision": "reject",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-8a0558bc2498fa64",
+      "source_submission_id": "d0108226-9474-41a4-a01a-b2c7db5c29c9",
+      "source_content_sha256": "sha256:8c3b717be69bfbe6fff6964128857227f103098b249961872186760b4bd2540d",
+      "blinded_content_sha256": "sha256:5ff964d9cdcabe4351106e1d82eb6b63c5adaf6306ba52a5907a1fb4d7bfeeaa",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-75051ea0342e676c",
+      "source_submission_id": "a9cc2460-e010-4345-87f4-bf19b1a41993",
+      "source_content_sha256": "sha256:a2202f416e5e5518aff1710f23908de8062ceb333ff85276a584f6f2362a1d3d",
+      "blinded_content_sha256": "sha256:7634ec29452b720510dc41f9e9df80bd390c720d1150e5a2b13a12ff6836b1e4",
+      "historical_decision": "accept",
+      "article_type": "rapid_evidence_synthesis",
+      "domain_slug": "longevity"
+    },
+    {
+      "case_id": "case-678fa0a23c5d1437",
+      "source_submission_id": "1d9994ee-ab39-44d9-842a-ad958e3f2147",
+      "source_content_sha256": "sha256:3bfbcb1210286b3e7c46e03de766706b1e6f70f2e9adb6a1f58ad0e81cad689a",
+      "blinded_content_sha256": "sha256:1396de0e6a7af6658805a928e803121719e07198527f6b70331b73b2649aed2a",
+      "historical_decision": "revise",
+      "article_type": "alpha_memo",
+      "domain_slug": "longevity_research"
+    },
+    {
+      "case_id": "case-ddf938cff3da8e9a",
+      "source_submission_id": "2dd3bc7d-19f2-45bc-9d3e-2a4be6163daf",
+      "source_content_sha256": "sha256:aabf8419d39e72a976e2816343e4e1358eed9108e06308669cd39b6ad3c3cc14",
+      "blinded_content_sha256": "sha256:e3bcdb15f25a8658833070a75772d1ea111a1124a39cd12b790f30114665e9b2",
+      "historical_decision": "accept",
+      "article_type": "evidence_map",
+      "domain_slug": "ai_research"
+    }
+  ]
+}
