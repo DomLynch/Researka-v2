@@ -7,11 +7,16 @@ from typing import Any
 
 import httpx
 
+from .urls import validated_service_url
+
 log = logging.getLogger(__name__)
 
 
-def _base_url() -> str:
-    return os.getenv("RESEARKA_INTEGRITY_URL", "https://integrity.researka.org").rstrip("/")
+def integrity_base_url() -> str:
+    return validated_service_url(
+        os.getenv("RESEARKA_INTEGRITY_URL", "https://integrity.researka.org"),
+        label="integrity",
+    )
 
 
 def _enabled() -> bool:
@@ -59,7 +64,7 @@ def check_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
     for attempt in range(1, attempts + 1):
         try:
             with httpx.Client(timeout=_timeout_s()) as client:
-                response = client.post(f"{_base_url()}/check", json=payload, headers=_headers())
+                response = client.post(f"{integrity_base_url()}/check", json=payload, headers=_headers())
                 response.raise_for_status()
                 result = response.json()
                 if isinstance(result, dict):
@@ -85,12 +90,17 @@ def check_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
 def index_integrity(payload: dict[str, Any]) -> None:
     if not _enabled():
         return
-    try:
-        with httpx.Client(timeout=_timeout_s()) as client:
-            response = client.post(f"{_base_url()}/index", json=payload, headers=_headers())
-            if response.status_code == 409:
-                log.info("integrity_index_duplicate", extra={"response": response.text})
+    last_exc: Exception | None = None
+    for attempt in range(1, _max_attempts() + 1):
+        try:
+            with httpx.Client(timeout=_timeout_s()) as client:
+                response = client.post(f"{integrity_base_url()}/index", json=payload, headers=_headers())
+                if response.status_code == 409:
+                    return
+                response.raise_for_status()
                 return
-            response.raise_for_status()
-    except Exception as exc:
-        log.warning("integrity_index_fail_open", extra={"error": str(exc)})
+        except Exception as exc:
+            last_exc = exc
+            if attempt < _max_attempts():
+                time.sleep(_retry_backoff_s() * attempt)
+    raise RuntimeError(f"system_unavailable:integrity_index:{last_exc}")

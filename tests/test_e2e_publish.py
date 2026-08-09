@@ -55,7 +55,40 @@ def _submission_payload(search_summary: str) -> dict:
     }
 
 
-def _assert_publish_happy_path(client: TestClient) -> None:
+def _pass_integrity(_: object) -> dict[str, object]:
+    return {"available": True, "recommendation": "pass", "checked_at": "2026-08-09T00:00:00+00:00"}
+
+
+def _mock_osf_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "runtime_core.workflow._mint_publication_doi",
+        lambda repository, publication: {
+            "doi": "10.17605/OSF.IO/TEST1",
+            "doi_status": "minted",
+            "osf_status": "minted",
+            "osf_package_files": {"manifest-sha256.json": {"sha256": "abc"}},
+        },
+    )
+
+
+def _mock_dw_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "runtime_core.workflow.emit_publication_to_derivation_web",
+        lambda **kwargs: {"dw_status": "registered", "dw_artifact_id": "artifact-test"},
+    )
+    monkeypatch.setattr("runtime_core.workflow.check_integrity", _pass_integrity)
+
+
+def _assert_publish_happy_path(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    install_delivery_mocks: bool = True,
+) -> None:
+    monkeypatch.setenv("RESEARKA_AUTO_LIST_AGENT_IDS", "agent-demo")
+    if install_delivery_mocks:
+        _mock_osf_success(monkeypatch)
+        _mock_dw_success(monkeypatch)
     repository = _repository(client)
     seed = client.post(
         "/submissions",
@@ -111,7 +144,15 @@ def _assert_publish_happy_path(client: TestClient) -> None:
     assert duplicate_publish.status_code == 200
     assert len(repository.list_objects("publication")) == 1
     stages_seen = {event.payload["stage"] for event in repository.list_events() if "stage" in event.payload}
-    assert stages_seen == {"submission_intake", "autonomous_review", "autonomous_editorial_decision", "autonomous_publish"}
+    assert stages_seen == {
+        "submission_intake",
+        "autonomous_review",
+        "autonomous_editorial_decision",
+        "autonomous_publish",
+        "osf_deposit",
+        "derivation_web_delivery",
+        "publication_finalize",
+    }
 
 
 def test_public_review_record_preserves_submission_domain_metadata(client: TestClient) -> None:
@@ -126,6 +167,7 @@ def test_public_review_record_preserves_submission_domain_metadata(client: TestC
                 "category": "ai",
                 "domain_slug": "ai_research",
                 "topic": "medqa_benchmark",
+                "public_visibility": "listed",
             },
         )
     )
@@ -142,10 +184,11 @@ def test_public_review_record_preserves_submission_domain_metadata(client: TestC
             object_type=ObjectType.DECISION,
             parent_object_id=submission.id,
             title="Decision for MedQA benchmark memo",
-            metadata={
-                "decision": Decision.REJECT.value,
-                "review_id": review.id,
-            },
+                metadata={
+                    "decision": Decision.REJECT.value,
+                    "review_id": review.id,
+                    "public_visibility": "listed",
+                },
         )
     )
 
@@ -207,7 +250,11 @@ def test_decision_response_reports_deduped_publication(client: TestClient) -> No
             object_type=ObjectType.PUBLICATION,
             parent_object_id=original_submission.id,
             title="Semaglutide memo",
-            metadata={"article_type": "alpha_memo", "doi_status": "minted"},
+            metadata={
+                "article_type": "alpha_memo",
+                "doi_status": "minted",
+                "public_visibility": "listed",
+            },
         )
     )
     duplicate_submission = repository.create_object(
@@ -276,15 +323,18 @@ def test_decision_response_reports_publish_integrity_block(client: TestClient) -
     assert payload["failure_stage"] == Stage.PUBLISH.value
     assert payload["failure_category"] == "publish_gates_failed"
     assert payload["failed_checks"] == ["publish_blocked_by_integrity:reject"]
-    assert payload["resubmission"] == {"allowed": True, "parent_submission_id": submission.id}
+    assert payload["resubmission"] == {"allowed": False, "parent_submission_id": None}
 
 
-def test_end_to_end_publish_happy_path(client: TestClient) -> None:
-    _assert_publish_happy_path(client)
+def test_end_to_end_publish_happy_path(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _assert_publish_happy_path(client, monkeypatch)
 
 
-def test_end_to_end_publish_happy_path_postgres(postgres_client: TestClient) -> None:
-    _assert_publish_happy_path(postgres_client)
+def test_end_to_end_publish_happy_path_postgres(
+    postgres_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _assert_publish_happy_path(postgres_client, monkeypatch)
 
 
 @pytest.mark.parametrize(
@@ -305,8 +355,11 @@ def test_leakage_submission_is_revisable_at_intake(client: TestClient, leakage: 
     assert _repository(client).list_objects("review") == []
 
 
-def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
-    _assert_publish_happy_path(client)
+def test_same_title_with_distinct_package_is_not_deduped(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _assert_publish_happy_path(client, monkeypatch)
     publications = _repository(client).list_objects("publication")
     assert len(publications) == 1
     first_pub_id = publications[0].id
@@ -326,11 +379,11 @@ def test_duplicate_title_blocked_at_publish(client: TestClient) -> None:
         client.post("/jobs/run-once", headers=_worker_headers())
 
     publications = _repository(client).list_objects("publication")
-    assert len(publications) == 1
-    assert publications[0].id == first_pub_id
+    assert len(publications) == 2
+    assert first_pub_id in {publication.id for publication in publications}
 
 
-def test_end_to_end_publish_uses_full_body_when_present(client: TestClient) -> None:
+def test_end_to_end_publish_ignores_noncanonical_full_body(client: TestClient) -> None:
     payload = _submission_payload(
         "Databases searched include PubMed and review corpora, with a documented date window, explicit inclusion logic, and a stated narrowing rule that explains why these retained receipts best match the scoped research question."
     )
@@ -352,16 +405,18 @@ def test_end_to_end_publish_uses_full_body_when_present(client: TestClient) -> N
             break
         assert client.post("/jobs/run-once", headers=_worker_headers()).status_code == 200
     publication = _repository(client).list_objects("publication")[0]
-    assert "## References" in publication.body_markdown
-    assert "DOI: 10.1234/example" in publication.body_markdown
+    assert publication.body_markdown.startswith("## Research Question")
+    assert "## References" not in publication.body_markdown
+    assert "DOI: 10.1234/example" not in publication.body_markdown
 
 
 def test_publication_mints_osf_doi_before_derivation_web_metadata(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_AUTO_LIST_AGENT_IDS", "agent-demo")
     monkeypatch.setenv("RESEARKA_V2_OSF_PROJECT_ID", "root-osf-node")
     monkeypatch.setenv("RESEARKA_V2_OSF_TOKEN", "test-token")
     captured: dict[str, object] = {}
 
-    def fake_mint_publication_doi(publication: ResearchObject) -> dict[str, object]:
+    def fake_mint_publication_doi(publication: ResearchObject, **_: object) -> dict[str, object]:
         assert publication.metadata["doi_status"] == "pending_osf_export"
         return {
             "doi": "10.17605/OSF.IO/ABC12",
@@ -370,6 +425,7 @@ def test_publication_mints_osf_doi_before_derivation_web_metadata(client: TestCl
             "osf_project_id": "root-osf-node",
             "osf_guid": "abc12",
             "osf_url": "https://osf.io/abc12/",
+            "osf_package_files": {"manifest-sha256.json": {"sha256": "abc"}},
             "osf": {
                 "enabled": True,
                 "status": "minted",
@@ -386,12 +442,14 @@ def test_publication_mints_osf_doi_before_derivation_web_metadata(client: TestCl
         return {
             "dw_artifact_id": "art_dw_publication",
             "dw_chain_url": "https://provenance.researka.org/artifacts/art_dw_publication/chain",
+            "dw_status": "registered",
             "content_hash": "sha256:real-dw-hash",
             "sha256": "sha256:real-dw-hash",
         }
 
     monkeypatch.setattr("runtime_core.osf.mint_publication_doi", fake_mint_publication_doi)
     monkeypatch.setattr("runtime_core.workflow.emit_publication_to_derivation_web", fake_emit_publication_to_derivation_web)
+    monkeypatch.setattr("runtime_core.workflow.check_integrity", _pass_integrity)
 
     seed = client.post(
         "/submissions",
@@ -416,6 +474,7 @@ def test_publication_mints_osf_doi_before_derivation_web_metadata(client: TestCl
 
 
 def test_publication_uses_connected_osf_oauth_token_before_service_token(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_AUTO_LIST_AGENT_IDS", "agent-v3-full-paper")
     monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
     create_resp = client.post(
         "/ops/keys",
@@ -425,10 +484,15 @@ def test_publication_uses_connected_osf_oauth_token_before_service_token(client:
     raw_key = create_resp.json()["raw_key"]
     _repository(client).store_osf_oauth_token("agent-v3-full-paper", {"access_token": "oauth-token"})
 
-    def fake_mint_publication_doi(publication: ResearchObject) -> dict[str, object]:
+    def fake_mint_publication_doi(publication: ResearchObject, **_: object) -> dict[str, object]:
         raise AssertionError("service token fallback should not run when agent OAuth is connected")
 
-    def fake_mint_publication_doi_with_oauth(publication: ResearchObject, *, token_metadata: dict) -> tuple[dict[str, object], dict[str, object]]:
+    def fake_mint_publication_doi_with_oauth(
+        publication: ResearchObject,
+        *,
+        token_metadata: dict,
+        **_: object,
+    ) -> tuple[dict[str, object], dict[str, object]]:
         assert token_metadata["access_token"] == "oauth-token"
         return (
             {
@@ -437,7 +501,8 @@ def test_publication_uses_connected_osf_oauth_token_before_service_token(client:
                 "osf_status": "minted",
                 "osf_project_id": "oauth-root",
                 "osf_guid": "oauth1",
-                "osf_auth_source": "oauth_agent_token",
+                    "osf_auth_source": "oauth_agent_token",
+                    "osf_package_files": {"manifest-sha256.json": {"sha256": "abc"}},
                 "osf": {"enabled": True, "status": "minted", "project_id": "oauth-root", "guid": "oauth1"},
             },
             {**token_metadata, "root_project_id": "oauth-root"},
@@ -445,6 +510,7 @@ def test_publication_uses_connected_osf_oauth_token_before_service_token(client:
 
     monkeypatch.setattr("runtime_core.osf.mint_publication_doi", fake_mint_publication_doi)
     monkeypatch.setattr("runtime_core.osf.mint_publication_doi_with_oauth", fake_mint_publication_doi_with_oauth)
+    _mock_dw_success(monkeypatch)
 
     seed = client.post(
         "/submissions",
@@ -468,6 +534,7 @@ def test_publication_uses_connected_osf_oauth_token_before_service_token(client:
 
 
 def test_publication_uses_default_osf_oauth_agent_when_submitter_is_not_connected(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_AUTO_LIST_AGENT_IDS", "agent-v4-alpha-longevity-research")
     monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
     monkeypatch.setenv("RESEARKA_V2_OSF_DEFAULT_AGENT_ID", "agent-v4-alpha-memo")
     create_resp = client.post(
@@ -478,7 +545,12 @@ def test_publication_uses_default_osf_oauth_agent_when_submitter_is_not_connecte
     raw_key = create_resp.json()["raw_key"]
     _repository(client).store_osf_oauth_token("agent-v4-alpha-memo", {"access_token": "default-oauth-token", "root_project_id": "oauth-root"})
 
-    def fake_mint_publication_doi_with_oauth(publication: ResearchObject, *, token_metadata: dict) -> tuple[dict[str, object], dict[str, object]]:
+    def fake_mint_publication_doi_with_oauth(
+        publication: ResearchObject,
+        *,
+        token_metadata: dict,
+        **_: object,
+    ) -> tuple[dict[str, object], dict[str, object]]:
         assert token_metadata["access_token"] == "default-oauth-token"
         return (
             {
@@ -487,13 +559,15 @@ def test_publication_uses_default_osf_oauth_agent_when_submitter_is_not_connecte
                 "osf_status": "minted",
                 "osf_project_id": "oauth-root",
                 "osf_guid": "def01",
-                "osf_auth_source": "oauth_agent_token",
+                    "osf_auth_source": "oauth_agent_token",
+                    "osf_package_files": {"manifest-sha256.json": {"sha256": "abc"}},
                 "osf": {"enabled": True, "status": "minted", "project_id": "oauth-root", "guid": "def01"},
             },
             token_metadata,
         )
 
     monkeypatch.setattr("runtime_core.osf.mint_publication_doi_with_oauth", fake_mint_publication_doi_with_oauth)
+    _mock_dw_success(monkeypatch)
 
     seed = client.post(
         "/submissions",
@@ -516,12 +590,13 @@ def test_publication_uses_default_osf_oauth_agent_when_submitter_is_not_connecte
     assert publication.metadata["osf_agent_id"] == "agent-v4-alpha-memo"
 
 
-def test_osf_failure_marks_publication_without_blocking_derivation_web(client: TestClient, monkeypatch) -> None:
+def test_osf_failure_keeps_publication_private_and_blocks_derivation_web(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_AUTO_LIST_AGENT_IDS", "agent-demo")
     monkeypatch.setenv("RESEARKA_V2_OSF_PROJECT_ID", "root-osf-node")
     monkeypatch.setenv("RESEARKA_V2_OSF_TOKEN", "revoked-token")
     captured: dict[str, object] = {}
 
-    def fake_mint_publication_doi(publication: ResearchObject) -> dict[str, object]:
+    def fake_mint_publication_doi(publication: ResearchObject, **_: object) -> dict[str, object]:
         raise RuntimeError("osf_request_failed:POST:/nodes/root-osf-node/identifiers/:403:Forbidden")
 
     def fake_emit_publication_to_derivation_web(**kwargs: object) -> dict[str, object]:
@@ -556,11 +631,14 @@ def test_osf_failure_marks_publication_without_blocking_derivation_web(client: T
     assert publication.metadata["doi_status"] == "failed"
     assert publication.metadata["osf_status"] == "failed"
     assert publication.metadata["osf_error"].startswith("osf_request_failed")
-    assert publication.metadata["dw_artifact_id"] == "art_dw_publication"
-    assert captured["doi_status_seen_by_dw"] == "failed"
+    assert publication.metadata["publication_state"] == "PUBLISH_BLOCKED_EXTERNAL"
+    assert publication.metadata["public_visibility"] == "provisional"
+    assert "dw_artifact_id" not in publication.metadata
+    assert captured == {}
 
 
 def test_publish_attaches_derivation_web_publication_metadata(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_AUTO_LIST_AGENT_IDS", "agent-demo")
     captured: dict[str, object] = {}
 
     def fake_emit_publication_to_derivation_web(**kwargs: object) -> dict[str, object]:
@@ -575,7 +653,9 @@ def test_publish_attaches_derivation_web_publication_metadata(client: TestClient
         }
 
     monkeypatch.setattr("runtime_core.workflow.emit_publication_to_derivation_web", fake_emit_publication_to_derivation_web)
-    _assert_publish_happy_path(client)
+    _mock_osf_success(monkeypatch)
+    monkeypatch.setattr("runtime_core.workflow.check_integrity", _pass_integrity)
+    _assert_publish_happy_path(client, monkeypatch, install_delivery_mocks=False)
 
     publication = cast(Any, client.app).state.repository.list_objects("publication")[0]
     assert publication.metadata["dw_status"] == "registered"

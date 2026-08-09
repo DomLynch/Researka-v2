@@ -79,7 +79,12 @@ class RoutingProvider:
                 provider="reviewer-panel",
                 model="routing-model",
                 usage=ProviderUsage(input_tokens=12, output_tokens=8, cost_usd=0.05),
-                metadata={"accept_quorum_count": 2, "accept_quorum_models": ["routing-a", "routing-b"]},
+                metadata={
+                    "accept_quorum_count": 2,
+                    "accept_quorum_models": ["routing-a", "routing-b"],
+                    "accept_quorum_identities": ["provider-a:routing-a", "provider-b:routing-b"],
+                    "accept_quorum_providers": ["provider-a", "provider-b"],
+                },
             ),
         )
 

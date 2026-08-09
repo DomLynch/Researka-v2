@@ -17,7 +17,9 @@ from runtime_core.providers import ProviderRequest, ProviderResponse, ProviderRe
 from runtime_core.doi_resolver import UnsafeSourceLocator, _require_public_source, verify_source_metadata
 from runtime_core.repos import InMemoryRuntimeRepository
 from runtime_core.reviewer_panel import ReviewerPanel
+from runtime_core.urls import validated_service_url
 from runtime_core.workflow import SUBMISSION_DATA_END, SUBMISSION_DATA_START, WorkflowEngine
+from tests.support import accepted_publish_job
 
 
 def _sections(extra: str = "") -> dict[str, str]:
@@ -27,10 +29,10 @@ def _sections(extra: str = "") -> dict[str, str]:
         "Research Question": "This synthesis asks a bounded, decision-relevant question about recent evidence, target populations, comparator conditions, intended outcomes, and methodological limits, and it stays narrow enough that another reviewer could reproduce the scope, publication window, inclusion logic, and decision frame without inventing missing assumptions, broadening the intervention target, or silently changing the evidence standard.",
         "Search Summary": "Searches covered PubMed and review corpora, with a documented date window, explicit inclusion logic, and a clear narrowing rule that explains why the retained receipts best match the scoped research question." + extra,
         "Evidence Landscape": "The bundle includes review-level and primary evidence so the reader can see the balance of stronger and more applied material, and where individual studies still shape the remaining uncertainty.",
-        "Key Findings": "The key findings integrate the current evidence into bounded conclusions instead of stitching raw snippets together, and distinguish stronger review-level support from tentative primary-study signals.",
+        "Key Findings": "Source 1 reports bounded evidence for the scoped outcome and population, while the synthesis distinguishes stronger review-level support from tentative primary-study signals [bundle:1].",
         "Limitations": "The main limits are rapid-review scope, incomplete coverage, heterogeneity across evidence units, and the risk that a synthetic bundle omits conflicting sources that could materially change certainty.",
         "Gaps Identified": "No adequately powered human RCT has tested this specific intervention for the primary endpoints reported in non-human models, leaving a translational gap between animal evidence and clinical applicability.",
-        "Conclusion": "The current evidence supports a structured MVP publication, but only with explicit uncertainty, honest limits on reproducibility, and no overclaiming beyond what the retained bundle can directly justify.",
+        "Conclusion": "Source 1 reports bounded evidence for the scoped outcome and population, with explicit uncertainty and no claim beyond what the retained bundle can directly justify [bundle:1].",
     }
 
 
@@ -93,12 +95,18 @@ def _review_payload(
 
 
 class _StaticReviewProvider:
-    provider = "reviewer-panel"
-    model = "stub-model"
     enforces_accept_quorum = True
 
-    def __init__(self, payload: dict[str, object]) -> None:
+    def __init__(
+        self,
+        payload: dict[str, object],
+        *,
+        provider: str = "reviewer-panel",
+        model: str = "stub-model",
+    ) -> None:
         self.payload = payload
+        self.provider = provider
+        self.model = model
 
     def complete(self, request: ProviderRequest) -> ProviderResult:
         return ProviderResult(
@@ -145,6 +153,16 @@ def test_source_identity_requires_a_stable_locator() -> None:
 
     assert not gate.passed
     assert "indices [0]" in gate.reason
+
+
+def test_unknown_nested_source_field_fails_schema_gate() -> None:
+    bundle = _bundle()
+    bundle[0]["doii"] = bundle[0].pop("doi")
+
+    results = run_submission_template_checks(sections=_sections(), source_bundle=bundle)
+
+    assert [result.name for result in results] == ["source_bundle_schema"]
+    assert "unknown source fields: doii" in results[0].reason
 
 
 def test_duplicate_sources_do_not_inflate_citation_floor() -> None:
@@ -253,6 +271,18 @@ class _LocatorClient(_HandleClient):
     def get(self, url: str, **kwargs: Any) -> Any:
         return super().get(url)
 
+    def stream(self, method: str, url: str, **kwargs: Any) -> Any:  # noqa: ARG002
+        response = self.get(url)
+
+        class Stream:
+            def __enter__(self) -> Any:
+                return response
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+        return Stream()
+
 
 class _MetadataResponse:
     def __init__(self, payload: dict[str, Any], status_code: int = 200) -> None:
@@ -312,9 +342,8 @@ def test_intake_fail_closed_holds_when_resolver_down(monkeypatch: pytest.MonkeyP
     repo = InMemoryRuntimeRepository()
     submission = _submission(repo)
 
-    result = WorkflowEngine()._run_intake(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
-
-    assert result["terminal_decision"] == Decision.REVISE.value
+    with pytest.raises(RuntimeError, match="system_unavailable:doi_resolver"):
+        WorkflowEngine()._run_intake(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
     stored = repo.get_object(submission.id)
     assert stored is not None
     assert stored.metadata["doi_resolution"]["available"] is False
@@ -335,7 +364,84 @@ def test_intake_proceeds_with_stamp_when_resolver_down_fail_open(monkeypatch: py
     assert stored.metadata["doi_resolution"]["available"] is False  # stamped, never silent
 
 
-def test_intake_rejects_unresolvable_non_doi_source(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "flag",
+    [
+        "RESEARKA_DOI_CHECK_ENABLED",
+        "RESEARKA_SOURCE_CHECK_ENABLED",
+        "RESEARKA_SOURCE_METADATA_CHECK_ENABLED",
+        "RESEARKA_DOI_CHECK_FAIL_CLOSED",
+        "RESEARKA_SOURCE_METADATA_FAIL_CLOSED",
+        "RESEARKA_INTEGRITY_ENABLED",
+        "RESEARKA_INTEGRITY_FAIL_CLOSED",
+    ],
+)
+def test_production_refuses_disabled_or_fail_open_verification(
+    monkeypatch: pytest.MonkeyPatch,
+    flag: str,
+) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ENV", "production")
+    for required in (
+        "RESEARKA_DOI_CHECK_ENABLED",
+        "RESEARKA_SOURCE_CHECK_ENABLED",
+        "RESEARKA_SOURCE_METADATA_CHECK_ENABLED",
+        "RESEARKA_DOI_CHECK_FAIL_CLOSED",
+        "RESEARKA_SOURCE_METADATA_FAIL_CLOSED",
+        "RESEARKA_INTEGRITY_ENABLED",
+        "RESEARKA_INTEGRITY_FAIL_CLOSED",
+    ):
+        monkeypatch.setenv(required, "1")
+    monkeypatch.setenv(flag, "0")
+
+    with pytest.raises(RuntimeError, match=flag):
+        WorkflowEngine(provider=_StaticReviewProvider(_review_payload(
+            major_issues=[],
+            minor_issues=[],
+            required_revisions=[],
+        )))
+
+
+def test_production_rejects_insecure_service_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ENV", "production")
+
+    with pytest.raises(RuntimeError, match="insecure_test_service_url"):
+        validated_service_url("http://service.internal", label="test_service")
+
+
+def test_production_startup_rejects_insecure_integrity_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ENV", "production")
+    monkeypatch.setenv("RESEARKA_INTEGRITY_URL", "http://integrity.internal")
+    for required in (
+        "RESEARKA_DOI_CHECK_ENABLED",
+        "RESEARKA_SOURCE_CHECK_ENABLED",
+        "RESEARKA_SOURCE_METADATA_CHECK_ENABLED",
+        "RESEARKA_DOI_CHECK_FAIL_CLOSED",
+        "RESEARKA_SOURCE_METADATA_FAIL_CLOSED",
+        "RESEARKA_INTEGRITY_ENABLED",
+        "RESEARKA_INTEGRITY_FAIL_CLOSED",
+    ):
+        monkeypatch.setenv(required, "1")
+
+    with pytest.raises(RuntimeError, match="insecure_integrity_url"):
+        WorkflowEngine(provider=_StaticReviewProvider(_review_payload(
+            major_issues=[],
+            minor_issues=[],
+            required_revisions=[],
+        )))
+
+
+def test_development_allows_local_http_service_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ENV", "development")
+
+    assert validated_service_url("http://127.0.0.1:9000/", label="test_service") == "http://127.0.0.1:9000"
+
+
+def test_service_url_requires_http_scheme_and_host() -> None:
+    with pytest.raises(RuntimeError, match="invalid_test_service_url"):
+        validated_service_url("javascript:alert(1)", label="test_service")
+
+
+def test_intake_revises_unresolvable_non_doi_source(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_DOI_CHECK_ENABLED", "1")
     monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", _LocatorClient)
     repo = InMemoryRuntimeRepository()
@@ -346,7 +452,7 @@ def test_intake_rejects_unresolvable_non_doi_source(monkeypatch: pytest.MonkeyPa
 
     result = WorkflowEngine()._run_intake(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
 
-    assert result["terminal_decision"] == Decision.REJECT.value
+    assert result["terminal_decision"] == Decision.REVISE.value
     decision = repo.get_object(result["created_object_id"])
     assert decision is not None
     assert decision.metadata["gate_failures"][0]["name"] == "source_exists"
@@ -363,9 +469,8 @@ def test_non_doi_source_resolver_can_fail_closed(monkeypatch: pytest.MonkeyPatch
         source["registry_id"] = f"REG-{index}"
     submission = _submission(repo, source_bundle=bundle)
 
-    result = WorkflowEngine()._run_intake(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
-
-    assert result["terminal_decision"] == Decision.REVISE.value
+    with pytest.raises(RuntimeError, match="system_unavailable:source_resolver"):
+        WorkflowEngine()._run_intake(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
     stored = repo.get_object(submission.id)
     assert stored is not None
     assert stored.metadata["source_resolution"]["available"] is False
@@ -445,6 +550,54 @@ def test_source_metadata_cross_checks_pmid_when_doi_is_present(monkeypatch: pyte
     assert result["identifier_mismatches"] == []
 
 
+def test_source_metadata_detects_doi_pmid_alias_duplicate(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    title = "Influenza vaccination and cardiovascular outcomes"
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client(
+            {"title": [title]},
+            {
+                "uids": ["41536962"],
+                "41536962": {
+                    "uid": "41536962",
+                    "title": title,
+                    "articleids": [{"idtype": "doi", "value": "10.1000/influenza"}],
+                },
+            },
+        ),
+    )
+
+    result = verify_source_metadata([
+        {"title": title, "doi": "10.1000/influenza"},
+        {"title": title, "pmid": "41536962"},
+    ])
+
+    assert result is not None
+    assert result["recommendation"] == Decision.REVISE.value
+    assert result["canonical_duplicate_indices"] == [1]
+
+
+def test_intake_revises_canonical_source_alias_duplicates(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "runtime_core.workflow.verify_source_metadata",
+        lambda _: {
+            "available": True,
+            "recommendation": Decision.REVISE.value,
+            "canonical_duplicate_indices": [1],
+        },
+    )
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+
+    result = WorkflowEngine()._run_intake(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
+
+    assert result["terminal_decision"] == Decision.REVISE.value
+    decision = repo.get_object(result["created_object_id"])
+    assert decision is not None
+    assert decision.metadata["gate_failures"][0]["name"] == "source_uniqueness"
+
+
 def test_source_metadata_rejects_cross_identifier_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
     title = "Influenza vaccination and cardiovascular outcomes"
@@ -515,6 +668,50 @@ def test_source_evidence_mismatch_is_held_for_revision(monkeypatch: pytest.Monke
     assert result is not None
     assert result["recommendation"] == Decision.REVISE.value
     assert result["evidence_mismatches"] == ["doi:10.1000/evidence-mismatch"]
+    assert result["evidence_text_unverified"] == ["doi:10.1000/evidence-mismatch"]
+
+
+def test_source_evidence_requires_exact_authoritative_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    exact = "Adults receiving the intervention showed a bounded endpoint-specific improvement."
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client({
+            "title": ["Registered intervention trial in adults"],
+            "abstract": f"Background text. {exact} Additional limitations followed.",
+        }),
+    )
+
+    result = verify_source_metadata([{
+        "title": "Registered intervention trial in adults",
+        "doi": "10.1000/exact-evidence",
+        "excerpt": exact,
+        "evidence_text_verified": True,
+    }])
+
+    assert result is not None
+    assert result["evidence_text_verified"] == ["doi:10.1000/exact-evidence"]
+    assert result["evidence_text_unverified"] == []
+
+
+def test_source_without_authoritative_text_is_explicitly_unverified(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client({"title": ["Registered intervention trial in adults"]}),
+    )
+
+    result = verify_source_metadata([{
+        "title": "Registered intervention trial in adults",
+        "doi": "10.1000/no-authoritative-text",
+        "excerpt": "Author-supplied evidence cannot verify itself against unavailable source text.",
+        "evidence_text_verified": True,
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == "pass"
+    assert result["evidence_text_verified"] == []
+    assert result["evidence_text_unverified"] == ["doi:10.1000/no-authoritative-text"]
 
 
 def test_intake_proceeds_when_later_evidence_receipt_matches(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -639,7 +836,7 @@ def test_source_metadata_retries_rate_limit_without_redundant_fallback(monkeypat
 
 def _publish(repo: InMemoryRuntimeRepository, submission: ResearchObject, monkeypatch: pytest.MonkeyPatch) -> ResearchObject:
     monkeypatch.setattr(workflow, "_mint_publication_doi", lambda repository, publication: {})
-    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
     publication = repo.get_object(result["publication_id"])
     assert publication is not None
     return publication
@@ -652,7 +849,7 @@ def test_new_agent_publication_lands_provisional(monkeypatch: pytest.MonkeyPatch
     assert publication.metadata["public_visibility"] == "provisional"
 
 
-def test_established_agent_publication_is_listed(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_publication_history_does_not_create_implicit_trust(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = InMemoryRuntimeRepository()
     for index in range(3):
         repo.create_object(
@@ -664,7 +861,7 @@ def test_established_agent_publication_is_listed(monkeypatch: pytest.MonkeyPatch
         )
     submission = _submission(repo, author_agent_id="agent-house-v3")
     publication = _publish(repo, submission, monkeypatch)
-    assert publication.metadata["public_visibility"] == "listed"
+    assert publication.metadata["public_visibility"] == "provisional"
 
 
 def test_audited_agent_allowlist_lists_without_lowering_global_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -675,16 +872,19 @@ def test_audited_agent_allowlist_lists_without_lowering_global_threshold(monkeyp
     listed_submission = _submission(listed_repo, author_agent_id="agent-v4-alpha-business-research")
     provisional_submission = _submission(provisional_repo, author_agent_id="agent-external-new")
 
-    assert _publish(listed_repo, listed_submission, monkeypatch).metadata["public_visibility"] == "listed"
-    assert _publish(provisional_repo, provisional_submission, monkeypatch).metadata["public_visibility"] == "provisional"
+    listed = _publish(listed_repo, listed_submission, monkeypatch)
+    provisional = _publish(provisional_repo, provisional_submission, monkeypatch)
+    assert listed.metadata["requested_public_visibility"] == "listed"
+    assert listed.metadata["public_visibility"] == "provisional"
+    assert provisional.metadata["requested_public_visibility"] == "provisional"
 
 
-def test_auto_trust_disabled_lists_everyone(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_legacy_auto_trust_setting_cannot_list_everyone(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_AUTO_TRUST_MIN_PUBLISHED", "0")
     repo = InMemoryRuntimeRepository()
     submission = _submission(repo)
     publication = _publish(repo, submission, monkeypatch)
-    assert publication.metadata["public_visibility"] == "listed"
+    assert publication.metadata["public_visibility"] == "provisional"
 
 
 def test_provisional_hidden_from_public_list_and_admin_promotes(client) -> None:
@@ -776,6 +976,11 @@ def test_review_user_prompt_fences_submission_data() -> None:
                         metadata={
                             "accept_quorum_count": 2,
                             "accept_quorum_models": ["stub-primary", "stub-sparring"],
+                            "accept_quorum_identities": [
+                                "stub-a:stub-primary",
+                                "stub-b:stub-sparring",
+                            ],
+                            "accept_quorum_providers": ["stub-a", "stub-b"],
                         },
                 ),
             )
@@ -820,11 +1025,11 @@ def test_reviewer_panel_excludes_ungrounded_integrity_verdict_before_consensus()
     )
     panel = ReviewerPanel(
         primary=_StaticReviewProvider(invalid_payload),
-        sparring=_StaticReviewProvider(valid_payload),
-        fallback=_StaticReviewProvider(valid_payload),
+        sparring=_StaticReviewProvider(valid_payload, provider="reviewer-b"),
+        fallback=_StaticReviewProvider(valid_payload, provider="reviewer-c"),
     )
     repo = InMemoryRuntimeRepository()
-    submission = _submission(repo)
+    submission = _submission(repo, public_review_consent=True)
 
     result = WorkflowEngine(provider=panel)._run_review(
         RuntimeJob(target_object_id=submission.id, stage=Stage.REVIEW),
@@ -834,7 +1039,7 @@ def test_reviewer_panel_excludes_ungrounded_integrity_verdict_before_consensus()
 
     assert review is not None
     assert review.metadata["recommendation"] == "revise"
-    assert review.metadata["route"] == "primary_failed_sparring_used"
+    assert review.metadata["route"] == "primary_failed_sparring_used_confirmed"
     assert review.metadata["major_issues"] == [legitimate_issue]
     assert review.metadata["required_revisions"] == [legitimate_revision]
     assert review.metadata["primary_error"].endswith("integrity_finding_missing_quote")
@@ -870,8 +1075,8 @@ def test_reviewer_panel_excludes_false_source_identifier_accusation() -> None:
     )
     panel = ReviewerPanel(
         primary=_StaticReviewProvider(invalid_payload),
-        sparring=_StaticReviewProvider(valid_payload),
-        fallback=_StaticReviewProvider(valid_payload),
+        sparring=_StaticReviewProvider(valid_payload, provider="reviewer-b"),
+        fallback=_StaticReviewProvider(valid_payload, provider="reviewer-c"),
     )
     repo = InMemoryRuntimeRepository()
     submission = _submission(repo, source_verification={
@@ -891,7 +1096,7 @@ def test_reviewer_panel_excludes_false_source_identifier_accusation() -> None:
     review = repo.get_object(result["created_object_id"])
 
     assert review is not None
-    assert review.metadata["route"] == "primary_failed_sparring_used"
+    assert review.metadata["route"] == "primary_failed_sparring_used_confirmed"
     assert review.metadata["major_issues"] == [legitimate_issue]
     assert review.metadata["primary_error"].endswith(
         "unsupported_source_integrity_finding:pmid:41536962"
@@ -913,8 +1118,8 @@ def test_recovered_review_markdown_does_not_bypass_source_integrity_grounding() 
     )
     panel = ReviewerPanel(
         primary=_StaticReviewProvider(invalid_payload),
-        sparring=_StaticReviewProvider(valid_payload),
-        fallback=_StaticReviewProvider(valid_payload),
+        sparring=_StaticReviewProvider(valid_payload, provider="reviewer-b"),
+        fallback=_StaticReviewProvider(valid_payload, provider="reviewer-c"),
     )
 
     result = panel.complete(
@@ -928,7 +1133,7 @@ def test_recovered_review_markdown_does_not_bypass_source_integrity_grounding() 
 
     assert result.ok is True
     assert result.response is not None
-    assert result.response.metadata["route"] == "primary_failed_sparring_used"
+    assert result.response.metadata["route"] == "primary_failed_sparring_used_confirmed"
     assert result.response.metadata["review_markdown_recovered"] is True
     assert str(result.response.metadata["primary_error"]).endswith("source_integrity_finding_missing_id")
 
@@ -994,7 +1199,7 @@ def test_new_editorial_decision_supersedes_old_public_review() -> None:
         required_revisions=["Add explicit source inclusion criteria to Methods."],
     )
     repo = InMemoryRuntimeRepository()
-    submission = _submission(repo)
+    submission = _submission(repo, public_review_consent=True)
     engine = WorkflowEngine(provider=_StaticReviewProvider(payload))
     decision_ids: list[str] = []
 
@@ -1168,16 +1373,15 @@ def test_url_only_primary_source_earns_revise_not_terminal_reject() -> None:
     assert intake_failures_are_revisable(["doi_sanity", "citation_membership"])
 
 
-def test_evidence_insufficiency_stays_a_terminal_reject() -> None:
-    # Too few / too old / off-topic sources are not paperwork defects — the
-    # corpus itself is inadequate, so these must remain terminal.
+def test_correctable_evidence_and_scope_gaps_are_revisable() -> None:
     from contracts import intake_failures_are_revisable
 
-    assert not intake_failures_are_revisable(["minimum_citations"])
-    assert not intake_failures_are_revisable(["recency_ratio"])
-    assert not intake_failures_are_revisable(["topic_coherence"])
+    assert intake_failures_are_revisable(["minimum_citations"])
+    assert intake_failures_are_revisable(["recency_ratio"])
+    assert intake_failures_are_revisable(["topic_coherence"])
+    assert intake_failures_are_revisable(["alpha_title_novelty"])
     # Mixed: any non-revisable gate keeps the whole outcome terminal.
-    assert not intake_failures_are_revisable(["doi_sanity", "minimum_citations"])
+    assert not intake_failures_are_revisable(["doi_sanity", "core_claims_resolved"])
     assert not intake_failures_are_revisable([])
 
 

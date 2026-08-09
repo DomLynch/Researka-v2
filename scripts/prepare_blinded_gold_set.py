@@ -677,8 +677,8 @@ def sign_evaluation(
         "statement": statement.strip(),
     }
     _write_json(artifact_path, artifact, private=True)
-    active_release = {key: value for key, value in release.items() if key != "request_prompt_sha256"}
-    active_release["calibration"] = {
+    active_release = dict(release)
+    active_release["evaluation"] = {
         "artifact": artifact_path.name,
         "sha256": hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
     }

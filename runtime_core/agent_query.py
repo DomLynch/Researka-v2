@@ -21,7 +21,13 @@ def run_agent_query_job(repo: RuntimeRepository, job_id: str) -> ResearchObject:
     query = str(metadata.get("query") or job.title)
     caps = dict(metadata.get("caps") or {})
     max_sources = int(caps.get("max_sources") or 8)
-    matches = _rank_publications(query, repo.list_objects(ObjectType.PUBLICATION))[:max_sources]
+    publications = [
+        item
+        for item in repo.list_objects(ObjectType.PUBLICATION)
+        if str(item.metadata.get("public_visibility") or "hidden").strip().lower() == "listed"
+        and not item.metadata.get("superseded_by")
+    ]
+    matches = _rank_publications(query, publications)[:max_sources]
     generated_at = datetime.now(UTC).isoformat()
     result = _build_result(query, matches, generated_at=generated_at)
 

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import signal
+import time
+
+import pytest
 
 from apps.worker import loop as worker_loop
 from contracts import EventType, JobStatus, RuntimeJob, Stage
@@ -25,6 +28,13 @@ class _InvalidSubmissionEngine:
         raise ValueError("structure_gate:missing_conclusion")
 
 
+class _SlowReviewEngine:
+    def handle_job(self, job: RuntimeJob, repository: RuntimeRepository) -> dict:
+        time.sleep(0.2)
+        assert repository.claim_next_job() is None
+        return {"reviewed": True}
+
+
 def test_worker_sigterm_interrupts_idle_wait(monkeypatch) -> None:
     handlers: dict[int, object] = {}
 
@@ -46,6 +56,36 @@ def test_worker_sigterm_interrupts_idle_wait(monkeypatch) -> None:
     monkeypatch.setattr(worker_loop.time, "sleep", lambda _seconds: (_ for _ in ()).throw(AssertionError("sleep")))
 
     worker_loop.main()
+
+
+def test_worker_production_dependencies_require_osf_delivery(monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ENV", "production")
+    monkeypatch.setenv("RESEARKA_INTEGRITY_API_KEY", "integrity-key")
+    monkeypatch.setattr(worker_loop, "derivation_web_configured", lambda: True)
+    monkeypatch.setattr(worker_loop, "osf_service_config", lambda: None)
+    monkeypatch.setattr(worker_loop, "oauth_config_from_env", lambda: None)
+
+    with pytest.raises(RuntimeError, match="osf_delivery_required_in_production"):
+        worker_loop._assert_production_dependencies(InMemoryRuntimeRepository())
+
+
+def test_worker_production_dependencies_accept_default_oauth_owner(monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ENV", "production")
+    monkeypatch.setenv("RESEARKA_INTEGRITY_API_KEY", "integrity-key")
+    monkeypatch.setenv("RESEARKA_V2_OSF_DEFAULT_AGENT_ID", "researka-osf")
+    monkeypatch.setattr(worker_loop, "derivation_web_configured", lambda: True)
+    monkeypatch.setattr(worker_loop, "osf_service_config", lambda: None)
+    monkeypatch.setattr(worker_loop, "oauth_config_from_env", lambda: object())
+    repo = InMemoryRuntimeRepository()
+    monkeypatch.setattr(
+        repo,
+        "get_osf_oauth_token",
+        lambda agent_id: {"access_token": "encrypted"}
+        if agent_id == "researka-osf"
+        else None,
+    )
+
+    worker_loop._assert_production_dependencies(repo)
 
 
 def test_provider_review_failure_retries_to_success(monkeypatch) -> None:
@@ -75,6 +115,33 @@ def test_provider_review_failure_retries_to_success(monkeypatch) -> None:
     assert failed_retry is not None and failed_retry.status == JobStatus.FAILED
     assert completed_retry is not None and completed_retry.status == JobStatus.COMPLETED
     assert repo.queued_jobs() == []
+
+
+def test_integrity_index_outage_retries_finalization(monkeypatch) -> None:
+    class _UnavailableEngine:
+        def handle_job(self, job: RuntimeJob, repository: RuntimeRepository) -> dict:
+            raise RuntimeError("system_unavailable:integrity_index:timeout")
+
+    monkeypatch.setenv("RESEARKA_V2_REVIEW_JOB_RETRY_BACKOFF_SEC", "0")
+    repo = InMemoryRuntimeRepository()
+    repo.enqueue_job(RuntimeJob(target_object_id="publication-1", stage=Stage.PUBLICATION_FINALIZE))
+
+    result = WorkerApp(repo, engine=_UnavailableEngine()).run_once()
+
+    assert result["retried"] == 1
+    retry = repo.get_job(result["retry_job_id"])
+    assert retry is not None and retry.stage == Stage.PUBLICATION_FINALIZE
+
+
+def test_worker_heartbeat_prevents_live_job_reclaim(monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_WORKER_HEARTBEAT_SEC", "0.02")
+    repo = InMemoryRuntimeRepository(lease_ttl_seconds=0.09)
+    repo.enqueue_job(RuntimeJob(target_object_id="slow-review", stage=Stage.REVIEW))
+
+    result = WorkerApp(repo, engine=_SlowReviewEngine()).run_once()
+
+    assert result["completed"] == 1
+    assert result["failed"] == 0
 
 
 def test_provider_review_retry_is_bounded(monkeypatch) -> None:

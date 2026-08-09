@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from contracts import ProviderErrorClass, ProviderUsage
 from runtime_core.providers import (
     FallbackProvider,
@@ -171,7 +173,7 @@ def test_wrapper_exposes_primary_model_for_panel_string() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _ok_review(recommendation: str) -> ProviderResult:
+def _ok_review(recommendation: str, *, provider: str = "stub", model: str = "stub") -> ProviderResult:
     """Build a passing reviewer payload (passes the panel's _validate_payload_contract)."""
     payload = {
         "recommendation": recommendation,
@@ -195,8 +197,8 @@ def _ok_review(recommendation: str) -> ProviderResult:
         ok=True,
         response=ProviderResponse(
             text=json.dumps(payload),
-            provider="stub",
-            model="stub",
+            provider=provider,
+            model=model,
             usage=ProviderUsage(input_tokens=1, output_tokens=1, cost_usd=0.0),
         ),
     )
@@ -209,18 +211,18 @@ def test_panel_metadata_marks_primary_fallback_used_when_mimo_times_out() -> Non
     mistral = _StubProvider(
         provider="openrouter",
         model="mistralai/mistral-small-2603",
-        result=_ok_review("revise"),
+        result=_ok_review("revise", provider="openrouter", model="mistralai/mistral-small-2603"),
     )
     primary_slot = FallbackProvider(primary=mimo, fallback=mistral)
     sparring_slot = _StubProvider(
-        provider="openrouter",
-        model="google/gemma-4-31b-it",
-        result=_ok_review("revise"),
+        provider="minimax",
+        model="MiniMax-M3",
+        result=_ok_review("revise", provider="minimax", model="MiniMax-M3"),
     )
     fallback_slot = _StubProvider(
         provider="openrouter",
         model="mistralai/mistral-small-2603",
-        result=_ok_review("revise"),
+        result=_ok_review("revise", provider="openrouter", model="mistralai/mistral-small-2603"),
     )
 
     panel = ReviewerPanel(primary=primary_slot, sparring=sparring_slot, fallback=fallback_slot)
@@ -236,23 +238,27 @@ def test_panel_metadata_marks_primary_fallback_used_when_mimo_times_out() -> Non
 
 def test_panel_metadata_flags_default_false_when_no_fallback_fires() -> None:
     """Happy path: both slots succeed without fallback. Both flags should be False."""
-    mimo_inner = _StubProvider(provider="mimo", model="mimo-v2.5-pro", result=_ok_review("revise"))
+    mimo_inner = _StubProvider(
+        provider="mimo",
+        model="mimo-v2.5-pro",
+        result=_ok_review("revise", provider="mimo", model="mimo-v2.5-pro"),
+    )
     gemma_inner = _StubProvider(
         provider="openrouter",
         model="google/gemma-4-31b-it",
-        result=_ok_review("revise"),
+        result=_ok_review("revise", provider="openrouter", model="google/gemma-4-31b-it"),
     )
     mistral_backup = _StubProvider(
         provider="openrouter",
         model="mistralai/mistral-small-2603",
-        result=_ok_review("revise"),
+        result=_ok_review("revise", provider="openrouter", model="mistralai/mistral-small-2603"),
     )
     primary_slot = FallbackProvider(primary=mimo_inner, fallback=mistral_backup)
     sparring_slot = FallbackProvider(primary=gemma_inner, fallback=mistral_backup)
     fallback_slot = _StubProvider(
         provider="openrouter",
         model="mistralai/mistral-small-2603",
-        result=_ok_review("revise"),
+        result=_ok_review("revise", provider="openrouter", model="mistralai/mistral-small-2603"),
     )
 
     panel = ReviewerPanel(primary=primary_slot, sparring=sparring_slot, fallback=fallback_slot)
@@ -265,3 +271,17 @@ def test_panel_metadata_flags_default_false_when_no_fallback_fires() -> None:
     assert metadata.get("sparring_fallback_used") is False
     assert "primary_fallback_reason" not in metadata
     assert "sparring_fallback_reason" not in metadata
+
+
+def test_panel_response_rejects_missing_winner_response() -> None:
+    failed = _err_result(ProviderErrorClass.PROVIDER_UNAVAILABLE)
+    provider = _StubProvider(provider="stub", model="stub", result=failed)
+    panel = ReviewerPanel(primary=provider, sparring=provider, fallback=provider)
+
+    with pytest.raises(RuntimeError, match="panel_winner_response_missing"):
+        panel._panel_response(
+            winner=ProviderResult(ok=True),
+            route="invalid",
+            used=[],
+            metadata={},
+        )

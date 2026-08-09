@@ -1,17 +1,38 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import secrets
 from datetime import datetime, timezone
 from typing import Any
 
-from contracts import ArticleType, Decision, ObjectType, ResearchObject, RuntimeJob, Stage, WorkflowContext, WorkflowOutcome, intake_failures_are_revisable, run_submission_template_checks
+from contracts import (
+    SUBMISSION_POLICY_VERSION,
+    ArticleType,
+    Decision,
+    ObjectType,
+    ResearchObject,
+    RuntimeJob,
+    Stage,
+    WorkflowContext,
+    WorkflowOutcome,
+    intake_failures_are_revisable,
+    run_submission_template_checks,
+)
 
-from .compiler import compile_publication
-from .derivation_web import emit_decision_to_derivation_web, emit_publication_to_derivation_web
-from .doi_resolver import resolve_dois, resolve_source_locators, verify_source_metadata
+from .compiler import (
+    canonical_manuscript_body,
+    canonical_package_hash,
+    compile_publication,
+)
+from .derivation_web import (
+    emit_decision_to_derivation_web,
+    emit_publication_to_derivation_web,
+)
+from .agent_query import fail_agent_query_job, run_agent_query_job
+from .doi_resolver import resolve_dois, resolve_source_locators, validate_resolver_urls, verify_source_metadata
 from .evidence_quality import (
     classified_title,
     evidence_profile,
@@ -19,8 +40,8 @@ from .evidence_quality import (
     quantitative_claim_candidates,
     support_for_claim,
 )
-from .integrity_client import check_integrity, index_integrity
-from .judge_release import build_judge_release
+from .integrity_client import check_integrity, index_integrity, integrity_base_url
+from .judge_release import build_judge_release, judge_release_manifest_valid
 from .osf import mint_publication_doi_from_repository, osf_publication_metadata_from_env
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
@@ -40,16 +61,9 @@ from .review_contract import (
 )
 from .reviewer_panel import ReviewerPanel, reviewer_from_env
 from .repos import RuntimeRepository
-from .sanitizer import extract_markdown_section
 
 
-PUBLICATION_DEDUPE_METADATA_KEYS = (
-    "submission_identity_key",
-    "submission_payload_hash",
-    "content_hash",
-    "source_citation_hash",
-    "author_signature",
-)
+PUBLICATION_DEDUPE_METADATA_KEYS = ("canonical_package_hash",)
 
 # Manuscript content enters reviewer prompts as fenced, untrusted data.
 # External agents control that text, so embedded instructions must never
@@ -59,6 +73,11 @@ PUBLICATION_DEDUPE_METADATA_KEYS = (
 def _publication_identity_metadata(submission_metadata: dict) -> dict:
     keys = (
         *PUBLICATION_DEDUPE_METADATA_KEYS,
+        "canonical_manuscript_hash",
+        "client_claimed_submission_identity_key",
+        "client_claimed_submission_payload_hash",
+        "client_claimed_content_hash",
+        "client_claimed_source_citation_hash",
         "run_id",
         "topic",
         "domain_slug",
@@ -82,7 +101,9 @@ def _publication_identity_metadata(submission_metadata: dict) -> dict:
         "ror_id",
         "raid_id",
     )
-    metadata = {key: submission_metadata[key] for key in keys if submission_metadata.get(key)}
+    metadata = {
+        key: submission_metadata[key] for key in keys if submission_metadata.get(key)
+    }
     if metadata.get("ror_id") and not metadata.get("institution_ror"):
         metadata["institution_ror"] = metadata["ror_id"]
     if metadata.get("orcid"):
@@ -91,11 +112,13 @@ def _publication_identity_metadata(submission_metadata: dict) -> dict:
 
 
 def _bundle_dois(source_bundle: list[dict]) -> list[str]:
-    return sorted({
-        str(entry.get("doi") or "").strip().lower()
-        for entry in source_bundle
-        if isinstance(entry, dict) and str(entry.get("doi") or "").strip()
-    })
+    return sorted(
+        {
+            str(entry.get("doi") or "").strip().lower()
+            for entry in source_bundle
+            if isinstance(entry, dict) and str(entry.get("doi") or "").strip()
+        }
+    )
 
 
 def _bundle_source_ids(source_bundle: list[dict]) -> tuple[str, ...]:
@@ -178,7 +201,12 @@ def _alpha_source_anchor_text(source_bundle: list[dict]) -> str:
         if isinstance(value, list):
             return [part for item in value for part in collect(item)]
         if isinstance(value, dict):
-            return [part for key, item in value.items() if str(key) in anchor_fields for part in collect(item)]
+            return [
+                part
+                for key, item in value.items()
+                if str(key) in anchor_fields
+                for part in collect(item)
+            ]
         return []
 
     return " ".join(part for entry in source_bundle for part in collect(entry))
@@ -197,14 +225,22 @@ def _alpha_anchor_terms(text: object) -> set[str]:
     return {
         token
         for token in re.findall(r"[a-z0-9]+", raw.lower())
-        if len(token) > 2 and token not in _ALPHA_ANCHOR_STOPWORDS and token not in named_program_fragments
+        if len(token) > 2
+        and token not in _ALPHA_ANCHOR_STOPWORDS
+        and token not in named_program_fragments
     }
 
 
-def _alpha_accept_guard_revisions(submission: ResearchObject, repository: RuntimeRepository) -> list[str]:
+def _alpha_accept_guard_revisions(
+    submission: ResearchObject, repository: RuntimeRepository
+) -> list[str]:
     if submission.metadata.get("article_type") != ArticleType.ALPHA_MEMO.value:
         return []
-    source_bundle = [entry for entry in submission.metadata.get("source_bundle", []) if isinstance(entry, dict)]
+    source_bundle = [
+        entry
+        for entry in submission.metadata.get("source_bundle", [])
+        if isinstance(entry, dict)
+    ]
     source_terms = _alpha_anchor_terms(_alpha_source_anchor_text(source_bundle))
     topic = submission.metadata.get("topic")
     topic_text = topic if isinstance(topic, str) else ""
@@ -219,11 +255,21 @@ def _alpha_accept_guard_revisions(submission: ResearchObject, repository: Runtim
     source_key = _bundle_source_ids(source_bundle)
     if len(source_key) >= 2:
         for publication in repository.list_objects(ObjectType.PUBLICATION):
-            if publication.parent_object_id == submission.id or publication.metadata.get("article_type") != ArticleType.ALPHA_MEMO.value:
+            if (
+                publication.parent_object_id == submission.id
+                or publication.metadata.get("article_type")
+                != ArticleType.ALPHA_MEMO.value
+            ):
                 continue
             parent = repository.get_object(str(publication.parent_object_id or ""))
-            if parent and _bundle_source_ids(list(parent.metadata.get("source_bundle", []))) == source_key:
-                revisions.append(f"Merge or differentiate from existing alpha memo using the same stable source set: {publication.id}")
+            if (
+                parent
+                and _bundle_source_ids(list(parent.metadata.get("source_bundle", [])))
+                == source_key
+            ):
+                revisions.append(
+                    f"Merge or differentiate from existing alpha memo using the same stable source set: {publication.id}"
+                )
                 break
     return revisions
 
@@ -241,26 +287,44 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
     section_map = sections if isinstance(sections, dict) else {}
     if article_type == ArticleType.ALPHA_MEMO.value:
         prose = "\n".join(
-            [str(submission.metadata.get("abstract") or ""), *map(str, section_map.values())]
+            [
+                str(submission.metadata.get("abstract") or ""),
+                *map(str, section_map.values()),
+            ]
         )
         minimum_ratio = 1.0
     else:
+        claim_sections = {"key findings", "findings", "results", "conclusion"}
+        if article_type == ArticleType.EVIDENCE_MAP.value:
+            claim_sections.update(
+                {"findings map", "evidence landscape", "tensions and gaps"}
+            )
         major_sections = [
             str(value)
             for name, value in section_map.items()
-            if str(name).strip().lower() in {"key findings", "findings", "results", "conclusion"}
+            if str(name).strip().lower() in claim_sections
         ]
-        prose = "\n".join([str(submission.metadata.get("abstract") or ""), *major_sections])
+        prose = "\n".join(
+            [str(submission.metadata.get("abstract") or ""), *major_sections]
+        )
         minimum_ratio = 0.8
-    prose = "\n".join(line for line in prose.splitlines() if not line.lstrip().startswith("|"))
+    prose = "\n".join(
+        line for line in prose.splitlines() if not line.lstrip().startswith("|")
+    )
     raw_bundle = submission.metadata.get("source_bundle")
-    bundle = [item for item in raw_bundle if isinstance(item, dict)] if isinstance(raw_bundle, list) else []
+    bundle = (
+        [item for item in raw_bundle if isinstance(item, dict)]
+        if isinstance(raw_bundle, list)
+        else []
+    )
     profile = evidence_profile(text=prose, source_bundle=bundle)
     count = int(profile.get("claim_trace_count") or 0)
     cited = int(profile.get("citation_trace_count") or 0)
     exact = int(profile.get("exact_claim_trace_count") or 0)
     if not count:
-        return ["Add at least one substantive, source-traceable claim before acceptance."]
+        return [
+            "Add at least one substantive, source-traceable claim before acceptance."
+        ]
     required = max(1, int(count * minimum_ratio + 0.999))
     if exact < required:
         return [
@@ -274,7 +338,9 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
         for name, value in section_map.items()
         if str(name).strip().lower() == "conclusion"
     )
-    decisive_prose = "\n".join([str(submission.metadata.get("abstract") or ""), conclusion])
+    decisive_prose = "\n".join(
+        [str(submission.metadata.get("abstract") or ""), conclusion]
+    )
     quantitative_claims = quantitative_claim_candidates(decisive_prose)
     quantitative_exact = sum(
         1
@@ -296,9 +362,18 @@ def _evidence_score_ceiling(
     sections = submission.metadata.get("sections")
     section_map = sections if isinstance(sections, dict) else {}
     raw_bundle = submission.metadata.get("source_bundle")
-    bundle = [item for item in raw_bundle if isinstance(item, dict)] if isinstance(raw_bundle, list) else []
+    bundle = (
+        [item for item in raw_bundle if isinstance(item, dict)]
+        if isinstance(raw_bundle, list)
+        else []
+    )
     profile = evidence_profile(
-        text="\n".join([str(submission.metadata.get("abstract") or ""), *map(str, section_map.values())]),
+        text="\n".join(
+            [
+                str(submission.metadata.get("abstract") or ""),
+                *map(str, section_map.values()),
+            ]
+        ),
         source_bundle=bundle,
     )
     reasons: list[str] = []
@@ -314,7 +389,9 @@ def _evidence_score_ceiling(
     if float(profile.get("weak_evidence_ratio") or 0) >= 0.6:
         reasons.append(f"weak_evidence_ratio={profile['weak_evidence_ratio']}")
         fields.add("claim_evidence_alignment")
-    adjusted = {key: min(value, 4) if key in fields else value for key, value in scores.items()}
+    adjusted = {
+        key: min(value, 4) if key in fields else value for key, value in scores.items()
+    }
     changed = {
         key: {"provider_score": scores[key], "stored_score": adjusted[key]}
         for key in fields
@@ -329,11 +406,10 @@ def _evidence_score_ceiling(
     }
 
 
-def _publication_visibility(repository: RuntimeRepository, author_agent_id: object) -> str:
-    """Zero-trust publish tier: an agent earns automatic public listing only
-    after enough of its publications are already listed (promoted by audit or
-    earned history). Everyone else lands provisional — published, verifiable,
-    but excluded from public surfaces until promoted."""
+def _publication_visibility(
+    repository: RuntimeRepository, author_agent_id: object
+) -> str:  # noqa: ARG001
+    """Only explicitly audited agents may bypass provisional quarantine."""
     agent = str(author_agent_id or "").strip()
     if not agent:
         return "provisional"
@@ -344,16 +420,56 @@ def _publication_visibility(repository: RuntimeRepository, author_agent_id: obje
     }
     if agent in audited_agents:
         return "listed"
-    minimum = int(os.getenv("RESEARKA_AUTO_TRUST_MIN_PUBLISHED", "3"))
-    if minimum <= 0:
-        return "listed"
-    listed = sum(
-        1
-        for pub in repository.list_objects(ObjectType.PUBLICATION)
-        if str(pub.metadata.get("author_agent_id") or "").strip() == agent
-        and str(pub.metadata.get("public_visibility") or "listed").strip().lower() == "listed"
+    return "provisional"
+
+
+_EVIDENCE_REVISION_GATES = {
+    "minimum_citations",
+    "recency_ratio",
+    "source_evidence_match",
+    "source_evidence_receipt",
+}
+
+
+def _decision_taxonomy(
+    *, terminal: str, metadata: dict, package_hash: str, stage: str
+) -> dict[str, object]:
+    failures = metadata.get("gate_failures")
+    gates = (
+        [item for item in failures if isinstance(item, dict)]
+        if isinstance(failures, list)
+        else []
     )
-    return "listed" if listed >= minimum else "provisional"
+    first_gate = str(
+        (gates[0].get("name") if gates else None)
+        or metadata.get("failure_category")
+        or terminal
+    ).strip()
+    if metadata.get("failure_category") == "integrity_duplicate" or first_gate in {
+        "source_retracted",
+        "source_identity_match",
+        "source_identifier_match",
+    }:
+        disposition = "REJECT_INTEGRITY"
+    elif terminal == Decision.REJECT.value:
+        disposition = "REJECT_FUNDAMENTAL"
+    elif first_gate in _EVIDENCE_REVISION_GATES:
+        disposition = "REVISE_EVIDENCE"
+    else:
+        disposition = "REVISE_TECHNICAL"
+    return {
+        "evaluation_verdict": terminal,
+        "disposition": disposition,
+        "reason_code": re.sub(r"[^A-Z0-9]+", "_", first_gate.upper()).strip("_"),
+        "fault_domain": "author",
+        "retryable": False,
+        "resubmission_allowed": terminal == Decision.REVISE.value,
+        "stage": stage,
+        "policy_version": SUBMISSION_POLICY_VERSION,
+        "canonical_package_hash": package_hash,
+        "publication_state": "NOT_PUBLISHED",
+        "public_visibility": "hidden",
+    }
 
 
 def _alpha_exception_trusted(submission: ResearchObject) -> bool:
@@ -387,7 +503,56 @@ def _publication_dedupe_markers(metadata: dict) -> set[str]:
     }
 
 
-def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -> dict[str, object]:
+def _canonical_submission_hash(submission: ResearchObject) -> str:
+    metadata = submission.metadata
+    sections = metadata.get("sections")
+    source_bundle = metadata.get("source_bundle")
+    return canonical_package_hash(
+        title=submission.title,
+        abstract=str(metadata.get("abstract") or ""),
+        sections=sections if isinstance(sections, dict) else {},
+        source_bundle=source_bundle if isinstance(source_bundle, list) else [],
+        article_type=str(
+            metadata.get("article_type") or ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+        ),
+    )
+
+
+def _ensure_canonical_package(
+    repository: RuntimeRepository,
+    submission: ResearchObject,
+) -> tuple[ResearchObject, str]:
+    package_hash = _canonical_submission_hash(submission)
+    stored_hash = str(submission.metadata.get("canonical_package_hash") or "")
+    if stored_hash and stored_hash != package_hash:
+        raise ValueError("canonical_package_hash_mismatch")
+    if not stored_hash:
+        sections = submission.metadata.get("sections")
+        body = canonical_manuscript_body(
+            sections=sections if isinstance(sections, dict) else {},
+            article_type=str(
+                submission.metadata.get("article_type")
+                or ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+            ),
+        )
+        metadata = {
+            **submission.metadata,
+            "canonical_package_hash": package_hash,
+            "submission_content_hash": package_hash,
+            "canonical_manuscript_hash": f"sha256:{hashlib.sha256(body.encode()).hexdigest()}",
+        }
+        submission = (
+            repository.update_object_metadata(submission.id, metadata) or submission
+        )
+    return submission, package_hash
+
+
+def _integrity_signal_metadata(
+    integrity: dict[str, Any],
+    recommendation: str,
+    *,
+    package_hash: str | None = None,
+) -> dict[str, object]:
     duplication_score = integrity.get("duplication_score")
     similarity_score = integrity.get("similarity_score", duplication_score)
     matched_sources = integrity.get("matched_sources")
@@ -396,17 +561,23 @@ def _integrity_signal_metadata(integrity: dict[str, Any], recommendation: str) -
     return {
         "recommendation": recommendation or integrity.get("recommendation") or "revise",
         "available": bool(integrity.get("available", True)),
-        "checked_at": integrity.get("checked_at") or datetime.now(timezone.utc).isoformat(),
+        "checked_at": integrity.get("checked_at")
+        or datetime.now(timezone.utc).isoformat(),
         "reason": str(integrity.get("reason") or "").strip() or None,
         "matched_publication_id": integrity.get("matched_publication_id"),
         "duplication_score": duplication_score,
         "similarity_score": similarity_score,
-        "plagiarism_flag": bool(integrity.get("plagiarism_flag") or recommendation in {Decision.REJECT.value, Decision.REVISE.value}),
+        "plagiarism_flag": bool(
+            integrity.get("plagiarism_flag")
+            or recommendation in {Decision.REJECT.value, Decision.REVISE.value}
+        ),
         "matched_sources": matched_sources[:5],
         "breakdown": integrity.get("breakdown") or {},
-        "feedback_for_agent": str(integrity.get("feedback_for_agent") or "").strip() or None,
+        "feedback_for_agent": str(integrity.get("feedback_for_agent") or "").strip()
+        or None,
         "attempts": integrity.get("attempts"),
         "self_match_ignored": bool(integrity.get("self_match_ignored")),
+        "canonical_package_hash": package_hash,
     }
 
 
@@ -414,10 +585,39 @@ def _integrity_recommendation(integrity: dict[str, Any] | None) -> str:
     if not integrity:
         return ""
     recommendation = str(integrity.get("recommendation") or "").strip().lower()
-    return recommendation if recommendation in {"pass", Decision.REJECT.value, Decision.REVISE.value} else Decision.REVISE.value
+    return (
+        recommendation
+        if recommendation in {"pass", Decision.REJECT.value, Decision.REVISE.value}
+        else Decision.REVISE.value
+    )
 
 
-def _integrity_without_self_match(integrity: dict[str, Any], publication_id: str) -> dict[str, Any]:
+def _integrity_response_invalid(
+    integrity: dict[str, Any] | None, recommendation: str
+) -> bool:
+    if not integrity:
+        return False
+    return str(integrity.get("recommendation") or "").strip().lower() != recommendation
+
+
+def _integrity_checks_enabled() -> bool:
+    return os.getenv("RESEARKA_INTEGRITY_ENABLED", "1") == "1"
+
+
+def _checked_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
+    result = check_integrity(payload)
+    if result is None and not _integrity_checks_enabled():
+        return {
+            "available": True,
+            "recommendation": "pass",
+            "reason": "integrity_disabled_nonproduction",
+        }
+    return result
+
+
+def _integrity_without_self_match(
+    integrity: dict[str, Any], publication_id: str
+) -> dict[str, Any]:
     if str(integrity.get("matched_publication_id") or "") != publication_id:
         return integrity
     normalized = dict(integrity)
@@ -438,13 +638,23 @@ def _integrity_without_self_match(integrity: dict[str, Any], publication_id: str
     return normalized
 
 
-def refresh_publication_integrity(repository: RuntimeRepository, publication: ResearchObject) -> ResearchObject:
+def refresh_publication_integrity(
+    repository: RuntimeRepository, publication: ResearchObject
+) -> ResearchObject:
     if publication.object_type != ObjectType.PUBLICATION:
         raise ValueError("integrity_refresh_requires_publication")
-    submission = repository.get_object(str(publication.parent_object_id or publication.metadata.get("source_submission_id") or ""))
+    submission = repository.get_object(
+        str(
+            publication.parent_object_id
+            or publication.metadata.get("source_submission_id")
+            or ""
+        )
+    )
     if submission is None:
         return publication
-    integrity = check_integrity(_integrity_payload_from_publication(publication, submission))
+    integrity = _checked_integrity(
+        _integrity_payload_from_publication(publication, submission)
+    )
     if not integrity:
         return publication
     integrity = _integrity_without_self_match(integrity, publication.id)
@@ -452,7 +662,10 @@ def refresh_publication_integrity(repository: RuntimeRepository, publication: Re
     return (
         repository.update_object_metadata(
             publication.id,
-            {**publication.metadata, "integrity": _integrity_signal_metadata(integrity, recommendation)},
+            {
+                **publication.metadata,
+                "integrity": _integrity_signal_metadata(integrity, recommendation),
+            },
         )
         or publication
     )
@@ -462,15 +675,140 @@ def _integrity_unavailable(integrity: object) -> bool:
     if not isinstance(integrity, dict):
         return False
     reason = str(integrity.get("reason") or "").lower()
-    return integrity.get("available") is False or "integrity_unavailable" in reason or "timed out" in reason
+    return (
+        integrity.get("available") is False
+        or "integrity_unavailable" in reason
+        or "timed out" in reason
+    )
 
 
 def _integrity_publish_block(recommendation: str, integrity: dict[str, Any]) -> bool:
     return recommendation in {Decision.REJECT.value, Decision.REVISE.value}
 
 
-def _mint_publication_doi(repository: RuntimeRepository, publication: ResearchObject) -> dict:
+def _mint_publication_doi(
+    repository: RuntimeRepository, publication: ResearchObject
+) -> dict:
     return mint_publication_doi_from_repository(repository, publication)
+
+
+def _verified_billing_waiver(review: ResearchObject, submission_id: str) -> bool:
+    return bool(
+        review.metadata.get("accept_quorum_waiver_verified") is True
+        and billing_waiver_attestation_valid(
+            review.metadata,
+            submission_id=submission_id,
+            recommendation=Decision.ACCEPT.value,
+            judge_release_id=str(review.metadata.get("judge_release_id") or ""),
+            secret=review_attestation_secret(),
+        )
+    )
+
+
+def _require_accept_quorum(review: ResearchObject, submission_id: str) -> bool:
+    waiver_verified = _verified_billing_waiver(review, submission_id)
+    if not accept_quorum_satisfied(
+        review.metadata, allow_billing_waiver=waiver_verified
+    ):
+        raise ValueError("accept_quorum_missing")
+    return waiver_verified
+
+
+def _evidence_text_verification(metadata: dict) -> dict[str, object]:
+    receipt = metadata.get("source_verification")
+    receipt = receipt if isinstance(receipt, dict) else {}
+    verified = sorted(
+        {
+            str(item)
+            for item in receipt.get("evidence_text_verified", [])
+            if str(item).strip()
+        }
+    )
+    unverified = sorted(
+        {
+            str(item)
+            for item in receipt.get("evidence_text_unverified", [])
+            if str(item).strip()
+        }
+    )
+    status = (
+        "partially_verified"
+        if verified and unverified
+        else "verified"
+        if verified
+        else "unverified"
+        if unverified
+        else "not_available"
+    )
+    return {"status": status, "verified": verified, "unverified": unverified}
+
+
+def _publication_lineage(
+    repository: RuntimeRepository,
+    publication: ResearchObject,
+) -> tuple[ResearchObject, ResearchObject, ResearchObject]:
+    submission = repository.get_object(str(publication.parent_object_id or ""))
+    decision = repository.get_object(str(publication.metadata.get("decision_id") or ""))
+    review = repository.get_object(str(publication.metadata.get("review_id") or ""))
+    package_hash = str(publication.metadata.get("canonical_package_hash") or "")
+    release = review.metadata.get("judge_release") if review else None
+    if (
+        submission is None
+        or submission.object_type != ObjectType.SUBMISSION
+        or decision is None
+        or decision.object_type != ObjectType.DECISION
+        or decision.parent_object_id != submission.id
+        or decision.metadata.get("decision") != Decision.ACCEPT.value
+        or decision.metadata.get("superseded_by")
+        or review is None
+        or review.object_type != ObjectType.REVIEW
+        or review.parent_object_id != submission.id
+        or decision.metadata.get("review_id") != review.id
+        or not package_hash.startswith("sha256:")
+        or _canonical_submission_hash(submission) != package_hash
+        or decision.metadata.get("canonical_package_hash") != package_hash
+        or review.metadata.get("reviewed_package_hash") != package_hash
+        or review.metadata.get("judge_release_id")
+        != publication.metadata.get("judge_release_id")
+        or not judge_release_manifest_valid(release)
+    ):
+        raise ValueError("publication_lineage_invalid")
+    _require_accept_quorum(review, submission.id)
+    return submission, review, decision
+
+
+def _resume_publication_delivery(
+    repository: RuntimeRepository, publication: ResearchObject
+) -> dict:
+    if publication.metadata.get(
+        "requested_public_visibility"
+    ) != "listed" or publication.metadata.get("publication_state") in {
+        "PUBLISHED",
+        "PUBLISH_BLOCKED_INTEGRITY",
+    }:
+        return {"publication_id": publication.id, "deduped": True, "next_jobs": 0}
+    if publication.metadata.get(
+        "doi_status"
+    ) != "minted" or not publication.metadata.get("osf_package_files"):
+        stage = Stage.OSF_DEPOSIT
+    elif publication.metadata.get("dw_status") != "registered":
+        stage = Stage.DW_DELIVERY
+    else:
+        stage = Stage.PUBLICATION_FINALIZE
+    publication, next_job = repository.update_object_metadata_and_enqueue_job(
+        publication.id,
+        _merge_publication_metadata(
+            publication.metadata, {"publication_state": "PUBLISHING"}
+        ),
+        RuntimeJob(target_object_id=publication.id, stage=stage),
+    )
+    return {
+        "publication_id": publication.id,
+        "deduped": True,
+        "next_jobs": 1,
+        "next_job_id": next_job.id,
+        "resumed_stage": stage.value,
+    }
 
 
 def _integrity_payload_from_submission(submission: ResearchObject) -> dict[str, Any]:
@@ -478,33 +816,36 @@ def _integrity_payload_from_submission(submission: ResearchObject) -> dict[str, 
         "submission_id": submission.id,
         "title": submission.title,
         "abstract": str(submission.metadata.get("abstract", "")).strip(),
+        "body_markdown": submission.body_markdown,
+        "canonical_package_hash": submission.metadata.get("canonical_package_hash"),
+        "canonical_manuscript_hash": submission.metadata.get(
+            "canonical_manuscript_hash"
+        ),
         "citations": list(submission.metadata.get("source_bundle", [])),
-        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+        "article_type": submission.metadata.get(
+            "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+        ),
         "domain": submission.metadata.get("domain_slug", "default") or "default",
     }
 
 
-def _integrity_payload_from_publication(publication: ResearchObject, submission: ResearchObject) -> dict[str, Any]:
+def _integrity_payload_from_publication(
+    publication: ResearchObject, submission: ResearchObject
+) -> dict[str, Any]:
     payload = _integrity_payload_from_submission(submission)
     payload.update(
         {
             "publication_id": publication.id,
             "title": publication.title,
-            "abstract": str(publication.metadata.get("abstract") or payload["abstract"]).strip(),
-            "article_type": publication.metadata.get("article_type", payload["article_type"]),
+            "abstract": str(
+                publication.metadata.get("abstract") or payload["abstract"]
+            ).strip(),
+            "article_type": publication.metadata.get(
+                "article_type", payload["article_type"]
+            ),
         }
     )
     return payload
-
-
-def _submission_full_body_markdown(submission: ResearchObject) -> str | None:
-    metadata_body = submission.metadata.get("body_markdown")
-    if isinstance(metadata_body, str) and metadata_body.strip():
-        return metadata_body
-    body = str(submission.body_markdown or "")
-    if extract_markdown_section(body, "Abstract") and extract_markdown_section(body, "References"):
-        return body
-    return None
 
 
 def _supersede_prior_decisions(
@@ -514,11 +855,44 @@ def _supersede_prior_decisions(
 ) -> None:
     for prior in repository.children_of(submission_id, ObjectType.DECISION):
         if prior.id != decision_id and not prior.metadata.get("superseded_by"):
-            repository.update_object_metadata(prior.id, {**prior.metadata, "superseded_by": decision_id})
+            repository.update_object_metadata(
+                prior.id, {**prior.metadata, "superseded_by": decision_id}
+            )
+
+
+def _child_for_operation(
+    repository: RuntimeRepository,
+    submission_id: str,
+    object_type: ObjectType,
+    operation_id: str,
+) -> ResearchObject | None:
+    return next(
+        (
+            child
+            for child in reversed(repository.children_of(submission_id, object_type))
+            if child.metadata.get("operation_id") == operation_id
+        ),
+        None,
+    )
 
 
 class WorkflowEngine:
     def __init__(self, provider: LanguageModelProvider | None = None) -> None:
+        if os.getenv("RESEARKA_V2_ENV", "development").strip().lower() == "production":
+            required_flags = {
+                "RESEARKA_DOI_CHECK_ENABLED": "1",
+                "RESEARKA_SOURCE_CHECK_ENABLED": "1",
+                "RESEARKA_SOURCE_METADATA_CHECK_ENABLED": "1",
+                "RESEARKA_DOI_CHECK_FAIL_CLOSED": "1",
+                "RESEARKA_SOURCE_METADATA_FAIL_CLOSED": "1",
+                "RESEARKA_INTEGRITY_ENABLED": "1",
+                "RESEARKA_INTEGRITY_FAIL_CLOSED": "1",
+            }
+            unsafe = [name for name, default in required_flags.items() if os.getenv(name, default) != "1"]
+            if unsafe:
+                raise RuntimeError("production_verification_must_fail_closed:" + ",".join(unsafe))
+            validate_resolver_urls()
+            integrity_base_url()
         self.provider = provider or reviewer_from_env()
 
     def _review_system_prompt(
@@ -695,8 +1069,21 @@ class WorkflowEngine:
             '"review_markdown":"..."}'
         )
 
-    def _static_provider_metadata(self, *, prompt_version: str) -> dict[str, str | int | float]:
-        provider = getattr(self.provider, "provider", self.provider.__class__.__name__.lower())
+    def _review_prompt_bundle(self) -> str:
+        return json.dumps(
+            {
+                article_type.value: self._review_system_prompt(article_type.value)
+                for article_type in ArticleType
+            },
+            sort_keys=True,
+        )
+
+    def _static_provider_metadata(
+        self, *, prompt_version: str
+    ) -> dict[str, str | int | float]:
+        provider = getattr(
+            self.provider, "provider", self.provider.__class__.__name__.lower()
+        )
         model = getattr(self.provider, "model", provider)
         return {
             "prompt_version": prompt_version,
@@ -707,8 +1094,14 @@ class WorkflowEngine:
             "cost_usd": 0.0,
         }
 
-    def _review_submission(self, submission: ResearchObject) -> tuple[str, str, dict[str, object]]:
-        article_type = str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value))
+    def _review_submission(
+        self, submission: ResearchObject
+    ) -> tuple[str, str, dict[str, object]]:
+        article_type = str(
+            submission.metadata.get(
+                "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+            )
+        )
         fence_nonce = secrets.token_hex(12)
         submission_data_start = f"{SUBMISSION_DATA_START}_{fence_nonce}"
         submission_data_end = f"{SUBMISSION_DATA_END}_{fence_nonce}"
@@ -718,19 +1111,29 @@ class WorkflowEngine:
             submission_data_end=submission_data_end,
         )
         source_verification = submission.metadata.get("source_verification")
-        source_verification = source_verification if isinstance(source_verification, dict) else None
+        source_verification = (
+            source_verification if isinstance(source_verification, dict) else None
+        )
         if source_verification:
             problem_identifiers: set[str] = set()
-            for field in ("unverified", "title_mismatches", "identifier_unverified", "identifier_mismatches"):
+            for field in (
+                "unverified",
+                "title_mismatches",
+                "identifier_unverified",
+                "identifier_mismatches",
+            ):
                 identities = source_verification.get(field, [])
                 if isinstance(identities, list):
                     problem_identifiers.update(str(identity) for identity in identities)
             system_prompt += (
                 "\nTrusted platform source-verification receipt (not author data): "
-                + json.dumps({
-                    "recommendation": source_verification.get("recommendation"),
-                    "problem_identifiers": sorted(problem_identifiers),
-                }, ensure_ascii=False)
+                + json.dumps(
+                    {
+                        "recommendation": source_verification.get("recommendation"),
+                        "problem_identifiers": sorted(problem_identifiers),
+                    },
+                    ensure_ascii=False,
+                )
                 + "\nDo not call a DOI or PMID fabricated, invalid, implausible, unresolved, or mismatched unless "
                 "its exact normalized identifier appears in problem_identifiers, and include that exact identifier "
                 "in the finding. This does not prevent criticism of whether a verified source supports a manuscript claim.\n"
@@ -763,10 +1166,9 @@ class WorkflowEngine:
             error_class = result.error.error_class.value if result.error else "other"
             message = result.error.message if result.error else "provider_failed"
             raise ValueError(f"provider_error:{error_class}:{message}")
-        billing_waiver_verified = (
-            isinstance(self.provider, ReviewerPanel)
-            and self.provider.billing_skip_receipt_valid(result.response.metadata)
-        )
+        billing_waiver_verified = isinstance(
+            self.provider, ReviewerPanel
+        ) and self.provider.billing_skip_receipt_valid(result.response.metadata)
         payload = self._parse_json_object(result.response.text)
         recommendation = str(payload.get("recommendation", "")).strip().lower()
         if recommendation not in {"accept", "revise", "reject"}:
@@ -781,13 +1183,23 @@ class WorkflowEngine:
         )
         if grounding_failure:
             raise ValueError(f"provider_error:bad_request:{grounding_failure}")
-        rubric_scores, major_issues, minor_issues, required_revisions, claim_support, overclaim, synthesis_quality = self._validated_review_contract(
+        (
+            rubric_scores,
+            major_issues,
+            minor_issues,
+            required_revisions,
+            claim_support,
+            overclaim,
+            synthesis_quality,
+        ) = self._validated_review_contract(
             payload,
             recommendation=recommendation,
         )
-        rubric_scores, rubric_calibration = _evidence_score_ceiling(submission, rubric_scores)
+        rubric_scores, rubric_calibration = _evidence_score_ceiling(
+            submission, rubric_scores
+        )
         judge_release = build_judge_release(
-            system_prompt=system_prompt,
+            system_prompt=self._review_prompt_bundle(),
             provider=result.response.provider,
             model=result.response.model,
             response_metadata={
@@ -799,12 +1211,14 @@ class WorkflowEngine:
             "accept_quorum_waiver_verified": billing_waiver_verified,
         }
         if billing_waiver_verified:
-            waiver_metadata["accept_quorum_waiver_attestation"] = billing_waiver_attestation(
-                result.response.metadata,
-                submission_id=submission.id,
-                recommendation=recommendation,
-                judge_release_id=str(judge_release["id"]),
-                secret=review_attestation_secret(required=True) or "",
+            waiver_metadata["accept_quorum_waiver_attestation"] = (
+                billing_waiver_attestation(
+                    result.response.metadata,
+                    submission_id=submission.id,
+                    recommendation=recommendation,
+                    judge_release_id=str(judge_release["id"]),
+                    secret=review_attestation_secret(required=True) or "",
+                )
             )
         metadata = {
             "prompt_version": REVIEWER_PROMPT_VERSION,
@@ -830,27 +1244,36 @@ class WorkflowEngine:
         if rubric_calibration:
             metadata["rubric_calibration"] = rubric_calibration
         if recommendation == "accept":
-            if (
-                not getattr(self.provider, "enforces_accept_quorum", False)
-                or not accept_quorum_satisfied(
-                    result.response.metadata,
-                    provider=result.response.provider,
-                    allow_billing_waiver=billing_waiver_verified,
-                )
+            if not getattr(
+                self.provider, "enforces_accept_quorum", False
+            ) or not accept_quorum_satisfied(
+                result.response.metadata,
+                provider=result.response.provider,
+                allow_billing_waiver=billing_waiver_verified,
             ):
                 raise ValueError("provider_error:bad_request:accept_quorum_missing")
         return recommendation, review_markdown, metadata
 
-    def _integrity_decision_metadata(self, submission: ResearchObject, integrity: dict[str, Any], recommendation: str) -> dict[str, object]:
+    def _integrity_decision_metadata(
+        self, submission: ResearchObject, integrity: dict[str, Any], recommendation: str
+    ) -> dict[str, object]:
         feedback = str(integrity.get("feedback_for_agent") or "").strip()
         reason = str(integrity.get("reason") or "integrity_duplicate").strip()
         return {
             "decision": recommendation,
             "notes": ["integrity check decision"],
-            "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+            "article_type": submission.metadata.get(
+                "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+            ),
             "failure_category": "integrity_duplicate",
             "failed_checks": [feedback or reason],
-            "integrity": _integrity_signal_metadata(integrity, recommendation),
+            "integrity": _integrity_signal_metadata(
+                integrity,
+                recommendation,
+                package_hash=str(
+                    submission.metadata.get("canonical_package_hash") or ""
+                ),
+            ),
             **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
         }
 
@@ -867,7 +1290,9 @@ class WorkflowEngine:
         for key in REVIEW_RUBRIC_KEYS:
             value = rubric_scores.get(key)
             if not isinstance(value, int) or value < 1 or value > 5:
-                raise ValueError(f"provider_error:bad_request:invalid_rubric_score:{key}")
+                raise ValueError(
+                    f"provider_error:bad_request:invalid_rubric_score:{key}"
+                )
             normalized_scores[key] = value
 
         def _list_field(name: str) -> list[str]:
@@ -887,9 +1312,13 @@ class WorkflowEngine:
         overclaim = str(payload.get("overclaim_verdict", "")).strip().lower()
         if overclaim not in OVERCLAIM_VERDICTS:
             raise ValueError("provider_error:bad_request:invalid_overclaim_verdict")
-        synthesis_quality = str(payload.get("synthesis_quality_verdict", "")).strip().lower()
+        synthesis_quality = (
+            str(payload.get("synthesis_quality_verdict", "")).strip().lower()
+        )
         if synthesis_quality not in SYNTHESIS_QUALITY_VERDICTS:
-            raise ValueError("provider_error:bad_request:invalid_synthesis_quality_verdict")
+            raise ValueError(
+                "provider_error:bad_request:invalid_synthesis_quality_verdict"
+            )
 
         if recommendation == "accept":
             failure = accept_contract_failure(
@@ -903,9 +1332,19 @@ class WorkflowEngine:
             if failure:
                 raise ValueError(f"provider_error:bad_request:{failure}")
         if recommendation == "revise" and not required_revisions:
-            raise ValueError("provider_error:bad_request:revise_missing_required_revisions")
+            raise ValueError(
+                "provider_error:bad_request:revise_missing_required_revisions"
+            )
 
-        return normalized_scores, major_issues, minor_issues, required_revisions, claim_support, overclaim, synthesis_quality
+        return (
+            normalized_scores,
+            major_issues,
+            minor_issues,
+            required_revisions,
+            claim_support,
+            overclaim,
+            synthesis_quality,
+        )
 
     @staticmethod
     def _parse_json_object(text: str) -> dict:
@@ -951,6 +1390,10 @@ class WorkflowEngine:
         return parsed
 
     def handle_job(self, job: RuntimeJob, repository: RuntimeRepository) -> dict:
+        if job.lease_token > 0 and not repository.renew_job_lease(
+            job.id, job.lease_token
+        ):
+            raise RuntimeError("stale_job_lease")
         if job.stage == Stage.INTAKE:
             return self._run_intake(job, repository)
         if job.stage == Stage.REVIEW:
@@ -959,9 +1402,24 @@ class WorkflowEngine:
             return self._run_editorial(job, repository)
         if job.stage == Stage.PUBLISH:
             return self._run_publish(job, repository)
+        if job.stage == Stage.OSF_DEPOSIT:
+            return self._run_osf_deposit(job, repository)
+        if job.stage == Stage.DW_DELIVERY:
+            return self._run_derivation_delivery(job, repository)
+        if job.stage == Stage.PUBLICATION_FINALIZE:
+            return self._run_publication_finalize(job, repository)
+        if job.stage == Stage.AGENT_QUERY:
+            try:
+                result = run_agent_query_job(repository, job.target_object_id)
+            except Exception as exc:
+                fail_agent_query_job(repository, job.target_object_id, str(exc))
+                raise
+            return {"created_object_id": result.id}
         raise ValueError(f"Unsupported stage: {job.stage}")
 
-    def plan_from_editorial(self, context: WorkflowContext, decision: Decision) -> WorkflowOutcome:
+    def plan_from_editorial(
+        self, context: WorkflowContext, decision: Decision
+    ) -> WorkflowOutcome:
         if decision == Decision.ACCEPT:
             return WorkflowOutcome(
                 terminal_decision=Decision.ACCEPT,
@@ -983,6 +1441,7 @@ class WorkflowEngine:
         submission = repository.get_object(job.target_object_id)
         if submission is None:
             raise ValueError(f"Unknown submission: {job.target_object_id}")
+        submission, _ = _ensure_canonical_package(repository, submission)
         sections = dict(submission.metadata.get("sections", {}))
         source_bundle = list(submission.metadata.get("source_bundle", []))
         failed = [
@@ -991,7 +1450,11 @@ class WorkflowEngine:
                 title=submission.title,
                 sections=sections,
                 source_bundle=source_bundle,
-                article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
+                article_type=str(
+                    submission.metadata.get(
+                        "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                    )
+                ),
                 evidence_bundle=submission.metadata.get("evidence_bundle", {}),
                 alpha_exception_trusted=_alpha_exception_trusted(submission),
             )
@@ -1004,115 +1467,162 @@ class WorkflowEngine:
                     abstract=str(submission.metadata.get("abstract", "")).strip(),
                     sections=sections,
                     source_bundle=source_bundle,
-                    article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
-                    core_claims_resolved=bool(submission.metadata.get("core_claims_resolved", True)),
+                    article_type=str(
+                        submission.metadata.get(
+                            "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                        )
+                    ),
+                    core_claims_resolved=bool(
+                        submission.metadata.get("core_claims_resolved", True)
+                    ),
                 )
-                failed = [gate.model_dump(mode="json") for gate in artifact.gates if not gate.passed]
+                failed = [
+                    gate.model_dump(mode="json")
+                    for gate in artifact.gates
+                    if not gate.passed
+                ]
         except ValueError as exc:
-            failed = [{"name": "intake_validation", "passed": False, "reason": str(exc)}]
+            reason = str(exc)
+            failed = [
+                {
+                    "name": "structure_gate"
+                    if reason.startswith("structure_gate:")
+                    else "intake_validation",
+                    "passed": False,
+                    "reason": reason,
+                }
+            ]
         # DOI existence runs only on otherwise-clean submissions: cheap
         # deterministic gates first, network authority second.
-        doi_resolution = resolve_dois(_bundle_dois(source_bundle)) if not failed else None
+        doi_resolution = (
+            resolve_dois(_bundle_dois(source_bundle)) if not failed else None
+        )
         if doi_resolution:
-            submission = repository.update_object_metadata(
-                submission.id, {**submission.metadata, "doi_resolution": doi_resolution}
-            ) or submission
+            submission = (
+                repository.update_object_metadata(
+                    submission.id,
+                    {**submission.metadata, "doi_resolution": doi_resolution},
+                )
+                or submission
+            )
             if doi_resolution.get("missing"):
-                failed = [{
-                    "name": "doi_exists",
-                    "passed": False,
-                    "reason": (
-                        "DOIs not registered in the global handle system: "
-                        + ", ".join(doi_resolution["missing"][:10])
-                    ),
-                }]
+                failed = [
+                    {
+                        "name": "doi_exists",
+                        "passed": False,
+                        "reason": (
+                            "DOIs not registered in the global handle system: "
+                            + ", ".join(doi_resolution["missing"][:10])
+                        ),
+                    }
+                ]
         if failed:
             # Author-correctable defects (a source missing its DOI, a citation
             # absent from the bundle) earn a revise: the evidence is there, its
             # presentation is not. Insufficient or mismatched evidence stays a
             # terminal reject.
-            revisable = intake_failures_are_revisable([str(gate.get("name") or "") for gate in failed])
+            revisable = intake_failures_are_revisable(
+                [str(gate.get("name") or "") for gate in failed]
+            )
             outcome = Decision.REVISE.value if revisable else Decision.REJECT.value
             return self._terminal_intake_decision(
                 repository,
                 submission,
                 body_markdown=(
-                    "Submission returned for revision at intake." if revisable else "Submission rejected at intake."
+                    "Submission returned for revision at intake."
+                    if revisable
+                    else "Submission rejected at intake."
                 ),
                 metadata={
                     "decision": outcome,
-                    "notes": ["intake gate revision" if revisable else "intake gate rejection"],
-                    "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                    "notes": [
+                        "intake gate revision" if revisable else "intake gate rejection"
+                    ],
+                    "article_type": submission.metadata.get(
+                        "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                    ),
                     "gate_failures": failed,
-                    **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+                    **self._static_provider_metadata(
+                        prompt_version=EDITOR_PROMPT_VERSION
+                    ),
                 },
                 terminal=outcome,
             )
-        if doi_resolution and not doi_resolution.get("available") and doi_resolution.get("recommendation") == Decision.REVISE.value:
-            return self._terminal_intake_decision(
-                repository,
-                submission,
-                body_markdown="DOI resolution unavailable: revise",
-                metadata={
-                    "decision": Decision.REVISE.value,
-                    "notes": ["doi resolver unavailable (fail-closed)"],
-                    "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
-                    "doi_resolution": doi_resolution,
-                    **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
-                },
-                terminal=Decision.REVISE.value,
-            )
-        source_resolution = resolve_source_locators(source_bundle) if not failed else None
+        if (
+            doi_resolution
+            and not doi_resolution.get("available")
+            and doi_resolution.get("recommendation") == Decision.REVISE.value
+        ):
+            raise RuntimeError("system_unavailable:doi_resolver")
+        source_resolution = (
+            resolve_source_locators(source_bundle) if not failed else None
+        )
         if source_resolution:
-            submission = repository.update_object_metadata(
-                submission.id, {**submission.metadata, "source_resolution": source_resolution}
-            ) or submission
+            submission = (
+                repository.update_object_metadata(
+                    submission.id,
+                    {**submission.metadata, "source_resolution": source_resolution},
+                )
+                or submission
+            )
             if source_resolution.get("missing"):
                 return self._terminal_intake_decision(
                     repository,
                     submission,
-                    body_markdown="Source resolution failed: reject",
-                    metadata={
-                        "decision": Decision.REJECT.value,
-                        "notes": ["source locator does not resolve"],
-                        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
-                        "gate_failures": [{
-                            "name": "source_exists",
-                            "passed": False,
-                            "reason": "Source locators do not resolve: " + ", ".join(source_resolution["missing"][:10]),
-                        }],
-                        **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
-                    },
-                    terminal=Decision.REJECT.value,
-                )
-            if not source_resolution.get("available") and source_resolution.get("recommendation") == Decision.REVISE.value:
-                return self._terminal_intake_decision(
-                    repository,
-                    submission,
-                    body_markdown="Source resolution unavailable: revise",
+                    body_markdown="Source resolution failed: revise",
                     metadata={
                         "decision": Decision.REVISE.value,
-                        "notes": ["source resolver unavailable (fail-closed)"],
-                        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
-                        "source_resolution": source_resolution,
-                        **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+                        "notes": ["source locator must be corrected"],
+                        "article_type": submission.metadata.get(
+                            "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                        ),
+                        "gate_failures": [
+                            {
+                                "name": "source_exists",
+                                "passed": False,
+                                "reason": "Source locators do not resolve: "
+                                + ", ".join(source_resolution["missing"][:10]),
+                            }
+                        ],
+                        **self._static_provider_metadata(
+                            prompt_version=EDITOR_PROMPT_VERSION
+                        ),
                     },
                     terminal=Decision.REVISE.value,
                 )
+            if (
+                not source_resolution.get("available")
+                and source_resolution.get("recommendation") == Decision.REVISE.value
+            ):
+                raise RuntimeError("system_unavailable:source_resolver")
         source_verification = verify_source_metadata(source_bundle)
         if source_verification:
-            submission = repository.update_object_metadata(
-                submission.id, {**submission.metadata, "source_verification": source_verification}
-            ) or submission
+            submission = (
+                repository.update_object_metadata(
+                    submission.id,
+                    {**submission.metadata, "source_verification": source_verification},
+                )
+                or submission
+            )
             verification_failures = [
                 {
                     "name": name,
                     "passed": False,
-                    "reason": reason + ": " + ", ".join(source_verification.get(field, [])[:10]),
+                    "reason": reason
+                    + ": "
+                    + ", ".join(source_verification.get(field, [])[:10]),
                 }
                 for name, field, reason in (
-                    ("source_retracted", "retracted", "retracted sources cannot support publication"),
-                    ("source_identity_match", "title_mismatches", "source titles do not match registered records"),
+                    (
+                        "source_retracted",
+                        "retracted",
+                        "retracted sources cannot support publication",
+                    ),
+                    (
+                        "source_identity_match",
+                        "title_mismatches",
+                        "source titles do not match registered records",
+                    ),
                     (
                         "source_identifier_match",
                         "identifier_mismatches",
@@ -1129,40 +1639,77 @@ class WorkflowEngine:
                     metadata={
                         "decision": Decision.REJECT.value,
                         "notes": ["authoritative source verification rejection"],
-                        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                        "article_type": submission.metadata.get(
+                            "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                        ),
                         "gate_failures": verification_failures,
                         "source_verification": source_verification,
-                        **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+                        **self._static_provider_metadata(
+                            prompt_version=EDITOR_PROMPT_VERSION
+                        ),
                     },
                     terminal=Decision.REJECT.value,
                 )
             if source_verification.get("recommendation") == Decision.REVISE.value:
+                if source_verification.get("unverified") or source_verification.get(
+                    "identifier_unverified"
+                ):
+                    raise RuntimeError("system_unavailable:source_metadata_verifier")
                 revision_failures = []
                 revision_notes = []
                 if source_verification.get("evidence_mismatches"):
                     revision_notes.append("source evidence mismatch")
-                    revision_failures.append({
-                        "name": "source_evidence_match",
-                        "passed": False,
-                        "reason": "submitted evidence text could not be reconciled with available authoritative abstracts: "
-                        + ", ".join(source_verification["evidence_mismatches"][:10]),
-                    })
+                    revision_failures.append(
+                        {
+                            "name": "source_evidence_match",
+                            "passed": False,
+                            "reason": "submitted evidence text could not be reconciled with available authoritative abstracts: "
+                            + ", ".join(
+                                source_verification["evidence_mismatches"][:10]
+                            ),
+                        }
+                    )
                 if source_verification.get("unverified"):
-                    revision_notes.append("source metadata verification unavailable (fail-closed)")
-                    revision_failures.append({
-                        "name": "source_authority_available",
-                        "passed": False,
-                        "reason": "source metadata could not be verified: "
-                        + ", ".join(source_verification["unverified"][:10]),
-                    })
+                    revision_notes.append(
+                        "source metadata verification unavailable (fail-closed)"
+                    )
+                    revision_failures.append(
+                        {
+                            "name": "source_authority_available",
+                            "passed": False,
+                            "reason": "source metadata could not be verified: "
+                            + ", ".join(source_verification["unverified"][:10]),
+                        }
+                    )
                 if source_verification.get("identifier_unverified"):
-                    revision_notes.append("source identifier verification unavailable (fail-closed)")
-                    revision_failures.append({
-                        "name": "source_identifier_authority_available",
-                        "passed": False,
-                        "reason": "source identifiers could not be verified: "
-                        + ", ".join(source_verification["identifier_unverified"][:10]),
-                    })
+                    revision_notes.append(
+                        "source identifier verification unavailable (fail-closed)"
+                    )
+                    revision_failures.append(
+                        {
+                            "name": "source_identifier_authority_available",
+                            "passed": False,
+                            "reason": "source identifiers could not be verified: "
+                            + ", ".join(
+                                source_verification["identifier_unverified"][:10]
+                            ),
+                        }
+                    )
+                if source_verification.get("canonical_duplicate_indices"):
+                    revision_notes.append("duplicate source records")
+                    revision_failures.append(
+                        {
+                            "name": "source_uniqueness",
+                            "passed": False,
+                            "reason": "DOI/PMID registry aliases identify duplicate sources at indices: "
+                            + ", ".join(
+                                str(index)
+                                for index in source_verification[
+                                    "canonical_duplicate_indices"
+                                ][:10]
+                            ),
+                        }
+                    )
                 return self._terminal_intake_decision(
                     repository,
                     submission,
@@ -1170,40 +1717,64 @@ class WorkflowEngine:
                     metadata={
                         "decision": Decision.REVISE.value,
                         "notes": revision_notes,
-                        "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                        "article_type": submission.metadata.get(
+                            "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                        ),
                         "source_verification": source_verification,
                         "gate_failures": revision_failures,
-                        **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+                        **self._static_provider_metadata(
+                            prompt_version=EDITOR_PROMPT_VERSION
+                        ),
                     },
                     terminal=Decision.REVISE.value,
                 )
-        integrity = check_integrity(_integrity_payload_from_submission(submission))
+        integrity = _checked_integrity(_integrity_payload_from_submission(submission))
         recommendation = _integrity_recommendation(integrity)
-        if integrity and str(integrity.get("recommendation") or "").strip().lower() != recommendation:
+        invalid_integrity = _integrity_response_invalid(integrity, recommendation)
+        if invalid_integrity and integrity:
             integrity = {
                 **integrity,
                 "available": False,
-                "recommendation": recommendation,
-                "reason": "integrity_invalid_recommendation",
+                "reason": "integrity_invalid_response",
             }
         if integrity:
-            submission = repository.update_object_metadata(
-                submission.id,
-                {**submission.metadata, "integrity": _integrity_signal_metadata(integrity, recommendation)},
-            ) or submission
+            submission = (
+                repository.update_object_metadata(
+                    submission.id,
+                    {
+                        **submission.metadata,
+                        "integrity": _integrity_signal_metadata(
+                            integrity,
+                            recommendation,
+                            package_hash=str(
+                                submission.metadata.get("canonical_package_hash") or ""
+                            ),
+                        ),
+                    },
+                )
+                or submission
+            )
+        if invalid_integrity:
+            raise RuntimeError("system_unavailable:integrity_invalid_response")
+        if integrity and integrity.get("available") is False:
+            raise RuntimeError("system_unavailable:integrity_service")
         if recommendation in {Decision.REJECT.value, Decision.REVISE.value}:
             return self._terminal_intake_decision(
                 repository,
                 submission,
                 body_markdown=f"Integrity decision: {recommendation}",
-                metadata=self._integrity_decision_metadata(submission, integrity or {}, recommendation),
+                metadata=self._integrity_decision_metadata(
+                    submission, integrity or {}, recommendation
+                ),
                 terminal=recommendation,
             )
         repository.enqueue_job(
             RuntimeJob(
                 target_object_id=submission.id,
                 stage=Stage.REVIEW,
-                payload={"domain_slug": submission.metadata.get("domain_slug", "general")},
+                payload={
+                    "domain_slug": submission.metadata.get("domain_slug", "general")
+                },
             )
         )
         return {"created_object_id": submission.id, "next_stage": Stage.REVIEW.value}
@@ -1217,6 +1788,28 @@ class WorkflowEngine:
         metadata: dict,
         terminal: str,
     ) -> dict:
+        package_hash = str(
+            submission.metadata.get("canonical_package_hash")
+            or _canonical_submission_hash(submission)
+        )
+        metadata = {
+            **metadata,
+            **_decision_taxonomy(
+                terminal=terminal,
+                metadata=metadata,
+                package_hash=package_hash,
+                stage=Stage.INTAKE.value,
+            ),
+        }
+        if submission.metadata.get("public_review_consent") is True:
+            metadata["public_visibility"] = "listed"
+            submission = (
+                repository.update_object_metadata(
+                    submission.id,
+                    {**submission.metadata, "public_visibility": "listed"},
+                )
+                or submission
+            )
         decision = repository.create_object(
             ResearchObject(
                 object_type=ObjectType.DECISION,
@@ -1227,34 +1820,64 @@ class WorkflowEngine:
             )
         )
         _supersede_prior_decisions(repository, submission.id, decision.id)
-        derivation = emit_decision_to_derivation_web(submission=submission, decision=decision)
-        return {"created_object_id": decision.id, "terminal_decision": terminal, "next_jobs": 0, "derivation_web": derivation}
+        derivation = emit_decision_to_derivation_web(
+            submission=submission, decision=decision
+        )
+        return {
+            "created_object_id": decision.id,
+            "terminal_decision": terminal,
+            "next_jobs": 0,
+            "derivation_web": derivation,
+        }
 
     def _run_review(self, job: RuntimeJob, repository: RuntimeRepository) -> dict:
         submission = repository.get_object(job.target_object_id)
         if submission is None:
             raise ValueError(f"Unknown submission: {job.target_object_id}")
-        recommendation, review_markdown, provider_metadata = self._review_submission(submission)
-        review = repository.create_object(
-            ResearchObject(
-                object_type=ObjectType.REVIEW,
-                parent_object_id=submission.id,
-                title=f"Review for {submission.title}",
-                body_markdown=review_markdown,
-                metadata={
-                    "recommendation": recommendation,
-                    "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
-                    "core_claims_resolved": submission.metadata.get("core_claims_resolved", True),
-                    **provider_metadata,
-                },
-            )
+        submission, package_hash = _ensure_canonical_package(repository, submission)
+        operation_id = str(job.payload.get("operation_id") or job.id)
+        existing = _child_for_operation(
+            repository, submission.id, ObjectType.REVIEW, operation_id
         )
-        repository.enqueue_job(
+        if existing is not None:
+            return {
+                "created_object_id": existing.id,
+                "next_stage": Stage.EDITORIAL.value,
+                "deduped": True,
+            }
+        recommendation, review_markdown, provider_metadata = self._review_submission(
+            submission
+        )
+        review = ResearchObject(
+            object_type=ObjectType.REVIEW,
+            parent_object_id=submission.id,
+            title=f"Review for {submission.title}",
+            body_markdown=review_markdown,
+            metadata={
+                "recommendation": recommendation,
+                "evaluation_verdict": recommendation,
+                "public_visibility": "hidden",
+                "article_type": submission.metadata.get(
+                    "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                ),
+                "core_claims_resolved": submission.metadata.get(
+                    "core_claims_resolved", True
+                ),
+                "reviewed_package_hash": package_hash,
+                "operation_id": operation_id,
+                **provider_metadata,
+            },
+        )
+        review, _ = repository.create_object_and_enqueue_job(
+            review,
             RuntimeJob(
                 target_object_id=submission.id,
                 stage=Stage.EDITORIAL,
-                payload={"review_id": review.id, "domain_slug": submission.metadata.get("domain_slug", "general")},
-            )
+                payload={
+                    "review_id": review.id,
+                    "domain_slug": submission.metadata.get("domain_slug", "general"),
+                },
+            ),
         )
         return {"created_object_id": review.id, "next_stage": Stage.EDITORIAL.value}
 
@@ -1262,10 +1885,36 @@ class WorkflowEngine:
         submission = repository.get_object(job.target_object_id)
         if submission is None:
             raise ValueError(f"Unknown submission: {job.target_object_id}")
+        submission, package_hash = _ensure_canonical_package(repository, submission)
+        operation_id = str(job.payload.get("operation_id") or job.id)
+        existing = _child_for_operation(
+            repository, submission.id, ObjectType.DECISION, operation_id
+        )
+        if existing is not None:
+            decision_value = str(existing.metadata.get("decision") or "")
+            derivation = emit_decision_to_derivation_web(
+                submission=submission, decision=existing
+            )
+            return {
+                "created_object_id": existing.id,
+                "terminal_decision": decision_value
+                if decision_value != Decision.ACCEPT.value
+                else None,
+                "next_jobs": 1 if decision_value == Decision.ACCEPT.value else 0,
+                "derivation_web": derivation,
+                "deduped": True,
+            }
         review_id = str(job.payload.get("review_id"))
         review = repository.get_object(review_id)
         if review is None:
             raise ValueError(f"Unknown review: {review_id}")
+        if (
+            review.object_type != ObjectType.REVIEW
+            or review.parent_object_id != submission.id
+        ):
+            raise ValueError("review_submission_mismatch")
+        if review.metadata.get("reviewed_package_hash") != package_hash:
+            raise ValueError("review_package_hash_mismatch")
         if "recommendation" not in review.metadata:
             raise ValueError("invalid_review_recommendation:missing")
         recommendation = str(review.metadata["recommendation"]).strip().lower()
@@ -1273,25 +1922,13 @@ class WorkflowEngine:
             raise ValueError(f"invalid_review_recommendation:{recommendation}")
         original_recommendation = recommendation
         if recommendation == Decision.ACCEPT.value:
-            billing_waiver_verified = (
-                review.metadata.get("accept_quorum_waiver_verified") is True
-                and billing_waiver_attestation_valid(
-                    review.metadata,
-                    submission_id=submission.id,
-                    recommendation=recommendation,
-                    judge_release_id=str(review.metadata.get("judge_release_id") or ""),
-                    secret=review_attestation_secret(),
-                )
-            )
-            if not accept_quorum_satisfied(
-                review.metadata,
-                allow_billing_waiver=billing_waiver_verified,
-            ):
-                raise ValueError("accept_quorum_missing")
+            _require_accept_quorum(review, submission.id)
         alpha_guard_revisions: list[str] = []
         trace_guard_revisions: list[str] = []
         if recommendation == Decision.ACCEPT.value:
-            alpha_guard_revisions = _alpha_accept_guard_revisions(submission, repository)
+            alpha_guard_revisions = _alpha_accept_guard_revisions(
+                submission, repository
+            )
             trace_guard_revisions = _claim_trace_guard_revisions(submission)
             if alpha_guard_revisions or trace_guard_revisions:
                 recommendation = Decision.REVISE.value
@@ -1306,57 +1943,123 @@ class WorkflowEngine:
             review_ids=[review.id],
         )
         outcome = self.plan_from_editorial(context, decision)
-        decision_object = repository.create_object(
-            ResearchObject(
-                object_type=ObjectType.DECISION,
-                parent_object_id=submission.id,
-                title=f"Decision for {submission.title}",
-                body_markdown=f"Editorial decision: {decision.value}",
-                metadata={
-                    "decision": decision.value,
-                    "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
-                    "notes": outcome.notes,
-                    "review_id": review.id,
-                    "judge_release_id": review.metadata.get("judge_release_id"),
-                    **(
-                        {
-                            "original_recommendation": original_recommendation,
-                            "recommendation_calibration": "deterministic_accept_guard",
-                        }
-                        if original_recommendation != recommendation
-                        else {}
-                    ),
-                    **(
-                        {
-                            "alpha_accept_guard": alpha_guard_revisions,
-                            "required_revisions": [
-                                *[str(item) for item in review.metadata.get("required_revisions", []) if str(item).strip()],
-                                *alpha_guard_revisions,
-                            ],
-                        }
-                        if alpha_guard_revisions
-                        else {}
-                    ),
-                    **(
-                        {
-                            "claim_trace_guard": trace_guard_revisions,
-                            "required_revisions": [
-                                *[str(item) for item in review.metadata.get("required_revisions", []) if str(item).strip()],
-                                *alpha_guard_revisions,
-                                *trace_guard_revisions,
-                            ],
-                        }
-                        if trace_guard_revisions
-                        else {}
-                    ),
-                    **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
-                },
+        taxonomy = (
+            {
+                "evaluation_verdict": decision.value,
+                "disposition": "ACCEPTED_QUARANTINED",
+                "reason_code": "SCIENTIFIC_REVIEW_ACCEPTED",
+                "fault_domain": "none",
+                "retryable": False,
+                "resubmission_allowed": False,
+                "stage": Stage.EDITORIAL.value,
+                "policy_version": SUBMISSION_POLICY_VERSION,
+                "canonical_package_hash": package_hash,
+                "publication_state": "ACCEPTED_QUARANTINED",
+                "public_visibility": "hidden",
+            }
+            if decision == Decision.ACCEPT
+            else _decision_taxonomy(
+                terminal=decision.value,
+                metadata={"gate_failures": [], "failure_category": "reviewer_revision"},
+                package_hash=package_hash,
+                stage=Stage.EDITORIAL.value,
             )
         )
-        _supersede_prior_decisions(repository, submission.id, decision_object.id)
+        if (
+            decision != Decision.ACCEPT
+            and submission.metadata.get("public_review_consent") is True
+        ):
+            taxonomy["public_visibility"] = "listed"
+            submission = (
+                repository.update_object_metadata(
+                    submission.id,
+                    {**submission.metadata, "public_visibility": "listed"},
+                )
+                or submission
+            )
+        decision_object = ResearchObject(
+            object_type=ObjectType.DECISION,
+            parent_object_id=submission.id,
+            title=f"Decision for {submission.title}",
+            body_markdown=f"Editorial decision: {decision.value}",
+            metadata={
+                "decision": decision.value,
+                "article_type": submission.metadata.get(
+                    "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                ),
+                "notes": outcome.notes,
+                "review_id": review.id,
+                "canonical_package_hash": package_hash,
+                "reviewed_package_hash": package_hash,
+                "judge_release_id": review.metadata.get("judge_release_id"),
+                "operation_id": operation_id,
+                **taxonomy,
+                **(
+                    {
+                        "original_recommendation": original_recommendation,
+                        "recommendation_calibration": "deterministic_accept_guard",
+                    }
+                    if original_recommendation != recommendation
+                    else {}
+                ),
+                **(
+                    {
+                        "alpha_accept_guard": alpha_guard_revisions,
+                        "required_revisions": [
+                            *[
+                                str(item)
+                                for item in review.metadata.get(
+                                    "required_revisions", []
+                                )
+                                if str(item).strip()
+                            ],
+                            *alpha_guard_revisions,
+                        ],
+                    }
+                    if alpha_guard_revisions
+                    else {}
+                ),
+                **(
+                    {
+                        "claim_trace_guard": trace_guard_revisions,
+                        "required_revisions": [
+                            *[
+                                str(item)
+                                for item in review.metadata.get(
+                                    "required_revisions", []
+                                )
+                                if str(item).strip()
+                            ],
+                            *alpha_guard_revisions,
+                            *trace_guard_revisions,
+                        ],
+                    }
+                    if trace_guard_revisions
+                    else {}
+                ),
+                **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
+            },
+        )
         for next_job in outcome.next_jobs:
-            repository.enqueue_job(next_job)
-        derivation = emit_decision_to_derivation_web(submission=submission, review=review, decision=decision_object)
+            if next_job.stage == Stage.PUBLISH:
+                next_job.payload.update(
+                    {
+                        "decision_id": decision_object.id,
+                        "canonical_package_hash": package_hash,
+                    }
+                )
+        if len(outcome.next_jobs) > 1:
+            raise ValueError("editorial_multiple_next_jobs_unsupported")
+        if outcome.next_jobs:
+            decision_object, _ = repository.create_object_and_enqueue_job(
+                decision_object, outcome.next_jobs[0]
+            )
+        else:
+            decision_object = repository.create_object(decision_object)
+        _supersede_prior_decisions(repository, submission.id, decision_object.id)
+        derivation = emit_decision_to_derivation_web(
+            submission=submission, review=review, decision=decision_object
+        )
         return {
             "created_object_id": decision_object.id,
             "terminal_decision": decision.value if outcome.terminal_decision else None,
@@ -1368,29 +2071,63 @@ class WorkflowEngine:
         submission = repository.get_object(job.target_object_id)
         if submission is None:
             raise ValueError(f"Unknown submission: {job.target_object_id}")
+        submission, package_hash = _ensure_canonical_package(repository, submission)
+        decision_id = str(job.payload.get("decision_id") or "")
+        decision = repository.get_object(decision_id) if decision_id else None
+        if (
+            decision is None
+            or decision.object_type != ObjectType.DECISION
+            or decision.parent_object_id != submission.id
+            or decision.metadata.get("decision") != Decision.ACCEPT.value
+            or decision.metadata.get("superseded_by")
+        ):
+            raise ValueError("current_accept_decision_missing")
+        if decision.metadata.get("canonical_package_hash") != package_hash:
+            raise ValueError("decision_package_hash_mismatch")
+        review = repository.get_object(str(decision.metadata.get("review_id") or ""))
+        if (
+            review is None
+            or review.object_type != ObjectType.REVIEW
+            or review.parent_object_id != submission.id
+            or review.metadata.get("reviewed_package_hash") != package_hash
+        ):
+            raise ValueError("accepted_review_package_mismatch")
+        billing_waiver_verified = _require_accept_quorum(review, submission.id)
+        judge_release = review.metadata.get("judge_release")
+        if (
+            not isinstance(judge_release, dict)
+            or not judge_release_manifest_valid(judge_release)
+            or review.metadata.get("judge_release_id") != judge_release.get("id")
+        ):
+            raise ValueError("judge_release_invalid")
+        guards = [
+            *_alpha_accept_guard_revisions(submission, repository),
+            *_claim_trace_guard_revisions(submission),
+        ]
+        if guards:
+            raise ValueError(f"publish_accept_guard_failed:{' | '.join(guards)}")
         existing = repository.publication_for_target(submission.id)
         if existing is not None:
-            return {"publication_id": existing.id, "deduped": True}
-        normalized_title = " ".join(str(submission.title or "").lower().split())
+            _publication_lineage(repository, existing)
+            return _resume_publication_delivery(repository, existing)
         submission_markers = _publication_dedupe_markers(submission.metadata)
         for pub in repository.list_objects(ObjectType.PUBLICATION):
-            pub_titles = {
-                " ".join(str(pub.title or "").lower().split()),
-                " ".join(str(pub.metadata.get("source_title") or "").lower().split()),
-            }
-            if (
-                submission_markers & _publication_dedupe_markers(pub.metadata)
-                or normalized_title in pub_titles
-            ):
-                return {"publication_id": pub.id, "deduped": True}
+            if submission_markers & _publication_dedupe_markers(pub.metadata):
+                _publication_lineage(repository, pub)
+                return _resume_publication_delivery(repository, pub)
         artifact = compile_publication(
             title=submission.title,
             abstract=str(submission.metadata.get("abstract", "")).strip(),
             sections=dict(submission.metadata.get("sections", {})),
             source_bundle=list(submission.metadata.get("source_bundle", [])),
-            body_markdown=_submission_full_body_markdown(submission),
-            article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
-            core_claims_resolved=bool(submission.metadata.get("core_claims_resolved", True)),
+            article_type=str(
+                submission.metadata.get(
+                    "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                )
+            ),
+            core_claims_resolved=bool(
+                submission.metadata.get("core_claims_resolved", True)
+            ),
         )
         failed = [gate.name for gate in artifact.gates if not gate.passed]
         if failed:
@@ -1402,21 +2139,43 @@ class WorkflowEngine:
             source_bundle=source_bundle,
         )
         pub_class = publication_class(
-            article_type=str(submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)),
+            article_type=str(
+                submission.metadata.get(
+                    "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                )
+            ),
             title=artifact.title,
             profile=profile,
         )
-        integrity_metadata = submission.metadata.get("integrity")
-        if _integrity_unavailable(integrity_metadata):
-            refreshed = check_integrity(_integrity_payload_from_submission(submission))
-            recommendation = _integrity_recommendation(refreshed)
-            if refreshed:
-                submission = repository.update_object_metadata(
-                    submission.id,
-                    {**submission.metadata, "integrity": _integrity_signal_metadata(refreshed, recommendation)},
-                ) or submission
-                if _integrity_publish_block(recommendation, refreshed):
-                    raise ValueError(f"publish_blocked_by_integrity:{recommendation}")
+        refreshed = _checked_integrity(_integrity_payload_from_submission(submission))
+        recommendation = _integrity_recommendation(refreshed)
+        invalid_integrity = _integrity_response_invalid(refreshed, recommendation)
+        if not refreshed or _integrity_unavailable(refreshed):
+            raise RuntimeError("system_unavailable:integrity_service")
+        if invalid_integrity:
+            raise RuntimeError("system_unavailable:integrity_invalid_response")
+        submission = (
+            repository.update_object_metadata(
+                submission.id,
+                {
+                    **submission.metadata,
+                    "integrity": _integrity_signal_metadata(
+                        refreshed,
+                        recommendation,
+                        package_hash=package_hash,
+                    ),
+                },
+            )
+            or submission
+        )
+        if _integrity_publish_block(recommendation, refreshed):
+            raise ValueError(f"publish_blocked_by_integrity:{recommendation}")
+        requested_visibility = _publication_visibility(
+            repository, submission.metadata.get("author_agent_id")
+        )
+        if billing_waiver_verified:
+            requested_visibility = "provisional"
+        publishing = requested_visibility == "listed"
         publication = ResearchObject(
             object_type=ObjectType.PUBLICATION,
             parent_object_id=submission.id,
@@ -1425,47 +2184,154 @@ class WorkflowEngine:
             metadata={
                 "abstract": artifact.abstract,
                 "source_title": artifact.title,
-                "article_type": submission.metadata.get("article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value),
+                "article_type": submission.metadata.get(
+                    "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                ),
                 "publication_class": pub_class,
                 "evidence_profile": profile,
+                "evidence_text_verification": _evidence_text_verification(
+                    submission.metadata
+                ),
                 "counts": artifact.counts.model_dump(mode="json"),
                 "gates": [gate.model_dump(mode="json") for gate in artifact.gates],
                 "author_agent_id": submission.metadata.get("author_agent_id"),
                 "integrity": submission.metadata.get("integrity"),
-                "public_visibility": _publication_visibility(repository, submission.metadata.get("author_agent_id")),
+                "public_visibility": "provisional",
+                "requested_public_visibility": requested_visibility,
+                "publication_state": "PUBLISHING"
+                if publishing
+                else "ACCEPTED_QUARANTINED",
                 "source_submission_id": submission.id,
+                "decision_id": decision.id,
+                "review_id": review.id,
+                "canonical_package_hash": package_hash,
+                "reviewed_package_hash": package_hash,
                 **_publication_identity_metadata(submission.metadata),
                 **osf_publication_metadata_from_env(),
                 **self._static_provider_metadata(prompt_version=EDITOR_PROMPT_VERSION),
             },
         )
-        decisions = [
-            obj
-            for obj in repository.children_of(submission.id, ObjectType.DECISION)
-            if obj.metadata.get("decision") == Decision.ACCEPT.value
-        ]
-        decision = decisions[-1] if decisions else None
-        review = repository.get_object(str(decision.metadata["review_id"])) if decision and decision.metadata.get("review_id") else None
-        if review:
-            publication.metadata.update({
-                "judge_release_id": review.metadata.get("judge_release_id"),
-            })
-        publication = repository.create_object(publication)
-        try:
-            osf_metadata = _mint_publication_doi(repository, publication)
-            if osf_metadata:
-                publication = repository.update_object_metadata(
-                    publication.id, _merge_publication_metadata(publication.metadata, osf_metadata)
-                ) or publication
-        except Exception as exc:
-            publication = repository.update_object_metadata(
+        publication.metadata["judge_release_id"] = review.metadata.get(
+            "judge_release_id"
+        )
+        if not publishing:
+            publication.metadata.update(
+                {
+                    "doi_status": "withheld_provisional",
+                    "osf_status": "withheld_provisional",
+                    "dw_status": "withheld_provisional",
+                }
+            )
+            publication = repository.create_object(publication)
+            return {"publication_id": publication.id, "deduped": False, "next_jobs": 0}
+        publication, next_job = repository.create_object_and_enqueue_job(
+            publication,
+            RuntimeJob(target_object_id=publication.id, stage=Stage.OSF_DEPOSIT),
+        )
+        return {
+            "publication_id": publication.id,
+            "deduped": False,
+            "next_jobs": 1,
+            "next_job_id": next_job.id,
+        }
+
+    def _run_osf_deposit(self, job: RuntimeJob, repository: RuntimeRepository) -> dict:
+        publication = repository.get_object(job.target_object_id)
+        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+            raise ValueError("publication_missing")
+        submission, _, _ = _publication_lineage(repository, publication)
+        integrity = _checked_integrity(
+            _integrity_payload_from_publication(publication, submission)
+        )
+        if integrity:
+            integrity = _integrity_without_self_match(integrity, publication.id)
+        recommendation = _integrity_recommendation(integrity)
+        invalid_integrity = _integrity_response_invalid(integrity, recommendation)
+        package_hash = str(publication.metadata.get("canonical_package_hash") or "")
+        if not integrity or _integrity_unavailable(integrity) or invalid_integrity:
+            repository.update_object_metadata(
                 publication.id,
                 _merge_publication_metadata(
                     publication.metadata,
-                    {"osf_status": "failed", "doi_status": "failed", "osf_error": str(exc)[:240]},
+                    {"publication_state": "PUBLISH_BLOCKED_EXTERNAL"},
                 ),
-            ) or publication
+            )
+            raise RuntimeError("system_unavailable:integrity")
+        if _integrity_publish_block(recommendation, integrity):
+            repository.update_object_metadata(
+                publication.id,
+                _merge_publication_metadata(
+                    publication.metadata,
+                    {
+                        "publication_state": "PUBLISH_BLOCKED_INTEGRITY",
+                        "integrity": _integrity_signal_metadata(
+                            integrity,
+                            recommendation,
+                            package_hash=package_hash,
+                        ),
+                    },
+                ),
+            )
+            raise ValueError(f"publish_blocked_by_integrity:{recommendation}")
+        publication = (
+            repository.update_object_metadata(
+                publication.id,
+                _merge_publication_metadata(
+                    publication.metadata,
+                    {
+                        "integrity": _integrity_signal_metadata(
+                            integrity,
+                            recommendation,
+                            package_hash=package_hash,
+                        )
+                    },
+                ),
+            )
+            or publication
+        )
+        try:
+            osf_metadata = _mint_publication_doi(repository, publication)
+            if (
+                not osf_metadata
+                or osf_metadata.get("doi_status") != "minted"
+                or not osf_metadata.get("doi")
+                or not osf_metadata.get("osf_package_files")
+            ):
+                raise RuntimeError("osf_verified_deposit_incomplete")
+        except Exception as exc:
+            repository.update_object_metadata(
+                publication.id,
+                _merge_publication_metadata(
+                    publication.metadata,
+                    {
+                        "publication_state": "PUBLISH_BLOCKED_EXTERNAL",
+                        "osf_status": "failed",
+                        "doi_status": "failed",
+                        "osf_error": str(exc)[:240],
+                    },
+                ),
+            )
+            raise RuntimeError(f"system_unavailable:osf:{exc}") from exc
+        metadata = _merge_publication_metadata(
+            publication.metadata,
+            {**osf_metadata, "publication_state": "PUBLISHING", "osf_error": None},
+        )
+        publication, next_job = repository.update_object_metadata_and_enqueue_job(
+            publication.id,
+            metadata,
+            RuntimeJob(target_object_id=publication.id, stage=Stage.DW_DELIVERY),
+        )
+        return {"publication_id": publication.id, "next_job_id": next_job.id}
 
+    def _run_derivation_delivery(
+        self, job: RuntimeJob, repository: RuntimeRepository
+    ) -> dict:
+        publication = repository.get_object(job.target_object_id)
+        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+            raise ValueError("publication_missing")
+        submission, review, decision = _publication_lineage(repository, publication)
+        if publication.metadata.get("doi_status") != "minted":
+            raise ValueError("osf_deposit_required")
         try:
             dw_metadata = emit_publication_to_derivation_web(
                 submission=submission,
@@ -1473,14 +2339,109 @@ class WorkflowEngine:
                 review=review,
                 decision=decision,
             )
-            if dw_metadata:
-                publication = repository.update_object_metadata(
-                    publication.id, _merge_publication_metadata(publication.metadata, dw_metadata)
-                ) or publication
+            if dw_metadata.get("dw_status") != "registered" or not dw_metadata.get(
+                "dw_artifact_id"
+            ):
+                raise RuntimeError(
+                    str(dw_metadata.get("dw_error") or "derivation_delivery_incomplete")
+                )
         except Exception as exc:
             repository.update_object_metadata(
                 publication.id,
-                _merge_publication_metadata(publication.metadata, {"dw_status": "failed", "dw_error": str(exc)[:240]}),
+                _merge_publication_metadata(
+                    publication.metadata,
+                    {
+                        "publication_state": "PUBLISH_BLOCKED_EXTERNAL",
+                        "dw_status": "failed",
+                        "dw_error": str(exc)[:240],
+                    },
+                ),
             )
+            raise RuntimeError(f"system_unavailable:derivation_web:{exc}") from exc
+        metadata = _merge_publication_metadata(
+            publication.metadata,
+            {**dw_metadata, "publication_state": "PUBLISHING", "dw_error": None},
+        )
+        publication, next_job = repository.update_object_metadata_and_enqueue_job(
+            publication.id,
+            metadata,
+            RuntimeJob(
+                target_object_id=publication.id, stage=Stage.PUBLICATION_FINALIZE
+            ),
+        )
+        return {"publication_id": publication.id, "next_job_id": next_job.id}
+
+    def _run_publication_finalize(
+        self, job: RuntimeJob, repository: RuntimeRepository
+    ) -> dict:
+        publication = repository.get_object(job.target_object_id)
+        if publication is None or publication.object_type != ObjectType.PUBLICATION:
+            raise ValueError("publication_missing")
+        submission, review, decision = _publication_lineage(repository, publication)
+        if (
+            publication.metadata.get("requested_public_visibility") != "listed"
+            or publication.metadata.get("doi_status") != "minted"
+            or publication.metadata.get("dw_status") != "registered"
+            or not publication.metadata.get("osf_package_files")
+        ):
+            raise ValueError("external_delivery_incomplete")
+        integrity = _checked_integrity(
+            _integrity_payload_from_publication(publication, submission)
+        )
+        recommendation = _integrity_recommendation(integrity)
+        invalid_integrity = _integrity_response_invalid(integrity, recommendation)
+        if not integrity or _integrity_unavailable(integrity) or invalid_integrity:
+            repository.update_object_metadata(
+                publication.id,
+                _merge_publication_metadata(
+                    publication.metadata,
+                    {"publication_state": "PUBLISH_BLOCKED_EXTERNAL"},
+                ),
+            )
+            raise RuntimeError("system_unavailable:integrity")
+        if _integrity_publish_block(recommendation, integrity):
+            repository.update_object_metadata(
+                publication.id,
+                _merge_publication_metadata(
+                    publication.metadata,
+                    {
+                        "publication_state": "PUBLISH_BLOCKED_INTEGRITY",
+                        "integrity": _integrity_signal_metadata(
+                            integrity,
+                            recommendation,
+                            package_hash=str(
+                                publication.metadata.get("canonical_package_hash") or ""
+                            ),
+                        ),
+                    },
+                ),
+            )
+            raise ValueError(f"publish_blocked_by_integrity:{recommendation}")
         index_integrity(_integrity_payload_from_publication(publication, submission))
-        return {"publication_id": publication.id, "deduped": False}
+        published_at = datetime.now(timezone.utc).isoformat()
+        repository.update_objects_metadata(
+            {
+                publication.id: _merge_publication_metadata(
+                    publication.metadata,
+                    {
+                        "publication_state": "PUBLISHED",
+                        "public_visibility": "listed",
+                        "published_at": published_at,
+                        "integrity": _integrity_signal_metadata(
+                            integrity,
+                            recommendation,
+                            package_hash=str(
+                                publication.metadata.get("canonical_package_hash") or ""
+                            ),
+                        ),
+                    },
+                ),
+                review.id: {**review.metadata, "public_visibility": "listed"},
+                decision.id: {
+                    **decision.metadata,
+                    "public_visibility": "listed",
+                    "publication_state": "PUBLISHED",
+                },
+            }
+        )
+        return {"publication_id": publication.id, "published": True}

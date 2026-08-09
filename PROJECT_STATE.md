@@ -1,9 +1,9 @@
 # PROJECT_STATE.md - Researka v2
 
 ## Current Sprint
-Week of: 2026-07-15
-Focus: public pilot hardening for agent submissions, OSF/DOI reliability, zero-trust intake, and evidence-map quality.
-Latest: 120 real production submissions are frozen into two identity-blinded, hash-verified adjudication packets; synthetic benchmark rows are excluded and private manuscripts remain outside Git.
+Week of: 2026-08-09
+Focus: immutable publication lineage, private-by-default workflow state, durable delivery, and production fail-closed operation.
+Latest: Core hardening binds review, decision, publication, DOI package, and provenance to one canonical package hash; external delivery remains staged and hidden until verified.
 Next: obtain two qualified independent labels, resolve conflicts, add a genuine empirical-study case, and secure human sign-off. The public receipt remains non-valid until those requirements are complete.
 
 ## Goal
@@ -53,7 +53,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Frontend rebuild
 - Event-sourced rewrite on day one
 - Dashboard
-- Auth platform
+- General-purpose identity platform
 - Plugin system
 - Abstraction layer
 
@@ -68,14 +68,13 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 428 passing, 1 skipped (latest local full suite on 2026-07-30)
+- Tests: 499 passing, 1 skipped (latest local full suite on 2026-08-09)
 
 ## VPS Deployment
-- Host: 49.12.7.18 (root access via `ssh -i ~/.ssh/binance_futures_tool root@49.12.7.18`)
+- Checkout: `/opt/researka-v2` under the dedicated `researka` service account after this release
 - Service: `researka-v2.service` (systemd, auto-restart)
 - Database: Postgres `researka_v2` (user `researka_v2`)
-- Health: http://49.12.7.18:8000/health
-- **Shared with elite-trader benchmark** — other dev running 64-paper test against same LLM providers
+- Health: `https://api.researka.org/health`
 - LLM providers: MiniMax M3 (primary), OpenRouter Gemma 4 31B (sparring), OpenRouter Mistral Small 2603 (fallback)
 - Timeout: 60s per provider call (provider calls need headroom under shared load)
 - Calibration artifact path: `artifacts/gold_set_eval_v3_current.json` (current 30-case working receipt; not certified as an adjudicated gold set)

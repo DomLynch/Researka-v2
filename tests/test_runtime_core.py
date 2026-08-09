@@ -5,7 +5,11 @@ import pytest
 
 from apps.worker.main import WorkerApp
 from runtime_core.compiler import canonical_bundle_facts, compile_publication
-from runtime_core.evidence_quality import evidence_profile, publication_class, support_for_claim
+from runtime_core.evidence_quality import (
+    evidence_profile,
+    publication_class,
+    support_for_claim,
+)
 from runtime_core.judge_release import (
     build_judge_release,
     judge_release_manifest_valid,
@@ -14,31 +18,56 @@ from runtime_core.judge_release import (
 from runtime_core.gates import run_publish_gates
 from runtime_core.failure_classifier import classify_failure_reason
 from runtime_core.prompts import REVIEWER_PROMPT_VERSION
-from runtime_core.providers import DeterministicProvider, FallbackProvider, MimoProvider, MiniMaxProvider, OpenRouterProvider, ProviderError, ProviderRequest, ProviderResponse, ProviderResult
+from runtime_core.providers import (
+    DeterministicProvider,
+    FallbackProvider,
+    MimoProvider,
+    MiniMaxProvider,
+    OpenRouterProvider,
+    ProviderError,
+    ProviderRequest,
+    ProviderResponse,
+    ProviderResult,
+)
 from runtime_core.publication_sidecars import publication_sources
 from runtime_core.review_contract import accept_quorum_satisfied
 from runtime_core.reviewer_panel import ReviewerPanel, reviewer_from_env
 from runtime_core.repos import InMemoryRuntimeRepository
-from runtime_core.sanitizer import sanitize_source_ledger
+from runtime_core.sanitizer import sanitize_source_ledger, validate_template_structure
 import runtime_core.workflow as workflow
 from runtime_core.workflow import (
     WorkflowEngine,
 )
+from tests.support import accepted_publish_job, bound_review, sections_from_markdown
 
-from contracts import ArticleType, Decision, FailureClass, ObjectType, ProviderErrorClass, ProviderUsage, ResearchObject, RuntimeJob, Stage, SubmissionPayload, WorkflowContext, run_submission_template_checks
+from contracts import (
+    ArticleType,
+    Decision,
+    FailureClass,
+    ObjectType,
+    ProviderErrorClass,
+    ProviderUsage,
+    ResearchObject,
+    RuntimeJob,
+    Stage,
+    SubmissionPayload,
+    WorkflowContext,
+    publication_template_for,
+    run_submission_template_checks,
+)
 
 
 def _full_sections(
-    search_summary: str = "Legit retained summary line describing the databases, publication window, inclusion logic, and narrowing rule in enough detail to satisfy the structure gate."
+    search_summary: str = "Legit retained summary line describing the databases, publication window, inclusion logic, and narrowing rule in enough detail to satisfy the structure gate.",
 ) -> dict[str, str]:
     return {
         "Research Question": "This synthesis asks a bounded, decision-relevant question about recent evidence, target populations, comparator conditions, intended outcomes, and methodological limits, and it stays narrow enough that another reviewer could reproduce the scope, publication window, inclusion logic, and decision frame without inventing missing assumptions, broadening the target claim, or silently swapping the relevant evidence category.",
         "Search Summary": search_summary,
         "Evidence Landscape": "The bundle includes both review-level and primary evidence so the reader can see the balance of stronger and more applied material, how much of the synthesis rests on reviews, and where individual studies still shape the remaining uncertainty.",
-        "Key Findings": "The key findings integrate the current evidence into bounded conclusions instead of stitching raw snippets together, and they distinguish between stronger review-level support, tentative primary-study signals, and areas where conflicting evidence should temper confidence.",
+        "Key Findings": "The retained source reports bounded evidence for the scoped outcome and population, while uncertainty and study-design limits prevent a broader causal interpretation [bundle:1].",
         "Limitations": "The main limits are rapid-review scope, incomplete coverage, heterogeneity across evidence units, and the risk that a synthetic bundle omits conflicting sources that could materially change the certainty of any strong-sounding claim.",
         "Gaps Identified": "No adequately powered human RCT has tested this specific intervention for the primary endpoints reported in non-human models, leaving a translational gap between animal evidence and clinical applicability.",
-        "Conclusion": "The current evidence supports a structured MVP publication, but only with explicit uncertainty, honest limits on reproducibility, and no overclaiming beyond what the retained bundle can directly justify.",
+        "Conclusion": "The source reports bounded evidence for the scoped outcome and population, with explicit uncertainty and no claim beyond the population, endpoint, or design that was actually studied [bundle:1].",
     }
 
 
@@ -51,16 +80,31 @@ def _valid_source_bundle() -> list[dict[str, object]]:
             "year": year,
             "evidence_type": evidence_type,
             "doi": f"10.1234/source.{index}",
-            "excerpt": f"Source {index} reports bounded evidence for the scoped outcome and population.",
+            "excerpt": (
+                "The retained source reports bounded evidence for the scoped outcome and population, while uncertainty "
+                "and study-design limits prevent a broader causal interpretation. The source reports bounded evidence "
+                "for the scoped outcome and population, with explicit uncertainty and no claim beyond the population, "
+                "endpoint, or design that was actually studied."
+            ),
         }
-        for index, (year, evidence_type) in enumerate(zip(years, evidence_types, strict=True), start=1)
+        for index, (year, evidence_type) in enumerate(
+            zip(years, evidence_types, strict=True), start=1
+        )
     ]
 
 
 def test_claim_support_requires_explicit_evidence_span() -> None:
-    source = {"title": "Trial", "evidence_span": "mortality was lower in the intervention group"}
+    source = {
+        "title": "Trial",
+        "evidence_span": "mortality was lower in the intervention group",
+    }
 
-    assert support_for_claim("Mortality was lower in the intervention group.", [source])[0]["support_kind"] == "evidence_span_match"
+    assert (
+        support_for_claim("Mortality was lower in the intervention group.", [source])[
+            0
+        ]["support_kind"]
+        == "evidence_span_match"
+    )
     assert support_for_claim("The intervention may improve outcomes.", [source]) == []
 
 
@@ -88,10 +132,13 @@ def test_claim_support_rejects_citation_with_unrelated_receipt() -> None:
         "excerpt": "The trial measured blood pressure after a short dietary intervention.",
     }
 
-    assert support_for_claim(
-        "The treatment doubled survival in older adults (Lynch et al. 2026).",
-        [source],
-    ) == []
+    assert (
+        support_for_claim(
+            "The treatment doubled survival in older adults (Lynch et al. 2026).",
+            [source],
+        )
+        == []
+    )
 
 
 def test_claim_support_requires_numeric_and_unit_agreement_when_requested() -> None:
@@ -105,15 +152,21 @@ def test_claim_support_requires_numeric_and_unit_agreement_when_requested() -> N
     assert support_for_claim(claim, [source])
     assert support_for_claim(claim, [source], require_quantitative_agreement=True) == []
 
-    source["excerpt"] = "The intervention reduced the primary risk by 47 percent in the tested adult population."
+    source["excerpt"] = (
+        "The intervention reduced the primary risk by 47 percent in the tested adult population."
+    )
     assert support_for_claim(claim, [source], require_quantitative_agreement=True)
 
-    source["excerpt"] = "The intervention reduced the biomarker by 47 mg/L in the tested adult population."
+    source["excerpt"] = (
+        "The intervention reduced the biomarker by 47 mg/L in the tested adult population."
+    )
     claim = "The intervention reduced the biomarker by 47 mg/dL in the tested adult population (Alpha 2026)."
     assert support_for_claim(claim, [source])
     assert support_for_claim(claim, [source], require_quantitative_agreement=True) == []
 
-    source["excerpt"] = "The trial reported the endpoint after a 12-month follow-up in the tested adult population."
+    source["excerpt"] = (
+        "The trial reported the endpoint after a 12-month follow-up in the tested adult population."
+    )
     claim = "The trial reported the endpoint after a 12-week follow-up in the tested adult population (Alpha 2026)."
     assert support_for_claim(claim, [source])
     assert support_for_claim(claim, [source], require_quantitative_agreement=True) == []
@@ -133,15 +186,24 @@ def test_judge_release_is_stable_and_prompt_bound(tmp_path, monkeypatch) -> None
     calibration.write_text('{"cases":[{"id":"new-calibration"}]}')
     second = build_judge_release(system_prompt="locked prompt", **inputs)
     changed = build_judge_release(system_prompt="changed prompt", **inputs)
+    changed_observed = build_judge_release(
+        system_prompt="locked prompt",
+        provider="reviewer-panel",
+        model="model-b|model-a",
+        response_metadata={"panel_models": ["model-a", "model-c"]},
+    )
 
-    assert first["id"] == second["id"]
+    assert first["id"] != second["id"]
     assert first["calibration"] != second["calibration"]
-    assert first["id"] == changed["id"]
+    assert first["id"] != changed["id"]
+    assert first["id"] != changed_observed["id"]
     assert first["request_prompt_sha256"] != changed["request_prompt_sha256"]
     assert first["models"] == ["model-a", "model-b"]
     assert first["observed_models"] == ["model-a", "model-b"]
     assert judge_release_manifest_valid(first) is True
-    assert judge_release_manifest_valid({**first, "models": ["tampered-model"]}) is False
+    assert (
+        judge_release_manifest_valid({**first, "models": ["tampered-model"]}) is False
+    )
     calibration_identity = first["calibration"]
     assert isinstance(calibration_identity, dict)
     assert calibration_identity["artifact"] == "gold.json"
@@ -179,11 +241,17 @@ def test_publication_sources_prefer_bundle_and_parse_only_reference_receipts() -
     submission = ResearchObject(
         object_type=ObjectType.SUBMISSION,
         title="Submitted source test",
-        metadata={"source_bundle": [{"title": "Submitted trial", "doi": "10.1234/submitted"}]},
+        metadata={
+            "source_bundle": [{"title": "Submitted trial", "doi": "10.1234/submitted"}]
+        },
     )
 
-    assert [row["doi"] for row in publication_sources(publication, submission)] == ["10.1234/submitted"]
-    assert [row["doi"] for row in publication_sources(publication)] == ["10.1234/legacy"]
+    assert [row["doi"] for row in publication_sources(publication, submission)] == [
+        "10.1234/submitted"
+    ]
+    assert [row["doi"] for row in publication_sources(publication)] == [
+        "10.1234/legacy"
+    ]
 
 
 def _review_payload(
@@ -196,6 +264,11 @@ def _review_payload(
             "provider": "reviewer-panel",
             "accept_quorum_count": 2,
             "accept_quorum_models": ["reviewer-a", "reviewer-b"],
+            "accept_quorum_identities": [
+                "provider-a:reviewer-a",
+                "provider-b:reviewer-b",
+            ],
+            "accept_quorum_providers": ["provider-a", "provider-b"],
             "rubric_scores": {
                 "research_question_quality": 5,
                 "synthesis_quality": 4,
@@ -255,9 +328,10 @@ def _review_payload(
 
 
 class _ReviewPayloadProvider:
-    provider = "stub"
-
-    def __init__(self, model: str, payload: dict[str, object]) -> None:
+    def __init__(
+        self, model: str, payload: dict[str, object], *, provider: str = "stub"
+    ) -> None:
+        self.provider = provider
         self.model = model
         self.payload = payload
         self.calls = 0
@@ -273,6 +347,54 @@ class _ReviewPayloadProvider:
                 usage=ProviderUsage(input_tokens=10, output_tokens=5, cost_usd=0.1),
             ),
         )
+
+
+def _workflow_submission(repo: InMemoryRuntimeRepository) -> ResearchObject:
+    return repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Idempotent workflow submission",
+            metadata={
+                "abstract": "A bounded rapid evidence synthesis.",
+                "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
+                "sections": _full_sections(),
+                "source_bundle": _valid_source_bundle(),
+                "core_claims_resolved": True,
+            },
+        )
+    )
+
+
+def test_review_and_editorial_replay_do_not_duplicate_records() -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _workflow_submission(repo)
+    provider = _ReviewPayloadProvider("reviewer", _review_payload("revise"))
+    engine = WorkflowEngine(provider=provider)
+    review_job = RuntimeJob(
+        id="review-operation", target_object_id=submission.id, stage=Stage.REVIEW
+    )
+
+    first_review = engine._run_review(review_job, repo)
+    replayed_review = engine._run_review(review_job, repo)
+
+    assert replayed_review["deduped"] is True
+    assert replayed_review["created_object_id"] == first_review["created_object_id"]
+    assert provider.calls == 1
+    assert len(repo.children_of(submission.id, ObjectType.REVIEW)) == 1
+    assert len([job for job in repo.queued_jobs() if job.stage == Stage.EDITORIAL]) == 1
+
+    editorial_job = RuntimeJob(
+        id="editorial-operation",
+        target_object_id=submission.id,
+        stage=Stage.EDITORIAL,
+        payload={"review_id": first_review["created_object_id"]},
+    )
+    first_decision = engine._run_editorial(editorial_job, repo)
+    replayed_decision = engine._run_editorial(editorial_job, repo)
+
+    assert replayed_decision["deduped"] is True
+    assert replayed_decision["created_object_id"] == first_decision["created_object_id"]
+    assert len(repo.children_of(submission.id, ObjectType.DECISION)) == 1
 
 
 def test_revise_is_terminal_for_external_author() -> None:
@@ -303,7 +425,7 @@ def test_publish_job_is_idempotent_per_target() -> None:
     assert len(repo.jobs) == 1
 
 
-def test_publish_uses_submission_body_when_metadata_body_missing() -> None:
+def test_publish_uses_canonical_sections_not_alternate_body() -> None:
     body = "\n\n".join(
         [
             "# Full manuscript",
@@ -316,93 +438,304 @@ def test_publish_uses_submission_body_when_metadata_body_missing() -> None:
         ]
     )
     repo = InMemoryRuntimeRepository()
-    submission = repo.create_object(ResearchObject(
-        object_type=ObjectType.SUBMISSION,
-        title="Accepted body-column manuscript",
-        body_markdown=body,
-        metadata={
-            "abstract": "A structured abstract for a public research synthesis.",
-            "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
-            "sections": _full_sections(),
-            "source_bundle": _valid_source_bundle(),
-            "core_claims_resolved": True,
-        },
-    ))
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Accepted body-column manuscript",
+            body_markdown=body,
+            metadata={
+                "abstract": "A structured abstract for a public research synthesis.",
+                "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
+                "sections": _full_sections(),
+                "source_bundle": _valid_source_bundle(),
+                "core_claims_resolved": True,
+            },
+        )
+    )
 
-    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
 
     publication = repo.get_object(result["publication_id"])
     assert publication is not None
-    assert publication.body_markdown.startswith("# Full manuscript")
+    assert publication.body_markdown.startswith("## Research Question")
+    assert "# Full manuscript" not in publication.body_markdown
 
 
-def test_publish_preserves_submission_audit_hashes(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_publish_preserves_submission_audit_hashes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESEARKA_AUTO_LIST_AGENT_IDS", "agent-v3-full-paper")
     repo = InMemoryRuntimeRepository()
-    submission = repo.create_object(ResearchObject(
-        object_type=ObjectType.SUBMISSION,
-        title="Accepted hash-traced manuscript",
-        body_markdown="# Full manuscript\n\nBody",
-        metadata={
-            "abstract": "A structured abstract for a public research synthesis.",
-            "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
-            "sections": _full_sections(),
-            "source_bundle": _valid_source_bundle(),
-            "core_claims_resolved": True,
-            "author_agent_id": "agent-v3-full-paper",
-            "run_id": "synthesis-topic-v06-test",
-            "content_hash": "sha256:paper",
-            "submission_payload_hash": "sha256:payload",
-            "source_citation_hash": "sha256:sources",
-            "submission_identity_key": "sha256:identity",
-            "author_signature": "sha256:paper",
-        },
-    ))
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Accepted hash-traced manuscript",
+            body_markdown="# Full manuscript\n\nBody",
+            metadata={
+                "abstract": "A structured abstract for a public research synthesis.",
+                "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
+                "sections": _full_sections(),
+                "source_bundle": _valid_source_bundle(),
+                "core_claims_resolved": True,
+                "author_agent_id": "agent-v3-full-paper",
+                "run_id": "synthesis-topic-v06-test",
+                "client_claimed_content_hash": "sha256:paper",
+                "client_claimed_submission_payload_hash": "sha256:payload",
+                "client_claimed_source_citation_hash": "sha256:sources",
+                "client_claimed_submission_identity_key": "sha256:identity",
+                "author_signature": "sha256:paper",
+            },
+        )
+    )
     monkeypatch.setattr(
         workflow,
         "_mint_publication_doi",
         lambda repository, publication: {
             "doi": "10.17605/OSF.IO/TEST1",
             "doi_status": "minted",
+            "osf_status": "minted",
+            "osf_package_files": {"manifest-sha256.json": {"sha256": "abc"}},
             "content_hash": "sha256:recomputed-provider-hash",
         },
     )
 
-    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
 
     publication = repo.get_object(result["publication_id"])
     assert publication is not None
+    osf_job = repo.claim_next_job(target_object_id=publication.id)
+    assert osf_job is not None and osf_job.stage is Stage.OSF_DEPOSIT
+    WorkflowEngine()._run_osf_deposit(osf_job, repo)
+    publication = repo.get_object(publication.id)
+    assert publication is not None
     assert publication.metadata["source_submission_id"] == submission.id
     assert publication.metadata["run_id"] == "synthesis-topic-v06-test"
-    assert publication.metadata["content_hash"] == "sha256:paper"
-    assert publication.metadata["submission_payload_hash"] == "sha256:payload"
-    assert publication.metadata["source_citation_hash"] == "sha256:sources"
-    assert publication.metadata["submission_identity_key"] == "sha256:identity"
+    assert publication.metadata["client_claimed_content_hash"] == "sha256:paper"
+    assert (
+        publication.metadata["client_claimed_submission_payload_hash"]
+        == "sha256:payload"
+    )
+    assert (
+        publication.metadata["client_claimed_source_citation_hash"] == "sha256:sources"
+    )
+    assert (
+        publication.metadata["client_claimed_submission_identity_key"]
+        == "sha256:identity"
+    )
     assert publication.metadata["doi_status"] == "minted"
 
 
-def test_publish_dedupes_by_submission_identity_key() -> None:
+def test_publish_does_not_dedupe_by_client_claimed_identity() -> None:
     repo = InMemoryRuntimeRepository()
-    existing = repo.create_object(ResearchObject(
-        object_type=ObjectType.PUBLICATION,
-        title="Earlier public title",
-        metadata={"submission_identity_key": "sha256:identity"},
-    ))
-    submission = repo.create_object(ResearchObject(
-        object_type=ObjectType.SUBMISSION,
-        title="Retitled public manuscript",
-        metadata={
-            "abstract": "A structured abstract for a public research synthesis.",
-            "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
-            "sections": _full_sections(),
-            "source_bundle": _valid_source_bundle(),
-            "core_claims_resolved": True,
-            "submission_identity_key": "sha256:identity",
-        },
-    ))
+    existing = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Earlier public title",
+            metadata={"client_claimed_submission_identity_key": "sha256:identity"},
+        )
+    )
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Retitled public manuscript",
+            metadata={
+                "abstract": "A structured abstract for a public research synthesis.",
+                "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
+                "sections": _full_sections(),
+                "source_bundle": _valid_source_bundle(),
+                "core_claims_resolved": True,
+                "client_claimed_submission_identity_key": "sha256:identity",
+            },
+        )
+    )
 
-    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
 
-    assert result == {"publication_id": existing.id, "deduped": True}
+    assert result["publication_id"] != existing.id
+    assert result["deduped"] is False
+
+
+def test_publish_idempotency_still_requires_current_accept_proof() -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Existing publication must remain authorised",
+            metadata={
+                "abstract": "A structured abstract for a public research synthesis.",
+                "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
+                "sections": _full_sections(),
+                "source_bundle": _valid_source_bundle(),
+                "core_claims_resolved": True,
+            },
+        )
+    )
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title=submission.title,
+        )
+    )
+
+    with pytest.raises(ValueError, match="current_accept_decision_missing"):
+        WorkflowEngine()._run_publish(
+            RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH),
+            repo,
+        )
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected_stage"),
+    [
+        ({}, Stage.OSF_DEPOSIT),
+        (
+            {
+                "doi_status": "minted",
+                "osf_package_files": {"manifest-sha256.json": {"sha256": "abc"}},
+            },
+            Stage.DW_DELIVERY,
+        ),
+        (
+            {
+                "doi_status": "minted",
+                "osf_package_files": {"manifest-sha256.json": {"sha256": "abc"}},
+                "dw_status": "registered",
+            },
+            Stage.PUBLICATION_FINALIZE,
+        ),
+    ],
+)
+def test_blocked_publication_resumes_at_first_incomplete_delivery_stage(
+    metadata: dict[str, object],
+    expected_stage: Stage,
+) -> None:
+    repo = InMemoryRuntimeRepository()
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Resumable publication",
+            metadata={
+                "requested_public_visibility": "listed",
+                "public_visibility": "provisional",
+                "publication_state": "PUBLISH_BLOCKED_EXTERNAL",
+                **metadata,
+            },
+        )
+    )
+
+    result = workflow._resume_publication_delivery(repo, publication)
+
+    assert result["resumed_stage"] == expected_stage.value
+    assert [job.stage for job in repo.queued_jobs()] == [expected_stage]
+
+
+def test_integrity_blocked_publication_cannot_resume_delivery() -> None:
+    repo = InMemoryRuntimeRepository()
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Integrity-blocked publication",
+            metadata={
+                "requested_public_visibility": "listed",
+                "public_visibility": "provisional",
+                "publication_state": "PUBLISH_BLOCKED_INTEGRITY",
+            },
+        )
+    )
+
+    result = workflow._resume_publication_delivery(repo, publication)
+
+    assert result["next_jobs"] == 0
+    assert repo.queued_jobs() == []
+
+
+def test_external_delivery_revalidates_accept_quorum_before_side_effect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESEARKA_AUTO_LIST_AGENT_IDS", "agent-demo")
+    repo = InMemoryRuntimeRepository()
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Lineage-guarded publication",
+            metadata={
+                "abstract": "A structured abstract for a public research synthesis.",
+                "article_type": ArticleType.RAPID_EVIDENCE_SYNTHESIS.value,
+                "sections": _full_sections(),
+                "source_bundle": _valid_source_bundle(),
+                "core_claims_resolved": True,
+                "author_agent_id": "agent-demo",
+            },
+        )
+    )
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
+    publication = repo.get_object(result["publication_id"])
+    assert publication is not None
+    review = repo.get_object(str(publication.metadata["review_id"]))
+    assert review is not None
+    repo.update_object_metadata(
+        review.id, {**review.metadata, "accept_quorum_count": 1}
+    )
+    monkeypatch.setattr(
+        workflow,
+        "_mint_publication_doi",
+        lambda *_args, **_kwargs: pytest.fail(
+            "OSF side effect ran without valid quorum"
+        ),
+    )
+    osf_job = repo.claim_next_job(target_object_id=publication.id)
+    assert osf_job is not None and osf_job.stage is Stage.OSF_DEPOSIT
+
+    with pytest.raises(ValueError, match="accept_quorum_missing"):
+        WorkflowEngine()._run_osf_deposit(osf_job, repo)
+
+
+def test_external_delivery_rejects_decision_bound_to_different_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESEARKA_AUTO_LIST_AGENT_IDS", "agent-demo")
+    repo = InMemoryRuntimeRepository()
+    submission = _workflow_submission(repo)
+    updated_submission = repo.update_object_metadata(
+        submission.id, {**submission.metadata, "author_agent_id": "agent-demo"}
+    )
+    assert updated_submission is not None
+    submission = updated_submission
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
+    publication = repo.get_object(result["publication_id"])
+    assert publication is not None
+    decision = repo.get_object(str(publication.metadata["decision_id"]))
+    assert decision is not None
+    other_review = bound_review(repo, submission, {"recommendation": "accept"})
+    repo.update_object_metadata(
+        decision.id, {**decision.metadata, "review_id": other_review.id}
+    )
+    monkeypatch.setattr(
+        workflow,
+        "_mint_publication_doi",
+        lambda *_args, **_kwargs: pytest.fail("OSF ran with mismatched review lineage"),
+    )
+    osf_job = repo.claim_next_job(target_object_id=publication.id)
+    assert osf_job is not None and osf_job.stage is Stage.OSF_DEPOSIT
+
+    with pytest.raises(ValueError, match="publication_lineage_invalid"):
+        WorkflowEngine()._run_osf_deposit(osf_job, repo)
+
+
+def test_workflow_rejects_stale_lease_before_stage_execution() -> None:
+    repo = InMemoryRuntimeRepository(lease_ttl_seconds=-1)
+    queued = repo.enqueue_job(
+        RuntimeJob(target_object_id="missing", stage=Stage.REVIEW)
+    )
+    stale = repo.claim_next_job()
+    assert stale is not None and stale.id == queued.id
+    stale = stale.model_copy(deep=True)
+    current = repo.claim_next_job()
+    assert current is not None and current.lease_token > stale.lease_token
+
+    with pytest.raises(RuntimeError, match="stale_job_lease"):
+        WorkflowEngine().handle_job(stale, repo)
 
 
 def test_reject_is_terminal() -> None:
@@ -425,7 +758,10 @@ def test_compile_publication_flags_leakage_before_sanitizing() -> None:
         ),
         source_bundle=[{"evidence_type": "review", "year": 2024}],
     )
-    assert next(gate for gate in artifact.gates if gate.name == "leakage_blocker").passed is False
+    assert (
+        next(gate for gate in artifact.gates if gate.name == "leakage_blocker").passed
+        is False
+    )
 
 
 def test_compile_publication_supports_empirical_study_sections() -> None:
@@ -510,12 +846,31 @@ def test_alpha_memo_agent_artifact_uses_lightweight_intake_contract() -> None:
     artifact = compile_publication(
         title=payload.title,
         abstract=payload.abstract,
-        body_markdown=payload.body_markdown,
         sections=payload.sections,
         source_bundle=payload.source_bundle,
         article_type=payload.article_type.value,
     )
-    assert artifact.body_markdown.startswith("# Alpha memo")
+    assert artifact.body_markdown.startswith("## Evidence Landscape")
+    assert "# Alpha memo" in artifact.body_markdown
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    [
+        ("source_bundle", [{"excerpt": "x" * 2_000_001}], "source_bundle_too_large"),
+        ("evidence_bundle", {"receipt": "x" * 2_000_001}, "evidence_bundle_too_large"),
+    ],
+)
+def test_submission_payload_bounds_nested_bundles(
+    field: str, value: object, error: str
+) -> None:
+    with pytest.raises(ValueError, match=error):
+        SubmissionPayload(
+            title="Bounded payload",
+            abstract="Bounded abstract",
+            author_agent_id="agent-test",
+            **{field: value},
+        )
 
 
 def test_alpha_memo_with_four_sources_fails_public_intake_gate() -> None:
@@ -533,7 +888,9 @@ def test_alpha_memo_with_four_sources_fails_public_intake_gate() -> None:
         article_type=ArticleType.ALPHA_MEMO.value,
     )
     failures = {gate.name for gate in results if not gate.passed}
-    minimum_citations = next(gate for gate in results if gate.name == "minimum_citations")
+    minimum_citations = next(
+        gate for gate in results if gate.name == "minimum_citations"
+    )
 
     assert failures == {"minimum_citations"}
     assert "at least 5 citations" in minimum_citations.reason
@@ -598,7 +955,9 @@ def test_alpha_source_exception_requires_server_authenticated_agent(
 def test_alpha_memo_single_source_cannot_use_structural_exception() -> None:
     results = run_submission_template_checks(
         sections={},
-        source_bundle=[{"title": "Single source", "doi": "10.1000/one", "evidence_type": "primary"}],
+        source_bundle=[
+            {"title": "Single source", "doi": "10.1000/one", "evidence_type": "primary"}
+        ],
         article_type=ArticleType.ALPHA_MEMO.value,
         evidence_bundle={
             "publish_verdict": {
@@ -617,9 +976,15 @@ def test_alpha_memo_single_source_cannot_use_structural_exception() -> None:
 def test_alpha_memo_raw_title_fails_public_novelty_gate() -> None:
     results = run_submission_template_checks(
         title="desk",
-        sections={"Evidence Landscape": "This memo states one bounded receipt-backed signal with clear limits."},
+        sections={
+            "Evidence Landscape": "This memo states one bounded receipt-backed signal with clear limits."
+        },
         source_bundle=[
-            {"title": f"Desk source {index}", "doi": f"10.1000/desk-{index}", "evidence_type": "primary"}
+            {
+                "title": f"Desk source {index}",
+                "doi": f"10.1000/desk-{index}",
+                "evidence_type": "primary",
+            }
             for index in range(1, 6)
         ],
         article_type=ArticleType.ALPHA_MEMO.value,
@@ -634,9 +999,15 @@ def test_alpha_memo_raw_title_fails_public_novelty_gate() -> None:
 def test_alpha_memo_specific_title_passes_public_novelty_gate() -> None:
     results = run_submission_template_checks(
         title="Desk interventions split posture and productivity signals",
-        sections={"Evidence Landscape": "This memo states one bounded receipt-backed tension with a falsifiable gap."},
+        sections={
+            "Evidence Landscape": "This memo states one bounded receipt-backed tension with a falsifiable gap."
+        },
         source_bundle=[
-            {"title": f"Desk source {index}", "doi": f"10.1000/desk-{index}", "evidence_type": "primary"}
+            {
+                "title": f"Desk source {index}",
+                "doi": f"10.1000/desk-{index}",
+                "evidence_type": "primary",
+            }
             for index in range(1, 6)
         ],
         article_type=ArticleType.ALPHA_MEMO.value,
@@ -658,7 +1029,11 @@ def test_memo_prefix_does_not_mask_title_topic_anchors() -> None:
             )
         },
         source_bundle=[
-            {"title": f"Desk source {index}", "doi": f"10.1000/desk-{index}", "evidence_type": "primary"}
+            {
+                "title": f"Desk source {index}",
+                "doi": f"10.1000/desk-{index}",
+                "evidence_type": "primary",
+            }
             for index in range(1, 6)
         ],
         article_type=ArticleType.EVIDENCE_MAP.value,
@@ -674,7 +1049,9 @@ def test_alpha_reviewer_prompt_requires_title_source_alignment() -> None:
 
     assert "title/source alignment" in prompt
     assert "metformin memo relying on a dapagliflozin receipt" in prompt
-    assert "resistance-training memo backed only by sprint/heat cycling receipts" in prompt
+    assert (
+        "resistance-training memo backed only by sprint/heat cycling receipts" in prompt
+    )
     assert "require merge or narrower differentiation" in prompt
 
 
@@ -781,7 +1158,9 @@ def test_claim_trace_guard_accepts_numeric_and_pmid_citations() -> None:
     )
 
     assert workflow._claim_trace_guard_revisions(submission) == []
-    submission.metadata["source_bundle"][0]["excerpt"] = "An unrelated source that does not support the claim."
+    submission.metadata["source_bundle"][0]["excerpt"] = (
+        "An unrelated source that does not support the claim."
+    )
     revision = workflow._claim_trace_guard_revisions(submission)[0]
     assert "2/2 claims identify a source" in revision
     assert "1/2 also align with its evidence text" in revision
@@ -841,7 +1220,9 @@ def test_claim_trace_guard_checks_abstract_numbers_against_evidence() -> None:
         "0/1 quantitative claims agree."
     ]
 
-    source["excerpt"] = "The intervention reduced the primary risk by 47 percent in the tested adult population."
+    source["excerpt"] = (
+        "The intervention reduced the primary risk by 47 percent in the tested adult population."
+    )
     assert workflow._claim_trace_guard_revisions(submission) == []
 
 
@@ -862,37 +1243,55 @@ def test_research_synthesis_class_requires_directness_and_risk_appraisal() -> No
 
     assert profile["directness_coverage"] == 1.0
     assert profile["risk_of_bias_coverage"] == 0.8
-    assert publication_class(
-        article_type=ArticleType.RESEARCH_SYNTHESIS.value,
-        title="Research Synthesis: bounded effect",
-        profile=profile,
-    ) == "research_synthesis"
+    assert (
+        publication_class(
+            article_type=ArticleType.RESEARCH_SYNTHESIS.value,
+            title="Research Synthesis: bounded effect",
+            profile=profile,
+        )
+        == "research_synthesis"
+    )
 
     sources[-2]["risk_of_bias"] = "not appraised"
-    profile = evidence_profile(text="The evidence supports a bounded effect [bundle:1].", source_bundle=sources)
-    assert publication_class(
-        article_type=ArticleType.RESEARCH_SYNTHESIS.value,
-        title="Research Synthesis: bounded effect",
-        profile=profile,
-    ) == "adjacent_evidence_brief"
+    profile = evidence_profile(
+        text="The evidence supports a bounded effect [bundle:1].", source_bundle=sources
+    )
+    assert (
+        publication_class(
+            article_type=ArticleType.RESEARCH_SYNTHESIS.value,
+            title="Research Synthesis: bounded effect",
+            profile=profile,
+        )
+        == "adjacent_evidence_brief"
+    )
 
     sources[-2]["risk_of_bias"] = "low"
     sources[-1]["directness"] = "unknown"
-    profile = evidence_profile(text="The evidence supports a bounded effect [bundle:1].", source_bundle=sources)
+    profile = evidence_profile(
+        text="The evidence supports a bounded effect [bundle:1].", source_bundle=sources
+    )
     assert profile["directness_coverage"] == 0.8
-    assert publication_class(
-        article_type=ArticleType.RESEARCH_SYNTHESIS.value,
-        title="Research Synthesis: bounded effect",
-        profile=profile,
-    ) == "research_synthesis"
+    assert (
+        publication_class(
+            article_type=ArticleType.RESEARCH_SYNTHESIS.value,
+            title="Research Synthesis: bounded effect",
+            profile=profile,
+        )
+        == "research_synthesis"
+    )
 
     sources[-2]["directness"] = "not extracted"
-    profile = evidence_profile(text="The evidence supports a bounded effect [bundle:1].", source_bundle=sources)
-    assert publication_class(
-        article_type=ArticleType.RESEARCH_SYNTHESIS.value,
-        title="Research Synthesis: bounded effect",
-        profile=profile,
-    ) == "adjacent_evidence_brief"
+    profile = evidence_profile(
+        text="The evidence supports a bounded effect [bundle:1].", source_bundle=sources
+    )
+    assert (
+        publication_class(
+            article_type=ArticleType.RESEARCH_SYNTHESIS.value,
+            title="Research Synthesis: bounded effect",
+            profile=profile,
+        )
+        == "adjacent_evidence_brief"
+    )
 
 
 def test_alpha_accept_with_unsupported_title_anchor_becomes_revise() -> None:
@@ -921,17 +1320,18 @@ def test_alpha_accept_with_unsupported_title_anchor_becomes_revise() -> None:
             },
         )
     )
-    review = repo.create_object(
-        ResearchObject(
-            object_type=ObjectType.REVIEW,
-            parent_object_id=submission.id,
-            title="Review",
-            metadata={"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
-        )
+    review = bound_review(
+        repo,
+        submission,
+        {"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
     )
 
     outcome = engine.handle_job(
-        RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id}),
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.EDITORIAL,
+            payload={"review_id": review.id},
+        ),
         repo,
     )
     decision = repo.get_object(str(outcome["created_object_id"]))
@@ -940,8 +1340,14 @@ def test_alpha_accept_with_unsupported_title_anchor_becomes_revise() -> None:
     assert outcome["next_jobs"] == 0
     assert decision is not None
     assert decision.metadata["decision"] == Decision.REVISE.value
-    assert "unsupported title anchors: resistance" in decision.metadata["alpha_accept_guard"][0]
-    assert decision.metadata["required_revisions"] == decision.metadata["alpha_accept_guard"]
+    assert (
+        "unsupported title anchors: resistance"
+        in decision.metadata["alpha_accept_guard"][0]
+    )
+    assert (
+        decision.metadata["required_revisions"]
+        == decision.metadata["alpha_accept_guard"]
+    )
 
 
 def test_alpha_accept_ignores_null_topic_anchor() -> None:
@@ -972,17 +1378,18 @@ def test_alpha_accept_ignores_null_topic_anchor() -> None:
             },
         )
     )
-    review = repo.create_object(
-        ResearchObject(
-            object_type=ObjectType.REVIEW,
-            parent_object_id=submission.id,
-            title="Review",
-            metadata={"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
-        )
+    review = bound_review(
+        repo,
+        submission,
+        {"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
     )
 
     outcome = engine.handle_job(
-        RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id}),
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.EDITORIAL,
+            payload={"review_id": review.id},
+        ),
         repo,
     )
     decision = repo.get_object(str(outcome["created_object_id"]))
@@ -994,7 +1401,9 @@ def test_alpha_accept_ignores_null_topic_anchor() -> None:
     assert "alpha_accept_guard" not in decision.metadata
 
 
-def test_alpha_accept_guard_ignores_named_program_scaffold_and_acronym_fragments() -> None:
+def test_alpha_accept_guard_ignores_named_program_scaffold_and_acronym_fragments() -> (
+    None
+):
     repo = InMemoryRuntimeRepository()
     engine = WorkflowEngine()
     source_bundle = [
@@ -1022,17 +1431,18 @@ def test_alpha_accept_guard_ignores_named_program_scaffold_and_acronym_fragments
             },
         )
     )
-    review = repo.create_object(
-        ResearchObject(
-            object_type=ObjectType.REVIEW,
-            parent_object_id=submission.id,
-            title="Review",
-            metadata={"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
-        )
+    review = bound_review(
+        repo,
+        submission,
+        {"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
     )
 
     outcome = engine.handle_job(
-        RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id}),
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.EDITORIAL,
+            payload={"review_id": review.id},
+        ),
         repo,
     )
     decision = repo.get_object(str(outcome["created_object_id"]))
@@ -1045,7 +1455,9 @@ def test_alpha_accept_guard_ignores_named_program_scaffold_and_acronym_fragments
 
 
 def test_alpha_anchor_terms_keep_scientific_hyphenated_tokens() -> None:
-    assert "met" not in workflow._alpha_anchor_terms("EX-MET Program: Endpoint-Specific Findings")
+    assert "met" not in workflow._alpha_anchor_terms(
+        "EX-MET Program: Endpoint-Specific Findings"
+    )
     assert "covid" in workflow._alpha_anchor_terms("COVID-19 intervention findings")
 
 
@@ -1077,17 +1489,18 @@ def test_alpha_accept_guard_reads_structured_source_fact_terms() -> None:
             },
         )
     )
-    review = repo.create_object(
-        ResearchObject(
-            object_type=ObjectType.REVIEW,
-            parent_object_id=submission.id,
-            title="Review",
-            metadata={"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
-        )
+    review = bound_review(
+        repo,
+        submission,
+        {"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
     )
 
     outcome = engine.handle_job(
-        RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id}),
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.EDITORIAL,
+            payload={"review_id": review.id},
+        ),
         repo,
     )
     decision = repo.get_object(str(outcome["created_object_id"]))
@@ -1118,7 +1531,10 @@ def test_alpha_accept_duplicate_source_pair_becomes_revise() -> None:
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title="metformin exercise training adaptation",
-            metadata={"article_type": ArticleType.ALPHA_MEMO.value, "source_bundle": source_bundle},
+            metadata={
+                "article_type": ArticleType.ALPHA_MEMO.value,
+                "source_bundle": source_bundle,
+            },
         )
     )
     existing_publication = repo.create_object(
@@ -1133,20 +1549,24 @@ def test_alpha_accept_duplicate_source_pair_becomes_revise() -> None:
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title="metformin exercise adaptation signal",
-            metadata={"article_type": ArticleType.ALPHA_MEMO.value, "source_bundle": source_bundle},
+            metadata={
+                "article_type": ArticleType.ALPHA_MEMO.value,
+                "source_bundle": source_bundle,
+            },
         )
     )
-    review = repo.create_object(
-        ResearchObject(
-            object_type=ObjectType.REVIEW,
-            parent_object_id=submission.id,
-            title="Review",
-            metadata={"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
-        )
+    review = bound_review(
+        repo,
+        submission,
+        {"article_type": ArticleType.ALPHA_MEMO.value, **_review_payload("accept")},
     )
 
     outcome = engine.handle_job(
-        RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id}),
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.EDITORIAL,
+            payload={"review_id": review.id},
+        ),
         repo,
     )
     decision = repo.get_object(str(outcome["created_object_id"]))
@@ -1159,38 +1579,65 @@ def test_alpha_accept_duplicate_source_pair_becomes_revise() -> None:
     assert "same stable source set" in decision.metadata["required_revisions"][0]
 
 
-def test_publish_relabels_non_supportive_research_synthesis(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_publish_relabels_non_supportive_research_synthesis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     repo = InMemoryRuntimeRepository()
     full_body = "\n\n".join(
         [
             "# Full manuscript",
             "## Abstract\n\nEvidence-honesty note: 24/26 retained sources are coded as null or no extracted directional signal; this corpus is non-supportive for clinical efficacy claims and hypothesis-generating only.",
+            "## Introduction\n\nThe introduction defines the bounded intervention question, explains why the retained corpus is relevant, and avoids presenting indirect or null evidence as proof of clinical efficacy.",
             "## Methods\n\nThe methods describe source retrieval, screening, extraction, appraisal, synthesis, and verification in enough detail to audit the accepted manuscript.",
-            "## Results\n\nThe results preserve null and heterogeneous source-level findings without claiming broad clinical efficacy, separate direct findings from adjacent evidence, and report the corpus as hypothesis-generating rather than intervention-ready.",
+            "## Results\n\nThe results preserve null and heterogeneous source-level findings without claiming broad clinical efficacy, separate direct findings from adjacent evidence, and report the corpus as hypothesis-generating rather than intervention-ready [bundle:1].",
             "## Discussion\n\nThe discussion treats disagreement and indirect evidence as boundary conditions instead of a settled intervention claim.",
             "## Limitations\n\nThe limitations identify corpus boundaries, uncertainty, scope restrictions, missing endpoints, and interpretation risks that constrain public claims.",
-            "## Conclusion\n\nThe conclusion states a bounded hypothesis-generating finding, avoids clinical guidance, and makes clear that the weak retained corpus supports classification discipline rather than a definitive research synthesis label.",
+            "## Conclusion\n\nThe conclusion states a bounded hypothesis-generating finding, avoids clinical guidance, and makes clear that the weak retained corpus supports classification discipline rather than a definitive research synthesis label [bundle:1].",
             "## References\n\n- Example source. DOI: 10.1000/example.",
         ]
     )
-    submission = repo.create_object(ResearchObject(
-        object_type=ObjectType.SUBMISSION,
-        title="Research Synthesis: Example intervention",
-        body_markdown=full_body,
-        metadata={
-            "abstract": "Evidence-honesty note: 24/26 retained sources are coded as null.",
-            "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
-            "sections": {},
-            "source_bundle": [
-                {"title": f"Source {index}", "year": 2024, "evidence_type": "review"}
-                for index in range(1, 27)
-            ],
-            "core_claims_resolved": True,
-        },
-    ))
-    monkeypatch.setattr(workflow, "_mint_publication_doi", lambda repository, publication: {})
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Research Synthesis: Example intervention",
+            body_markdown=full_body,
+            metadata={
+                "abstract": (
+                    "Evidence-honesty note: 24/26 retained sources are coded as null or no extracted directional signal; "
+                    "this corpus is non-supportive for clinical efficacy claims and hypothesis-generating only [bundle:1]."
+                ),
+                "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
+                "sections": sections_from_markdown(
+                    full_body, ArticleType.RESEARCH_SYNTHESIS.value
+                ),
+                "source_bundle": [
+                    {
+                        "title": f"Source {index}",
+                        "year": 2024,
+                        "evidence_type": "review",
+                        "excerpt": (
+                            "Evidence-honesty note: 24/26 retained sources are coded as null or no extracted "
+                            "directional signal; this corpus is non-supportive for clinical efficacy claims and "
+                            "hypothesis-generating only. The results preserve null and heterogeneous source-level findings "
+                            "without claiming broad clinical efficacy, separate direct findings from adjacent evidence, and "
+                            "report the corpus as hypothesis-generating rather than intervention-ready. The conclusion states "
+                            "a bounded hypothesis-generating finding, avoids clinical guidance, and makes clear that the weak "
+                            "retained corpus supports classification discipline rather than a definitive research synthesis label."
+                        )
+                        if index == 1
+                        else "The source reports a null or non-directional finding.",
+                    }
+                    for index in range(1, 27)
+                ],
+                "core_claims_resolved": True,
+            },
+        )
+    )
+    monkeypatch.setattr(
+        workflow, "_mint_publication_doi", lambda repository, publication: {}
+    )
 
-    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
 
     publication = repo.get_object(result["publication_id"])
     assert publication is not None
@@ -1216,47 +1663,61 @@ def test_publish_preserves_research_synthesis_with_direct_clinical_core(
             "## References\n\n- Example source. DOI: 10.1000/example.",
         ]
     )
-    submission = repo.create_object(ResearchObject(
-        object_type=ObjectType.SUBMISSION,
-        title="Research Synthesis: Resistance Training Effects — full paper",
-        body_markdown=full_body,
-        metadata={
-            "abstract": "Evidence-honesty note: 54/85 retained sources are indirect, review-level, adjacent, or mechanistic and are used only to bound interpretation [bundle:1].",
-            "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
-            "sections": {},
-            "source_bundle": [
-                {
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Research Synthesis: Resistance Training Effects — full paper",
+            body_markdown=full_body,
+            metadata={
+                "abstract": "Evidence-honesty note: 54/85 retained sources are indirect, review-level, adjacent, or mechanistic and are used only to bound interpretation [bundle:1].",
+                "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
+                "sections": sections_from_markdown(
+                    full_body, ArticleType.RESEARCH_SYNTHESIS.value
+                ),
+                "source_bundle": [
+                    {
                         "title": f"Primary source {index}",
                         "year": 2024,
                         "evidence_type": "primary",
                         "directness": "direct clinical",
                         "risk_of_bias": "low",
                         "excerpt": (
-                            "The evidence bounds interpretation, preserves heterogeneous findings, separates direct "
+                            "Evidence-honesty note: 54/85 retained sources are indirect, review-level, adjacent, or "
+                            "mechanistic and are used only to bound interpretation. The evidence bounds interpretation, "
+                            "preserves heterogeneous findings, separates direct "
                             "clinical results from adjacent evidence, treats disagreement as a boundary condition, "
                             "identifies corpus uncertainty and scope restrictions, and avoids broad clinical guidance."
-                        ) if index == 1 else "This direct clinical source reports an appraised endpoint-specific result.",
-                }
-                for index in range(1, 59)
-            ] + [
-                {
+                        )
+                        if index == 1
+                        else "This direct clinical source reports an appraised endpoint-specific result.",
+                    }
+                    for index in range(1, 59)
+                ]
+                + [
+                    {
                         "title": f"Review source {index}",
                         "year": 2024,
                         "evidence_type": "review",
                         "directness": "review level",
-                }
-                for index in range(59, 86)
-            ],
-            "core_claims_resolved": True,
-        },
-    ))
-    monkeypatch.setattr(workflow, "_mint_publication_doi", lambda repository, publication: {})
+                    }
+                    for index in range(59, 86)
+                ],
+                "core_claims_resolved": True,
+            },
+        )
+    )
+    monkeypatch.setattr(
+        workflow, "_mint_publication_doi", lambda repository, publication: {}
+    )
 
-    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
 
     publication = repo.get_object(result["publication_id"])
     assert publication is not None
-    assert publication.title == "Research Synthesis: Resistance Training Effects — full paper"
+    assert (
+        publication.title
+        == "Research Synthesis: Resistance Training Effects — full paper"
+    )
     assert publication.metadata["publication_class"] == "research_synthesis"
     assert publication.metadata["evidence_profile"]["weak_evidence_ratio"] == 0.6353
     assert publication.metadata["evidence_profile"]["direct_clinical_sources"] == 31
@@ -1277,24 +1738,39 @@ def test_publish_labels_declared_evidence_map_as_evidence_map(
             "## References\n\n- Example source. DOI: 10.1000/example.",
         ]
     )
-    submission = repo.create_object(ResearchObject(
-        object_type=ObjectType.SUBMISSION,
-        title="Research Synthesis: Tai Chi Exercise Effects — full paper",
-        body_markdown=full_body,
-        metadata={
-            "abstract": "This evidence map catalogs heterogeneous source-level findings.",
-            "article_type": ArticleType.EVIDENCE_MAP.value,
-            "sections": {},
-            "source_bundle": [
-                {"title": f"Source {index}", "year": 2024, "evidence_type": "primary"}
-                for index in range(1, 13)
-            ],
-            "core_claims_resolved": True,
-        },
-    ))
-    monkeypatch.setattr(workflow, "_mint_publication_doi", lambda repository, publication: {})
+    submission = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.SUBMISSION,
+            title="Research Synthesis: Tai Chi Exercise Effects — full paper",
+            body_markdown=full_body,
+            metadata={
+                "abstract": "This evidence map catalogs heterogeneous source-level findings [bundle:1].",
+                "article_type": ArticleType.EVIDENCE_MAP.value,
+                "sections": {
+                    "Evidence Landscape": (
+                        "This evidence map catalogs heterogeneous source-level findings without collapsing them into a single "
+                        "causal thesis. It preserves source-level disagreement and frames conclusions as exploratory [bundle:1]."
+                    ),
+                    "Limitations": "The map is bounded by corpus coverage, heterogeneous endpoints, and uncertain external validity.",
+                },
+                "source_bundle": [
+                    {
+                        "title": f"Source {index}",
+                        "year": 2024,
+                        "evidence_type": "primary",
+                        "excerpt": "This evidence map catalogs heterogeneous source-level findings and preserves source-level disagreement.",
+                    }
+                    for index in range(1, 13)
+                ],
+                "core_claims_resolved": True,
+            },
+        )
+    )
+    monkeypatch.setattr(
+        workflow, "_mint_publication_doi", lambda repository, publication: {}
+    )
 
-    result = WorkflowEngine()._run_publish(RuntimeJob(target_object_id=submission.id, stage=Stage.PUBLISH), repo)
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
 
     publication = repo.get_object(result["publication_id"])
     assert publication is not None
@@ -1303,25 +1779,16 @@ def test_publish_labels_declared_evidence_map_as_evidence_map(
 
 
 def test_compile_publication_preserves_full_manuscript_references() -> None:
-    full_body = "\n\n".join(
-        [
-            "# Full manuscript",
-            "## Abstract\n\nThis abstract is long enough to satisfy the public full manuscript structure gate and summarize the accepted research artifact.",
-            "## Methods\n\nThe methods describe source retrieval, screening, extraction, appraisal, synthesis, and verification in enough detail to audit the accepted manuscript.",
-            "## Results\n\nThe results present outcome-specific evidence, directness, limitations, and traceable findings without reducing the publication to a section-map summary.",
-            "## Limitations\n\nThe limitations identify corpus boundaries, uncertainty, scope restrictions, missing endpoints, and interpretation risks that constrain public claims.",
-            "## Conclusion\n\nThe conclusion states the bounded finding and preserves the distinction between supported claims, unresolved gaps, and future research needs.",
-            "## References\n\n- Example 2024. DOI: 10.1234/example. PMID: 12345678.",
-        ]
-    )
+    sections = {
+        **_full_sections(),
+        "References": "- Example 2024. DOI: 10.1234/example. PMID: 12345678.",
+    }
     artifact = compile_publication(
         title="Full manuscript",
         abstract="A",
-        body_markdown=full_body,
-        sections=_full_sections(),
+        sections=sections,
         source_bundle=_valid_source_bundle(),
     )
-    assert artifact.body_markdown.strip() == full_body
     assert "## References" in artifact.body_markdown
     assert "DOI: 10.1234/example" in artifact.body_markdown
 
@@ -1333,15 +1800,23 @@ def test_canonical_bundle_facts_reconcile_counts() -> None:
             {"evidence_type": "primary", "year": 2023},
         ]
     )
-    results = run_publish_gates(body_markdown="Clean body", counts=counts, core_claims_resolved=True)
-    reconciliation = next(result for result in results if result.name == "count_reconciliation")
+    results = run_publish_gates(
+        body_markdown="Clean body", counts=counts, core_claims_resolved=True
+    )
+    reconciliation = next(
+        result for result in results if result.name == "count_reconciliation"
+    )
     assert reconciliation.passed is True
 
 
 def test_unresolved_core_claims_fail_publish_gate() -> None:
     counts = canonical_bundle_facts([{"evidence_type": "review", "year": 2024}])
-    results = run_publish_gates(body_markdown="Clean body", counts=counts, core_claims_resolved=False)
-    claim_gate = next(result for result in results if result.name == "core_claims_resolved")
+    results = run_publish_gates(
+        body_markdown="Clean body", counts=counts, core_claims_resolved=False
+    )
+    claim_gate = next(
+        result for result in results if result.name == "core_claims_resolved"
+    )
     assert claim_gate.passed is False
 
 
@@ -1375,10 +1850,17 @@ def test_workflow_uses_provider_contract_for_trace_metadata() -> None:
                     ),
                     provider="reviewer-panel",
                     model="stub-model",
-                    usage=ProviderUsage(input_tokens=11, output_tokens=7, cost_usd=0.42),
+                    usage=ProviderUsage(
+                        input_tokens=11, output_tokens=7, cost_usd=0.42
+                    ),
                     metadata={
                         "accept_quorum_count": 2,
                         "accept_quorum_models": ["stub-primary", "stub-sparring"],
+                        "accept_quorum_identities": [
+                            "stub-a:stub-primary",
+                            "stub-b:stub-sparring",
+                        ],
+                        "accept_quorum_providers": ["stub-a", "stub-b"],
                     },
                 ),
             )
@@ -1427,12 +1909,17 @@ def test_workflow_uses_provider_contract_for_trace_metadata() -> None:
     }
     assert review.metadata["judge_release_id"].startswith("sha256:")
     assert review.metadata["judge_release"]["models"] == ["stub-model"]
-    assert review.metadata["judge_release"]["observed_models"] == ["stub-primary", "stub-sparring"]
+    assert review.metadata["judge_release"]["observed_models"] == [
+        "stub-primary",
+        "stub-sparring",
+    ]
     assert review.metadata["judge_release"]["settings"]["accept_quorum_min"] == 2
 
 
 def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
-    prompt = WorkflowEngine()._review_system_prompt(ArticleType.RAPID_EVIDENCE_SYNTHESIS.value)
+    prompt = WorkflowEngine()._review_system_prompt(
+        ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+    )
     assert "rapid evidence synthesis reviewer" in prompt.lower()
     assert "forced triage call" in prompt
     assert "Do not use revise as a safe default" in prompt
@@ -1445,9 +1932,14 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
     assert "Never assume unverifiable percentages" in prompt
     assert "required_revisions lists concrete fixes" in prompt
     assert "review_markdown must be a non-empty rationale" in prompt
-    assert "Do not label accept-quality papers as revise for minor wording polish only" in prompt
+    assert (
+        "Do not label accept-quality papers as revise for minor wording polish only"
+        in prompt
+    )
     assert "reject = structurally broken" in prompt
-    empirical_prompt = WorkflowEngine()._review_system_prompt(ArticleType.EMPIRICAL_STUDY.value)
+    empirical_prompt = WorkflowEngine()._review_system_prompt(
+        ArticleType.EMPIRICAL_STUDY.value
+    )
     assert "empirical study reviewer" in empirical_prompt.lower()
     assert "Empirical-study calibration rules" in empirical_prompt
     assert "one primary study rather than a multi-study synthesis" in empirical_prompt
@@ -1463,13 +1955,25 @@ def test_workflow_marks_empirical_study_in_review_metadata() -> None:
             return ProviderResult(
                 ok=True,
                 response=ProviderResponse(
-                    text=json.dumps(_review_payload("accept", review_markdown="Empirical manuscript accepted.")),
+                    text=json.dumps(
+                        _review_payload(
+                            "accept", review_markdown="Empirical manuscript accepted."
+                        )
+                    ),
                     provider="reviewer-panel",
                     model="stub-model",
                     usage=ProviderUsage(input_tokens=9, output_tokens=6, cost_usd=0.21),
                     metadata={
                         "accept_quorum_count": 2,
-                        "accept_quorum_models": ["empirical-primary", "empirical-sparring"],
+                        "accept_quorum_models": [
+                            "empirical-primary",
+                            "empirical-sparring",
+                        ],
+                        "accept_quorum_identities": [
+                            "empirical-a:empirical-primary",
+                            "empirical-b:empirical-sparring",
+                        ],
+                        "accept_quorum_providers": ["empirical-a", "empirical-b"],
                     },
                 ),
             )
@@ -1498,7 +2002,9 @@ def test_workflow_marks_empirical_study_in_review_metadata() -> None:
         )
     )
     engine = WorkflowEngine(provider=EmpiricalProvider())
-    engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={}), repo)
+    engine.handle_job(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={}), repo
+    )
     review_job = repo.queued_jobs()[0]
     engine.handle_job(review_job, repo)
     review = repo.children_of(submission.id, "review")[0]
@@ -1516,7 +2022,9 @@ def test_sanitize_source_ledger_drops_polluted_revision_hints() -> None:
             ],
         }
     )
-    assert ledger["revision_hints"] == ["Keep the retained hint about explicit date windows and databases searched."]
+    assert ledger["revision_hints"] == [
+        "Keep the retained hint about explicit date windows and databases searched."
+    ]
     assert actions == ["revision_hints:dropped_2_polluted_entries"]
 
 
@@ -1526,17 +2034,20 @@ def test_compile_publication_blocks_real_v1_leakage_samples() -> None:
         abstract="A",
         sections=_full_sections(
             search_summary="\n".join(
-                    [
-                        "The Search Summary is incomplete and lacks reproducibility.",
-                        "Deterministic review records show the proposal does not explain the selection method.",
-                        "Leaves semantic support for LLM review.",
-                        "Legit retained line describing the databases, publication window, and inclusion logic in enough detail to survive structure gating.",
-                    ]
-                )
-            ),
+                [
+                    "The Search Summary is incomplete and lacks reproducibility.",
+                    "Deterministic review records show the proposal does not explain the selection method.",
+                    "Leaves semantic support for LLM review.",
+                    "Legit retained line describing the databases, publication window, and inclusion logic in enough detail to survive structure gating.",
+                ]
+            )
+        ),
         source_bundle=[{"evidence_type": "review", "year": 2024}],
     )
-    assert next(gate for gate in artifact.gates if gate.name == "leakage_blocker").passed is False
+    assert (
+        next(gate for gate in artifact.gates if gate.name == "leakage_blocker").passed
+        is False
+    )
 
 
 def test_structure_gate_rejects_missing_required_sections() -> None:
@@ -1554,24 +2065,22 @@ def test_full_manuscript_structure_accepts_demoted_heading_levels() -> None:
         [
             "# Full manuscript",
             "### Abstract\n\n" + " ".join(["abstract"] * 30),
+            "### Introduction\n\n" + " ".join(["introduction"] * 30),
             "### Methods\n\n" + " ".join(["methods"] * 30),
             "### Results\n\n" + " ".join(["results"] * 30),
+            "### Discussion\n\n" + " ".join(["discussion"] * 30),
             "### Limitations\n\n" + " ".join(["limitations"] * 30),
             "### Conclusion\n\n" + " ".join(["conclusion"] * 30),
             "### References\n\n- Example 2024. DOI: 10.1234/example.",
         ]
     )
 
-    artifact = compile_publication(
-        title="Demoted manuscript",
-        abstract="A structured abstract for a public research synthesis.",
-        sections={},
-        source_bundle=[{"evidence_type": "primary", "year": 2024}],
-        body_markdown=body,
-        article_type="rapid_evidence_synthesis",
+    validate_template_structure(
+        body,
+        publication_template_for(
+            ArticleType.RESEARCH_SYNTHESIS.value
+        ).required_sections,
     )
-
-    assert artifact.body_markdown.startswith("# Full manuscript")
 
 
 def test_full_manuscript_structure_counts_nested_subsections() -> None:
@@ -1579,37 +2088,45 @@ def test_full_manuscript_structure_counts_nested_subsections() -> None:
         [
             "# Full manuscript",
             "### Abstract\n\n" + " ".join(["abstract"] * 30),
+            "### Introduction\n\n" + " ".join(["introduction"] * 30),
             "### Methods",
             "#### Review type\n\n" + " ".join(["methods"] * 30),
             "#### Search strategy\n\n" + " ".join(["search"] * 30),
             "### Results\n\n" + " ".join(["results"] * 30),
+            "### Discussion\n\n" + " ".join(["discussion"] * 30),
             "### Limitations\n\n" + " ".join(["limitations"] * 30),
             "### Conclusion\n\n" + " ".join(["conclusion"] * 30),
             "### References\n\n- Example 2024. DOI: 10.1234/example.",
         ]
     )
 
-    artifact = compile_publication(
-        title="Nested manuscript",
-        abstract="A structured abstract for a public research synthesis.",
-        sections={},
-        source_bundle=[{"evidence_type": "primary", "year": 2024}],
-        body_markdown=body,
-        article_type="rapid_evidence_synthesis",
+    validate_template_structure(
+        body,
+        publication_template_for(
+            ArticleType.RESEARCH_SYNTHESIS.value
+        ).required_sections,
     )
-
-    assert "#### Search strategy" in artifact.body_markdown
 
 
 def test_failure_classifier_maps_structure_gate() -> None:
-    assert classify_failure_reason("structure_gate: 'Conclusion' empty or placeholder-thin") == FailureClass.STRUCTURE_GATE
+    assert (
+        classify_failure_reason(
+            "structure_gate: 'Conclusion' empty or placeholder-thin"
+        )
+        == FailureClass.STRUCTURE_GATE
+    )
 
 
 def test_failure_classifier_maps_integrity_publish_block() -> None:
-    assert classify_failure_reason("publish_blocked_by_integrity:reject") == FailureClass.PUBLISH_GATES_FAILED
+    assert (
+        classify_failure_reason("publish_blocked_by_integrity:reject")
+        == FailureClass.PUBLISH_GATES_FAILED
+    )
 
 
-def test_openrouter_provider_retries_transient_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_openrouter_provider_retries_transient_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     attempts = {"count": 0}
     sleeps: list[float] = []
 
@@ -1629,7 +2146,9 @@ def test_openrouter_provider_retries_transient_errors(monkeypatch: pytest.Monkey
             raise TimeoutError("timed out")
         return StubResponse()
 
-    monkeypatch.setattr("runtime_core.providers.time.sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(
+        "runtime_core.providers.time.sleep", lambda seconds: sleeps.append(seconds)
+    )
     monkeypatch.setattr("runtime_core.providers.urllib.request.urlopen", fake_urlopen)
     provider = OpenRouterProvider(api_key="test-key")
     result = provider.complete(
@@ -1649,14 +2168,20 @@ def test_openrouter_provider_retries_transient_errors(monkeypatch: pytest.Monkey
     assert sleeps[1] == pytest.approx(0.5, abs=0.125)
 
 
-def test_openrouter_provider_rejects_unapproved_model(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_openrouter_provider_rejects_unapproved_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("RESEARKA_V2_OPENROUTER_ALLOWED_MODELS", raising=False)
 
-    with pytest.raises(ValueError, match="openrouter_model_not_allowed:anthropic/claude-sonnet-5"):
+    with pytest.raises(
+        ValueError, match="openrouter_model_not_allowed:anthropic/claude-sonnet-5"
+    ):
         OpenRouterProvider(api_key="test-key", model="anthropic/claude-sonnet-5")
 
 
-def test_openrouter_provider_retries_rate_limits(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_openrouter_provider_retries_rate_limits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     attempts = {"count": 0}
     sleeps: list[float] = []
 
@@ -1676,7 +2201,9 @@ def test_openrouter_provider_retries_rate_limits(monkeypatch: pytest.MonkeyPatch
             raise urllib.error.HTTPError("url", 429, "rate limit", {}, None)
         return StubResponse()
 
-    monkeypatch.setattr("runtime_core.providers.time.sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(
+        "runtime_core.providers.time.sleep", lambda seconds: sleeps.append(seconds)
+    )
     monkeypatch.setattr("runtime_core.providers.urllib.request.urlopen", fake_urlopen)
     provider = OpenRouterProvider(api_key="test-key", model="google/gemma-4-31b-it")
     result = provider.complete(
@@ -1696,7 +2223,9 @@ def test_openrouter_provider_retries_rate_limits(monkeypatch: pytest.MonkeyPatch
     assert sleeps[0] == pytest.approx(2.0, abs=0.5)
 
 
-def test_reviewer_panel_from_env_uses_minimax_gemma_mistral(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reviewer_panel_from_env_uses_minimax_gemma_mistral(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
     monkeypatch.delenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", raising=False)
     monkeypatch.delenv("RESEARKA_V2_MINIMAX_MODEL", raising=False)
@@ -1726,7 +2255,9 @@ def test_reviewer_panel_from_env_uses_minimax_gemma_mistral(monkeypatch: pytest.
     assert provider.allow_sparring_billing_skip is False
 
 
-def test_reviewer_panel_from_env_can_disable_per_slot_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reviewer_panel_from_env_can_disable_per_slot_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Setting RESEARKA_V2_REVIEWER_FALLBACK_ENABLED=0 returns to the previous
     behaviour: bare primary and Gemma in the primary/sparring slots, no wrapping.
     Useful for measuring raw provider failure rates without the safety net."""
@@ -1740,7 +2271,9 @@ def test_reviewer_panel_from_env_can_disable_per_slot_fallback(monkeypatch: pyte
     assert isinstance(provider.sparring, OpenRouterProvider)
 
 
-@pytest.mark.parametrize(("value", "expected"), [("1", True), ("true", True), ("typo", False), ("", False)])
+@pytest.mark.parametrize(
+    ("value", "expected"), [("1", True), ("true", True), ("typo", False), ("", False)]
+)
 def test_reviewer_panel_from_env_parses_billing_skip_strictly(
     monkeypatch: pytest.MonkeyPatch,
     value: str,
@@ -1757,7 +2290,9 @@ def test_reviewer_panel_from_env_parses_billing_skip_strictly(
     assert provider.allow_sparring_billing_skip is expected
 
 
-def test_reviewer_panel_billing_skip_requires_attestation_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reviewer_panel_billing_skip_requires_attestation_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
     monkeypatch.setenv("RESEARKA_V2_SKIP_SPARRING_ON_BILLING_ERROR", "1")
     monkeypatch.delenv("RESEARKA_V2_REVIEW_ATTESTATION_SECRET", raising=False)
@@ -1767,7 +2302,9 @@ def test_reviewer_panel_billing_skip_requires_attestation_secret(monkeypatch: py
         reviewer_from_env()
 
 
-def test_reviewer_panel_from_env_can_select_mimo_primary(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reviewer_panel_from_env_can_select_mimo_primary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
     monkeypatch.setenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "mimo")
     monkeypatch.setenv("RESEARKA_V2_REVIEWER_FALLBACK_ENABLED", "0")
@@ -1794,14 +2331,10 @@ def test_editorial_requires_recommendation_metadata() -> None:
             },
         )
     )
-    review = repo.create_object(
-        ResearchObject(
-            object_type="review",
-            parent_object_id=submission.id,
-            title=f"Review for {submission.title}",
-            body_markdown="Review exists but has no recommendation.",
-            metadata={},
-        )
+    review = bound_review(
+        repo,
+        submission,
+        {},
     )
     engine = WorkflowEngine()
     with pytest.raises(ValueError, match="invalid_review_recommendation:missing"):
@@ -1826,7 +2359,12 @@ def test_reviewer_panel_escalates_on_disagreement() -> None:
             return ProviderResult(
                 ok=True,
                 response=ProviderResponse(
-                    text=json.dumps(_review_payload(self.recommendation, review_markdown=f"{self.provider} says {self.recommendation}")),
+                    text=json.dumps(
+                        _review_payload(
+                            self.recommendation,
+                            review_markdown=f"{self.provider} says {self.recommendation}",
+                        )
+                    ),
                     provider=self.provider,
                     model=self.model,
                     usage=ProviderUsage(input_tokens=10, output_tokens=5, cost_usd=0.1),
@@ -1846,21 +2384,107 @@ def test_reviewer_panel_escalates_on_disagreement() -> None:
             response_format="json_object",
         )
     )
+    assert result.ok is False
+    assert result.error is not None
+    assert "panel_decision_quorum_unavailable" in result.error.message
+
+
+def test_reviewer_panel_falls_back_from_false_missing_manuscript_rejection() -> None:
+    class FailedProvider:
+        provider = "minimax"
+        model = "primary"
+
+        def complete(self, request: ProviderRequest) -> ProviderResult:  # noqa: ARG002
+            return ProviderResult(
+                ok=False,
+                error=ProviderError(
+                    error_class=ProviderErrorClass.PROVIDER_UNAVAILABLE,
+                    message="unavailable",
+                ),
+            )
+
+    sparring = _ReviewPayloadProvider(
+        "sparring",
+        _review_payload(
+            "reject",
+            major_issues=[
+                "The submission is empty/missing content between the submission data markers."
+            ],
+            required_revisions=["Provide the full manuscript text for review."],
+        ),
+    )
+    fallback = _ReviewPayloadProvider("fallback", _review_payload("revise"))
+    nonce = "a" * 24
+    request = ProviderRequest(
+        system_prompt="system",
+        user_prompt=(
+            f"SUBMISSION_DATA_START_{nonce}\n"
+            + json.dumps(
+                {"abstract": "A complete abstract.", "sections": _full_sections()}
+            )
+            + f"\nSUBMISSION_DATA_END_{nonce}"
+        ),
+        prompt_version="reviewer-v1",
+    )
+
+    result = ReviewerPanel(
+        primary=FailedProvider(), sparring=sparring, fallback=fallback
+    ).complete(request)
+
+    assert result.ok is False
+    assert result.error is not None
+    assert "panel_single_fallback_cannot_decide" in result.error.message
+    assert "false_missing_manuscript" in result.error.message
+
+
+def test_reviewer_panel_allows_substantively_empty_rejection() -> None:
+    primary = _ReviewPayloadProvider(
+        "reviewer-a", _review_payload("reject"), provider="provider-a"
+    )
+    sparring = _ReviewPayloadProvider(
+        "reviewer-b", _review_payload("reject"), provider="provider-b"
+    )
+    nonce = "b" * 24
+    request = ProviderRequest(
+        system_prompt="system",
+        user_prompt=(
+            f"SUBMISSION_DATA_START_{nonce}\n"
+            + json.dumps({"abstract": "Padded abstract.", "sections": _full_sections()})
+            + f"\nSUBMISSION_DATA_END_{nonce}"
+        ),
+        prompt_version="reviewer-v1",
+    )
+
+    result = ReviewerPanel(
+        primary=primary, sparring=sparring, fallback=primary
+    ).complete(request)
+
     assert result.ok is True
     assert result.response is not None
-    assert '"recommendation": "revise"' in result.response.text
-    assert result.response.provider == "reviewer-panel"
-    assert result.response.metadata["route"] == "fallback_tiebreak"
-    assert result.response.metadata["escalated_to_fallback"] is True
-    assert result.response.metadata["primary_recommendation"] == "accept"
-    assert result.response.metadata["sparring_recommendation"] == "reject"
-    assert result.response.metadata["fallback_tiebreak_attempts"] == 1
-    assert result.response.metadata["panel_models"] == [
-        "google/gemma-4-31b-it",
-        "mimo-v2.5-pro",
-        "mistralai/mistral-small-2603",
-    ]
-    assert result.response.usage.cost_usd == 0.3
+    assert result.response.metadata["decision_quorum_count"] == 2
+    assert '"recommendation": "reject"' in result.response.text
+
+
+@pytest.mark.parametrize("recommendation", ["revise", "reject"])
+def test_one_provider_cannot_form_non_accept_decision_quorum(
+    recommendation: str,
+) -> None:
+    payload = _review_payload(recommendation)
+    panel = ReviewerPanel(
+        primary=_ReviewPayloadProvider("reviewer-a", payload),
+        sparring=_ReviewPayloadProvider("reviewer-b", payload),
+        fallback=_ReviewPayloadProvider("reviewer-c", payload),
+    )
+
+    result = panel.complete(
+        ProviderRequest(
+            system_prompt="system", user_prompt="user", prompt_version="reviewer-v1"
+        )
+    )
+
+    assert result.ok is False
+    assert result.error is not None
+    assert "panel_decision_quorum_unavailable" in result.error.message
 
 
 def test_reviewer_panel_cannot_create_accept_without_two_accept_votes() -> None:
@@ -1881,18 +2505,18 @@ def test_reviewer_panel_cannot_create_accept_without_two_accept_votes() -> None:
                 ),
             )
 
-    request = ProviderRequest(system_prompt="system", user_prompt="user", prompt_version="reviewer-v1")
+    request = ProviderRequest(
+        system_prompt="system", user_prompt="user", prompt_version="reviewer-v1"
+    )
     result = ReviewerPanel(
         primary=Provider("primary", "revise"),
         sparring=Provider("sparring", "reject"),
         fallback=Provider("fallback", "accept"),
     ).complete(request)
 
-    assert result.ok is True
-    assert result.response is not None
-    assert '"recommendation": "reject"' in result.response.text
-    assert result.response.metadata["route"] == "fallback_accept_quorum_unmet_conservative"
-    assert result.response.metadata["accept_quorum_count"] == 1
+    assert result.ok is False
+    assert result.error is not None
+    assert "panel_accept_quorum_unavailable" in result.error.message
 
     duplicate_model = ReviewerPanel(
         primary=Provider("same-model", "accept"),
@@ -1915,7 +2539,9 @@ def test_reviewer_panel_cannot_create_accept_without_two_accept_votes() -> None:
 
 def test_reviewer_panel_retries_malformed_tiebreaker_once() -> None:
     class Provider:
-        def __init__(self, provider: str, model: str, payloads: list[dict[str, object]]) -> None:
+        def __init__(
+            self, provider: str, model: str, payloads: list[dict[str, object]]
+        ) -> None:
             self.provider = provider
             self.model = model
             self.payloads = payloads
@@ -1935,22 +2561,24 @@ def test_reviewer_panel_retries_malformed_tiebreaker_once() -> None:
             )
 
     fallback = Provider(
-        "openrouter",
+        "independent-fallback",
         "mistralai/mistral-small-2603",
         [
             _review_payload(
-                "revise",
+                "reject",
                 review_markdown="",
                 major_issues=[],
                 minor_issues=[],
                 required_revisions=[],
             ),
-            _review_payload("revise", review_markdown="Fallback revises on retry."),
+            _review_payload("reject", review_markdown="Fallback rejects on retry."),
         ],
     )
     panel = ReviewerPanel(
         primary=Provider("mimo", "mimo-v2.5-pro", [_review_payload("accept")]),
-        sparring=Provider("openrouter", "google/gemma-4-31b-it", [_review_payload("reject")]),
+        sparring=Provider(
+            "openrouter", "google/gemma-4-31b-it", [_review_payload("reject")]
+        ),
         fallback=fallback,
     )
     result = panel.complete(
@@ -1964,14 +2592,18 @@ def test_reviewer_panel_retries_malformed_tiebreaker_once() -> None:
     assert result.ok is True
     assert result.response is not None
     assert fallback.calls == 2
-    assert '"recommendation": "revise"' in result.response.text
+    assert '"recommendation": "reject"' in result.response.text
     assert result.response.metadata["route"] == "fallback_tiebreak"
     assert result.response.metadata["fallback_tiebreak_attempts"] == 2
 
 
-def test_reviewer_panel_uses_conservative_valid_review_when_tiebreaker_stays_malformed() -> None:
+def test_reviewer_panel_uses_conservative_valid_review_when_tiebreaker_stays_malformed() -> (
+    None
+):
     class Provider:
-        def __init__(self, provider: str, model: str, payload: dict[str, object]) -> None:
+        def __init__(
+            self, provider: str, model: str, payload: dict[str, object]
+        ) -> None:
             self.provider = provider
             self.model = model
             self.payload = payload
@@ -1989,10 +2621,16 @@ def test_reviewer_panel_uses_conservative_valid_review_when_tiebreaker_stays_mal
                 ),
             )
 
-    fallback = Provider("openrouter", "mistralai/mistral-small-2603", _review_payload("accept", review_markdown=""))
+    fallback = Provider(
+        "openrouter",
+        "mistralai/mistral-small-2603",
+        _review_payload("accept", review_markdown=""),
+    )
     panel = ReviewerPanel(
         primary=Provider("mimo", "mimo-v2.5-pro", _review_payload("accept")),
-        sparring=Provider("openrouter", "google/gemma-4-31b-it", _review_payload("reject")),
+        sparring=Provider(
+            "openrouter", "google/gemma-4-31b-it", _review_payload("reject")
+        ),
         fallback=fallback,
     )
     result = panel.complete(
@@ -2003,15 +2641,11 @@ def test_reviewer_panel_uses_conservative_valid_review_when_tiebreaker_stays_mal
             response_format="json_object",
         )
     )
-    assert result.ok is True
-    assert result.response is not None
+    assert result.ok is False
+    assert result.error is not None
     assert fallback.calls == 2
-    assert '"recommendation": "reject"' in result.response.text
-    assert result.response.metadata["route"] == "fallback_tiebreak_failed_conservative"
-    assert result.response.metadata["ops_flag"] == "fallback_tiebreak_failed_conservative"
-    assert result.response.metadata["fallback_tiebreak_attempts"] == 2
-    assert "missing_review_markdown" in str(result.response.metadata["fallback_error"])
-    assert result.response.usage.cost_usd == 0.2
+    assert "panel_disagreement_unresolved" in result.error.message
+    assert "missing_review_markdown" in result.error.message
 
 
 def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
@@ -2042,7 +2676,11 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
         fallback=BrokenProvider(
             "openrouter",
             "google/gemma-4-31b-it",
-            json.dumps(_review_payload("accept", review_markdown="Fallback confirms acceptance.")),
+            json.dumps(
+                _review_payload(
+                    "accept", review_markdown="Fallback confirms acceptance."
+                )
+            ),
         ),
     )
     result = panel.complete(
@@ -2056,10 +2694,20 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
     assert result.ok is True
     assert result.response is not None
     assert '"recommendation": "accept"' in result.response.text
-    assert result.response.metadata["route"] == "single_reviewer_accept_quorum"
+    assert result.response.metadata["route"] == "primary_failed_sparring_used_confirmed"
     assert result.response.metadata["accept_quorum_count"] == 2
     assert result.response.metadata["ops_flag"] == "primary_failed"
     assert "invalid_panel_response" in str(result.response.metadata["primary_error"])
+    receipts = result.response.metadata["reviewer_receipts"]
+    assert isinstance(receipts, list)
+    assert len(receipts) == 3
+    responses = [
+        receipt.get("response") for receipt in receipts if isinstance(receipt, dict)
+    ]
+    responses = [response for response in responses if isinstance(response, dict)]
+    assert len(responses) == 2
+    assert all(response.get("rubric_scores") for response in responses)
+    assert all(response.get("review_markdown") for response in responses)
 
 
 @pytest.mark.parametrize(
@@ -2074,7 +2722,10 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
             ),
             id="missing-source-id",
         ),
-        pytest.param({**_review_payload("accept"), "recommendation": "approve"}, id="invalid-recommendation"),
+        pytest.param(
+            {**_review_payload("accept"), "recommendation": "approve"},
+            id="invalid-recommendation",
+        ),
         pytest.param(
             _review_payload(
                 "revise",
@@ -2084,36 +2735,40 @@ def test_reviewer_panel_treats_malformed_primary_as_failure() -> None:
             ),
             id="missing-integrity-quote",
         ),
-        pytest.param(_review_payload("accept", review_markdown=""), id="missing-rationale"),
+        pytest.param(
+            _review_payload("accept", review_markdown=""), id="missing-rationale"
+        ),
     ],
 )
 def test_reviewer_panel_uses_slot_fallback_for_invalid_model_output(
     malformed_payload: dict[str, object],
 ) -> None:
-    slot_fallback = _ReviewPayloadProvider("mistralai/mistral-small-2603", _review_payload("accept"))
-    panel_fallback = _ReviewPayloadProvider("fallback-unused", _review_payload("accept", review_markdown=""))
+    slot_fallback = _ReviewPayloadProvider(
+        "mistralai/mistral-small-2603", _review_payload("accept")
+    )
+    panel_fallback = _ReviewPayloadProvider(
+        "fallback-unused", _review_payload("accept", review_markdown="")
+    )
     panel = ReviewerPanel(
         primary=FallbackProvider(
             primary=_ReviewPayloadProvider("MiniMax-M3", malformed_payload),
             fallback=slot_fallback,
         ),
-        sparring=_ReviewPayloadProvider("google/gemma-4-31b-it", _review_payload("accept")),
+        sparring=_ReviewPayloadProvider(
+            "google/gemma-4-31b-it", _review_payload("accept")
+        ),
         fallback=panel_fallback,
     )
 
     result = panel.complete(
-        ProviderRequest(system_prompt="system", user_prompt="user", prompt_version="reviewer-v1")
+        ProviderRequest(
+            system_prompt="system", user_prompt="user", prompt_version="reviewer-v1"
+        )
     )
 
-    assert result.ok is True
-    assert result.response is not None
-    assert result.response.metadata["route"] == "consensus"
-    assert result.response.metadata["primary_fallback_used"] is True
-    assert result.response.metadata["accept_quorum_count"] == 2
-    assert result.response.metadata["accept_quorum_models"] == [
-        "google/gemma-4-31b-it",
-        "mistralai/mistral-small-2603",
-    ]
+    assert result.ok is False
+    assert result.error is not None
+    assert "panel_accept_quorum_unavailable" in result.error.message
     assert slot_fallback.calls == 1
     assert panel_fallback.calls == 0
 
@@ -2130,7 +2785,9 @@ def test_invalid_slot_fallback_cannot_duplicate_accept_quorum() -> None:
     )
 
     result = panel.complete(
-        ProviderRequest(system_prompt="system", user_prompt="user", prompt_version="reviewer-v1")
+        ProviderRequest(
+            system_prompt="system", user_prompt="user", prompt_version="reviewer-v1"
+        )
     )
 
     assert result.ok is False
@@ -2140,7 +2797,9 @@ def test_invalid_slot_fallback_cannot_duplicate_accept_quorum() -> None:
 
 def test_reviewer_panel_treats_missing_review_markdown_as_failure() -> None:
     class BrokenProvider:
-        def __init__(self, provider: str, model: str, payload: dict[str, object]) -> None:
+        def __init__(
+            self, provider: str, model: str, payload: dict[str, object]
+        ) -> None:
             self.provider = provider
             self.model = model
             self.payload = payload
@@ -2181,21 +2840,22 @@ def test_reviewer_panel_treats_missing_review_markdown_as_failure() -> None:
             response_format="json_object",
         )
     )
-    assert result.ok is True
-    assert result.response is not None
-    assert '"recommendation": "revise"' in result.response.text
-    assert result.response.metadata["route"] == "single_reviewer_accept_overruled"
-    assert result.response.metadata["accept_quorum_count"] == 1
-    assert "missing_review_markdown" in str(result.response.metadata["primary_error"])
+    assert result.ok is False
+    assert result.error is not None
+    assert "panel_single_reviewer_disagreement" in result.error.message
+    assert "missing_review_markdown" in result.error.message
 
 
-def test_reviewer_panel_recovers_non_accept_review_markdown_from_structured_feedback() -> None:
+def test_reviewer_panel_recovers_non_accept_review_markdown_from_structured_feedback() -> (
+    None
+):
     class Provider:
-        provider = "stub"
-        model = "stub-model"
-
-        def __init__(self, payload: dict[str, object]) -> None:
+        def __init__(
+            self, payload: dict[str, object], *, provider: str, model: str
+        ) -> None:
             self.payload = payload
+            self.provider = provider
+            self.model = model
 
         def complete(self, request: ProviderRequest) -> ProviderResult:  # noqa: ARG002
             return ProviderResult(
@@ -2210,9 +2870,13 @@ def test_reviewer_panel_recovers_non_accept_review_markdown_from_structured_feed
 
     missing_markdown = _review_payload("revise", review_markdown="")
     panel = ReviewerPanel(
-        primary=Provider(missing_markdown),
-        sparring=Provider(_review_payload("revise")),
-        fallback=Provider(_review_payload("reject")),
+        primary=Provider(missing_markdown, provider="provider-a", model="reviewer-a"),
+        sparring=Provider(
+            _review_payload("revise"), provider="provider-b", model="reviewer-b"
+        ),
+        fallback=Provider(
+            _review_payload("reject"), provider="provider-c", model="reviewer-c"
+        ),
     )
 
     result = panel.complete(
@@ -2234,7 +2898,9 @@ def test_reviewer_panel_recovers_non_accept_review_markdown_from_structured_feed
 
 def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
     class BrokenProvider:
-        def __init__(self, provider: str, model: str, payload: dict[str, object]) -> None:
+        def __init__(
+            self, provider: str, model: str, payload: dict[str, object]
+        ) -> None:
             self.provider = provider
             self.model = model
             self.payload = payload
@@ -2290,11 +2956,10 @@ def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
             response_format="json_object",
         )
     )
-    assert result.ok is True
-    assert result.response is not None
-    assert '"recommendation": "revise"' in result.response.text
-    assert result.response.metadata["route"] == "primary_failed_sparring_used"
-    assert "accept_rubric_too_weak" in str(result.response.metadata["primary_error"])
+    assert result.ok is False
+    assert result.error is not None
+    assert "panel_single_reviewer_disagreement" in result.error.message
+    assert "accept_rubric_too_weak" in result.error.message
 
 
 @pytest.mark.parametrize(
@@ -2305,9 +2970,13 @@ def test_reviewer_panel_treats_weak_accept_contract_as_failure() -> None:
         ("__missing__", "missing_required_revisions"),
     ],
 )
-def test_reviewer_panel_rejects_non_actionable_revise_contract(required_revisions: object, expected_error: str) -> None:
+def test_reviewer_panel_rejects_non_actionable_revise_contract(
+    required_revisions: object, expected_error: str
+) -> None:
     class Provider:
-        def __init__(self, provider: str, model: str, payload: dict[str, object]) -> None:
+        def __init__(
+            self, provider: str, model: str, payload: dict[str, object]
+        ) -> None:
             self.provider = provider
             self.model = model
             self.payload = payload
@@ -2356,11 +3025,10 @@ def test_reviewer_panel_rejects_non_actionable_revise_contract(required_revision
         )
     )
 
-    assert result.ok is True
-    assert result.response is not None
-    assert result.response.metadata["route"] == "single_reviewer_accept_overruled"
-    assert expected_error in str(result.response.metadata["primary_error"])
-    assert '"recommendation": "reject"' in result.response.text
+    assert result.ok is False
+    assert result.error is not None
+    assert "panel_single_reviewer_disagreement" in result.error.message
+    assert expected_error in result.error.message
 
 
 def test_workflow_stores_panel_route_metadata() -> None:
@@ -2395,14 +3063,24 @@ def test_workflow_stores_panel_route_metadata() -> None:
                     ),
                     provider=self.provider,
                     model=self.model,
-                    usage=ProviderUsage(input_tokens=33, output_tokens=12, cost_usd=0.9),
+                    usage=ProviderUsage(
+                        input_tokens=33, output_tokens=12, cost_usd=0.9
+                    ),
                     metadata={
                         "route": "consensus",
                         "winner_provider": "mimo",
                         "winner_model": "mimo-v2.5-pro",
                         "primary_recommendation": "accept",
                         "accept_quorum_count": 2,
-                        "accept_quorum_models": ["mimo-v2.5-pro", "google/gemma-4-31b-it"],
+                        "accept_quorum_models": [
+                            "mimo-v2.5-pro",
+                            "google/gemma-4-31b-it",
+                        ],
+                        "accept_quorum_identities": [
+                            "mimo:mimo-v2.5-pro",
+                            "openrouter:google/gemma-4-31b-it",
+                        ],
+                        "accept_quorum_providers": ["mimo", "openrouter"],
                         "sparring_recommendation": "accept",
                     },
                 ),
@@ -2424,7 +3102,11 @@ def test_workflow_stores_panel_route_metadata() -> None:
     )
     engine = WorkflowEngine(provider=PanelProvider())
     engine.handle_job(
-        RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}),
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        ),
         repo,
     )
     review_job = repo.queued_jobs()[0]
@@ -2470,7 +3152,13 @@ def test_longevity_exemplar_submission_is_accepted() -> None:
         )
     )
     engine = WorkflowEngine()
-    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        )
+    )
     engine.handle_job(intake_job, repo)
     repo.complete_job(intake_job.id)
 
@@ -2479,7 +3167,13 @@ def test_longevity_exemplar_submission_is_accepted() -> None:
     repo.complete_job(review_job.id)
 
     review = repo.list_objects(ObjectType.REVIEW)[0]
-    editorial_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id, "domain_slug": "longevity"}))
+    editorial_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.EDITORIAL,
+            payload={"review_id": review.id, "domain_slug": "longevity"},
+        )
+    )
     engine.handle_job(editorial_job, repo)
     repo.complete_job(editorial_job.id)
 
@@ -2496,7 +3190,7 @@ def test_missing_limitations_fails_intake() -> None:
             metadata={
                 "abstract": "CALERIE-2 RCT analysis.",
                 "sections": {
-        "Research Question": "Does two years of moderate caloric restriction reduce circulating biomarkers of cellular senescence in healthy adults enrolled in CALERIE-2, and can that signal be interpreted as evidence of a durable anti-aging effect rather than a study-specific biomarker shift confined to one tightly monitored trial population with unusually high adherence, intensive follow-up, and limited demographic diversity?",
+                    "Research Question": "Does two years of moderate caloric restriction reduce circulating biomarkers of cellular senescence in healthy adults enrolled in CALERIE-2, and can that signal be interpreted as evidence of a durable anti-aging effect rather than a study-specific biomarker shift confined to one tightly monitored trial population with unusually high adherence, intensive follow-up, and limited demographic diversity?",
                     "Search Summary": "CALERIE-2 biomarker sub-study retained as sole source. No other RCTs of CR with senescence endpoints identified in this population.",
                     "Evidence Landscape": "Single well-powered RCT supplemented by mechanistic reviews. Evidence base is narrow by design.",
                     "Key Findings": "CR significantly reduced 9 SASP biomarkers at 12 months and a subset at 24 months vs ad libitum controls.",
@@ -2511,8 +3205,15 @@ def test_missing_limitations_fails_intake() -> None:
         )
     )
     engine = WorkflowEngine()
-    result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
-    assert result.get("terminal_decision") == Decision.REJECT.value
+    result = engine.handle_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        ),
+        repo,
+    )
+    assert result.get("terminal_decision") == Decision.REVISE.value
 
 
 def test_missing_gaps_identified_fails_intake() -> None:
@@ -2524,7 +3225,7 @@ def test_missing_gaps_identified_fails_intake() -> None:
             metadata={
                 "abstract": "Phase 2 RCT of dasatinib + quercetin for bone metabolism.",
                 "sections": {
-        "Research Question": "In postmenopausal women with osteopenia, does twenty weeks of intermittent senolytic therapy with dasatinib plus quercetin reduce the bone resorption marker CTx versus placebo, and is any observed effect strong enough to justify broader claims about bone-health deployment beyond this single short-duration randomized trial, limited endpoint set, and one narrowly defined patient population?",
+                    "Research Question": "In postmenopausal women with osteopenia, does twenty weeks of intermittent senolytic therapy with dasatinib plus quercetin reduce the bone resorption marker CTx versus placebo, and is any observed effect strong enough to justify broader claims about bone-health deployment beyond this single short-duration randomized trial, limited endpoint set, and one narrowly defined patient population?",
                     "Search Summary": "Single phase 2 RCT retained. PubMed and ClinicalTrials.gov searched for senolytic trials with bone endpoints in postmenopausal populations.",
                     "Evidence Landscape": "One well-powered RCT with preregistered primary endpoint. No systematic reviews of senolytics for bone metabolism exist.",
                     "Key Findings": "The primary endpoint did not differ between groups at 20 weeks. Secondary bone formation markers showed transient early elevation.",
@@ -2539,8 +3240,15 @@ def test_missing_gaps_identified_fails_intake() -> None:
         )
     )
     engine = WorkflowEngine()
-    result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
-    assert result.get("terminal_decision") == Decision.REJECT.value
+    result = engine.handle_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        ),
+        repo,
+    )
+    assert result.get("terminal_decision") == Decision.REVISE.value
 
 
 def test_short_research_question_fails_template_gate() -> None:
@@ -2562,10 +3270,21 @@ def test_short_research_question_fails_template_gate() -> None:
         )
     )
     engine = WorkflowEngine()
-    result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
+    result = engine.handle_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        ),
+        repo,
+    )
     decision = repo.list_objects(ObjectType.DECISION)[0]
-    assert result.get("terminal_decision") == Decision.REVISE.value  # author-correctable intake defect
-    assert {failure["name"] for failure in decision.metadata["gate_failures"]} == {"research_question_word_budget"}
+    assert (
+        result.get("terminal_decision") == Decision.REVISE.value
+    )  # author-correctable intake defect
+    assert {failure["name"] for failure in decision.metadata["gate_failures"]} == {
+        "research_question_word_budget"
+    }
 
 
 def test_too_few_citations_fail_template_gate() -> None:
@@ -2585,10 +3304,19 @@ def test_too_few_citations_fail_template_gate() -> None:
         )
     )
     engine = WorkflowEngine()
-    result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
+    result = engine.handle_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        ),
+        repo,
+    )
     decision = repo.list_objects(ObjectType.DECISION)[0]
-    assert result.get("terminal_decision") == Decision.REJECT.value
-    assert {failure["name"] for failure in decision.metadata["gate_failures"]} == {"minimum_citations"}
+    assert result.get("terminal_decision") == Decision.REVISE.value
+    assert {failure["name"] for failure in decision.metadata["gate_failures"]} == {
+        "minimum_citations"
+    }
 
 
 def test_low_recency_ratio_fails_template_gate() -> None:
@@ -2612,10 +3340,19 @@ def test_low_recency_ratio_fails_template_gate() -> None:
         )
     )
     engine = WorkflowEngine()
-    result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
+    result = engine.handle_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        ),
+        repo,
+    )
     decision = repo.list_objects(ObjectType.DECISION)[0]
-    assert result.get("terminal_decision") == Decision.REJECT.value
-    assert {failure["name"] for failure in decision.metadata["gate_failures"]} == {"recency_ratio"}
+    assert result.get("terminal_decision") == Decision.REVISE.value
+    assert {failure["name"] for failure in decision.metadata["gate_failures"]} == {
+        "recency_ratio"
+    }
 
 
 def test_invalid_source_bundle_schema_fails_intake() -> None:
@@ -2637,10 +3374,21 @@ def test_invalid_source_bundle_schema_fails_intake() -> None:
         )
     )
     engine = WorkflowEngine()
-    result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
+    result = engine.handle_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        ),
+        repo,
+    )
     decision = repo.list_objects(ObjectType.DECISION)[0]
-    assert result.get("terminal_decision") == Decision.REVISE.value  # author-correctable intake defect
-    assert {failure["name"] for failure in decision.metadata["gate_failures"]} == {"source_bundle_schema"}
+    assert (
+        result.get("terminal_decision") == Decision.REVISE.value
+    )  # author-correctable intake defect
+    assert {failure["name"] for failure in decision.metadata["gate_failures"]} == {
+        "source_bundle_schema"
+    }
 
 
 def test_missing_evidence_type_fails_intake() -> None:
@@ -2662,8 +3410,17 @@ def test_missing_evidence_type_fails_intake() -> None:
         )
     )
     engine = WorkflowEngine()
-    result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
-    assert result.get("terminal_decision") == Decision.REVISE.value  # author-correctable intake defect
+    result = engine.handle_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        ),
+        repo,
+    )
+    assert (
+        result.get("terminal_decision") == Decision.REVISE.value
+    )  # author-correctable intake defect
 
 
 def test_calibration_revise_decision() -> None:
@@ -2690,7 +3447,9 @@ def test_calibration_revise_decision() -> None:
                                 "Key findings are descriptive rather than synthetic.",
                                 "Conclusion is broader than the evidence landscape supports.",
                             ],
-                            "minor_issues": ["Limitations section is honest but not integrated into the conclusion."],
+                            "minor_issues": [
+                                "Limitations section is honest but not integrated into the conclusion."
+                            ],
                             "required_revisions": [
                                 "Rewrite key findings to synthesize rather than describe.",
                                 "Narrow conclusion to match evidence scope.",
@@ -2703,7 +3462,9 @@ def test_calibration_revise_decision() -> None:
                     ),
                     provider=self.provider,
                     model=self.model,
-                    usage=ProviderUsage(input_tokens=20, output_tokens=10, cost_usd=0.0),
+                    usage=ProviderUsage(
+                        input_tokens=20, output_tokens=10, cost_usd=0.0
+                    ),
                 ),
             )
 
@@ -2732,7 +3493,13 @@ def test_calibration_revise_decision() -> None:
     )
     engine = WorkflowEngine(provider=ReviseProvider())
 
-    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        )
+    )
     intake_result = engine.handle_job(intake_job, repo)
     assert intake_result.get("next_stage") == Stage.REVIEW.value
     repo.complete_job(intake_job.id)
@@ -2787,10 +3554,20 @@ def _rubric_accept_provider() -> object:
                     ),
                     provider=self.provider,
                     model=self.model,
-                    usage=ProviderUsage(input_tokens=20, output_tokens=10, cost_usd=0.0),
+                    usage=ProviderUsage(
+                        input_tokens=20, output_tokens=10, cost_usd=0.0
+                    ),
                     metadata={
                         "accept_quorum_count": 2,
-                        "accept_quorum_models": ["calibration-primary", "calibration-sparring"],
+                        "accept_quorum_models": [
+                            "calibration-primary",
+                            "calibration-sparring",
+                        ],
+                        "accept_quorum_identities": [
+                            "calibration-a:calibration-primary",
+                            "calibration-b:calibration-sparring",
+                        ],
+                        "accept_quorum_providers": ["calibration-a", "calibration-b"],
                     },
                 ),
             )
@@ -2829,7 +3606,9 @@ def _minor_only_revise_provider() -> object:
                     ),
                     provider=self.provider,
                     model=self.model,
-                    usage=ProviderUsage(input_tokens=20, output_tokens=10, cost_usd=0.0),
+                    usage=ProviderUsage(
+                        input_tokens=20, output_tokens=10, cost_usd=0.0
+                    ),
                 ),
             )
 
@@ -2860,7 +3639,9 @@ def _rubric_revise_provider() -> object:
                                 "Key findings describe rather than synthesize.",
                                 "Conclusion is broader than the evidence landscape supports.",
                             ],
-                            "minor_issues": ["Limitations section is honest but not integrated into the conclusion."],
+                            "minor_issues": [
+                                "Limitations section is honest but not integrated into the conclusion."
+                            ],
                             "required_revisions": [
                                 "Rewrite key findings to synthesize rather than describe.",
                                 "Narrow conclusion to match evidence scope.",
@@ -2873,7 +3654,9 @@ def _rubric_revise_provider() -> object:
                     ),
                     provider=self.provider,
                     model=self.model,
-                    usage=ProviderUsage(input_tokens=20, output_tokens=10, cost_usd=0.0),
+                    usage=ProviderUsage(
+                        input_tokens=20, output_tokens=10, cost_usd=0.0
+                    ),
                 ),
             )
 
@@ -2917,14 +3700,18 @@ def _rubric_reject_provider() -> object:
                     ),
                     provider=self.provider,
                     model=self.model,
-                    usage=ProviderUsage(input_tokens=20, output_tokens=10, cost_usd=0.0),
+                    usage=ProviderUsage(
+                        input_tokens=20, output_tokens=10, cost_usd=0.0
+                    ),
                 ),
             )
 
     return Provider()
 
 
-def _calibration_submission(repo: InMemoryRuntimeRepository, *, recommendation: str) -> ResearchObject:
+def _calibration_submission(
+    repo: InMemoryRuntimeRepository, *, recommendation: str
+) -> ResearchObject:
     return repo.create_object(
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
@@ -2946,7 +3733,13 @@ def test_calibration_accept_rubric_fields_stored() -> None:
     submission = _calibration_submission(repo, recommendation="accept")
     engine = WorkflowEngine(provider=_rubric_accept_provider())
 
-    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        )
+    )
     engine.handle_job(intake_job, repo)
     repo.complete_job(intake_job.id)
 
@@ -2986,12 +3779,16 @@ def test_single_provider_accept_cannot_bypass_panel_quorum() -> None:
                 ),
             )
 
-    submission = _calibration_submission(InMemoryRuntimeRepository(), recommendation="accept")
+    submission = _calibration_submission(
+        InMemoryRuntimeRepository(), recommendation="accept"
+    )
     with pytest.raises(ValueError, match="accept_quorum_missing"):
         WorkflowEngine(provider=SingleProvider())._review_submission(submission)
 
 
-def test_secondary_billing_failure_skips_without_backlogging_accept(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_secondary_billing_failure_skips_without_backlogging_accept(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = 0
     monkeypatch.setenv("RESEARKA_V2_REVIEW_ATTESTATION_SECRET", "test-secret")
 
@@ -3006,19 +3803,27 @@ def test_secondary_billing_failure_skips_without_backlogging_accept(monkeypatch:
             None,
         )
 
-    monkeypatch.setattr("runtime_core.providers.urllib.request.urlopen", payment_required)
+    monkeypatch.setattr(
+        "runtime_core.providers.urllib.request.urlopen", payment_required
+    )
     primary = FallbackProvider(
         primary=DeterministicProvider(provider="minimax", model="MiniMax-M3"),
-        fallback=OpenRouterProvider(api_key="test", model="mistralai/mistral-small-2603"),
+        fallback=OpenRouterProvider(
+            api_key="test", model="mistralai/mistral-small-2603"
+        ),
     )
     sparring = FallbackProvider(
         primary=OpenRouterProvider(api_key="test", model="google/gemma-4-31b-it"),
-        fallback=OpenRouterProvider(api_key="test", model="mistralai/mistral-small-2603"),
+        fallback=OpenRouterProvider(
+            api_key="test", model="mistralai/mistral-small-2603"
+        ),
     )
     panel = ReviewerPanel(
         primary=primary,
         sparring=sparring,
-        fallback=OpenRouterProvider(api_key="test", model="mistralai/mistral-small-2603"),
+        fallback=OpenRouterProvider(
+            api_key="test", model="mistralai/mistral-small-2603"
+        ),
         allow_sparring_billing_skip=True,
     )
     repo = InMemoryRuntimeRepository()
@@ -3042,7 +3847,10 @@ def test_secondary_billing_failure_skips_without_backlogging_accept(monkeypatch:
     assert metadata["sparring_http_status"] == 402
     assert metadata["primary_fallback_used"] is False
     assert metadata["judge_release"]["settings"]["accept_quorum_min"] == 1
-    assert metadata["judge_release"]["settings"]["accept_quorum_waiver"] == "sparring_billing_unavailable"
+    assert (
+        metadata["judge_release"]["settings"]["accept_quorum_waiver"]
+        == "sparring_billing_unavailable"
+    )
     assert calls == 1
     assert not accept_quorum_satisfied(metadata)
     assert accept_quorum_satisfied(metadata, allow_billing_waiver=True)
@@ -3067,17 +3875,23 @@ def test_secondary_billing_failure_skips_without_backlogging_accept(monkeypatch:
         def complete(self, request: ProviderRequest) -> ProviderResult:  # noqa: ARG002
             return ProviderResult(
                 ok=False,
-                error=ProviderError(error_class=ProviderErrorClass.TIMEOUT, message="timed out"),
+                error=ProviderError(
+                    error_class=ProviderErrorClass.TIMEOUT, message="timed out"
+                ),
             )
 
     openrouter_primary = FallbackProvider(
         primary=TimedOutPrimary(provider="minimax", model="MiniMax-M3"),
-        fallback=DeterministicProvider(provider="openrouter", model="mistralai/mistral-small-2603"),
+        fallback=DeterministicProvider(
+            provider="openrouter", model="mistralai/mistral-small-2603"
+        ),
     )
     unsafe = ReviewerPanel(
         primary=openrouter_primary,
         sparring=OpenRouterProvider(api_key="test", model="google/gemma-4-31b-it"),
-        fallback=OpenRouterProvider(api_key="test", model="mistralai/mistral-small-2603"),
+        fallback=OpenRouterProvider(
+            api_key="test", model="mistralai/mistral-small-2603"
+        ),
         allow_sparring_billing_skip=True,
     ).complete(ProviderRequest(system_prompt="s", user_prompt="u", prompt_version="v"))
     assert unsafe.ok is False
@@ -3103,7 +3917,9 @@ def test_single_vote_waiver_requires_exact_billing_skip_receipt() -> None:
     assert not ReviewerPanel(
         primary=DeterministicProvider(provider="minimax", model="MiniMax-M3"),
         sparring=OpenRouterProvider(api_key="test", model="google/gemma-4-31b-it"),
-        fallback=OpenRouterProvider(api_key="test", model="mistralai/mistral-small-2603"),
+        fallback=OpenRouterProvider(
+            api_key="test", model="mistralai/mistral-small-2603"
+        ),
         allow_sparring_billing_skip=True,
     ).billing_skip_receipt_valid(
         {
@@ -3113,7 +3929,9 @@ def test_single_vote_waiver_requires_exact_billing_skip_receipt() -> None:
             "accept_quorum_models": ["MiniMax-M3", "google/gemma-4-31b-it"],
         }
     )
-    assert not accept_quorum_satisfied({**receipt, "route": "sparring_failed_primary_used"})
+    assert not accept_quorum_satisfied(
+        {**receipt, "route": "sparring_failed_primary_used"}
+    )
     assert not accept_quorum_satisfied(
         {**receipt, "accept_quorum_waiver": "timeout"},
         allow_billing_waiver=True,
@@ -3158,7 +3976,9 @@ def test_non_openrouter_sparring_fallback_cannot_claim_billing_skip() -> None:
     result = ReviewerPanel(
         primary=DeterministicProvider(provider="minimax", model="MiniMax-M3"),
         sparring=FallbackProvider(
-            primary=UnavailableOpenRouter(api_key="test", model="google/gemma-4-31b-it"),
+            primary=UnavailableOpenRouter(
+                api_key="test", model="google/gemma-4-31b-it"
+            ),
             fallback=billing,
         ),
         fallback=billing,
@@ -3167,7 +3987,7 @@ def test_non_openrouter_sparring_fallback_cannot_claim_billing_skip() -> None:
 
     assert result.ok is False
     assert result.error is not None
-    assert "panel_accept_quorum_unavailable" in result.error.message
+    assert "panel_decision_quorum_unavailable" in result.error.message
 
 
 def test_duplicate_reviewer_models_cannot_forge_accept_quorum() -> None:
@@ -3194,7 +4014,9 @@ def test_duplicate_reviewer_models_cannot_forge_accept_quorum() -> None:
                 ),
             )
 
-    submission = _calibration_submission(InMemoryRuntimeRepository(), recommendation="accept")
+    submission = _calibration_submission(
+        InMemoryRuntimeRepository(), recommendation="accept"
+    )
     with pytest.raises(ValueError, match="accept_quorum_missing"):
         WorkflowEngine(provider=ForgedPanel())._review_submission(submission)
     forged_waiver = {
@@ -3210,7 +4032,37 @@ def test_duplicate_reviewer_models_cannot_forge_accept_quorum() -> None:
         "winner_provider": "minimax",
     }
     with pytest.raises(ValueError, match="accept_quorum_missing"):
-        WorkflowEngine(provider=ForgedPanel(forged_waiver))._review_submission(submission)
+        WorkflowEngine(provider=ForgedPanel(forged_waiver))._review_submission(
+            submission
+        )
+
+
+def test_two_models_from_one_provider_do_not_form_accept_quorum() -> None:
+    assert not accept_quorum_satisfied(
+        {
+            "provider": "reviewer-panel",
+            "accept_quorum_count": 2,
+            "accept_quorum_models": ["legacy-a", "legacy-b"],
+        }
+    )
+    assert not accept_quorum_satisfied(
+        {
+            "provider": "reviewer-panel",
+            "accept_quorum_count": 1,
+            "accept_quorum_models": ["model-a", "model-b"],
+            "accept_quorum_identities": ["provider-a:model-a", "provider-a:model-b"],
+            "accept_quorum_providers": ["provider-a"],
+        }
+    )
+    assert accept_quorum_satisfied(
+        {
+            "provider": "reviewer-panel",
+            "accept_quorum_count": 2,
+            "accept_quorum_models": ["model-a", "model-b"],
+            "accept_quorum_identities": ["provider-a:model-a", "provider-b:model-b"],
+            "accept_quorum_providers": ["provider-a", "provider-b"],
+        }
+    )
 
 
 @pytest.mark.parametrize("count", ["invalid", [], {}])
@@ -3250,7 +4102,9 @@ def test_panel_and_workflow_reject_score_below_accept_floor() -> None:
                     ),
                     provider=self.provider,
                     model=self.model,
-                    usage=ProviderUsage(input_tokens=10, output_tokens=10, cost_usd=0.0),
+                    usage=ProviderUsage(
+                        input_tokens=10, output_tokens=10, cost_usd=0.0
+                    ),
                 ),
             )
 
@@ -3263,7 +4117,13 @@ def test_panel_and_workflow_reject_score_below_accept_floor() -> None:
     )
     engine = WorkflowEngine(provider=panel)
 
-    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        )
+    )
     engine.handle_job(intake_job, repo)
     repo.complete_job(intake_job.id)
 
@@ -3278,7 +4138,13 @@ def test_minor_issues_only_revise_without_action_is_invalid() -> None:
     submission = _calibration_submission(repo, recommendation="revise")
     engine = WorkflowEngine(provider=_minor_only_revise_provider())
 
-    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        )
+    )
     engine.handle_job(intake_job, repo)
     repo.complete_job(intake_job.id)
 
@@ -3291,30 +4157,26 @@ def test_minor_issues_only_revise_without_action_is_invalid() -> None:
 def test_existing_minor_issues_only_review_remains_revise() -> None:
     repo = InMemoryRuntimeRepository()
     submission = _calibration_submission(repo, recommendation="revise")
-    review = repo.create_object(
-        ResearchObject(
-            object_type=ObjectType.REVIEW,
-            parent_object_id=submission.id,
-            title=f"Review for {submission.title}",
-            body_markdown="Excellent synthesis. Minor issues do not detract from core quality.",
-            metadata={
-                "recommendation": "revise",
-                "rubric_scores": {
-                    "research_question_quality": 5,
-                    "synthesis_quality": 5,
-                    "claim_evidence_alignment": 5,
-                    "limitations_quality": 5,
-                    "gaps_quality": 4,
-                    "source_grounding": 4,
-                },
-                "major_issues": [],
-                "minor_issues": ["Clarify one wording detail."],
-                "required_revisions": [],
-                "claim_support_verdict": "supported",
-                "overclaim_verdict": "none",
-                "synthesis_quality_verdict": "strong",
+    review = bound_review(
+        repo,
+        submission,
+        {
+            "recommendation": "revise",
+            "rubric_scores": {
+                "research_question_quality": 5,
+                "synthesis_quality": 5,
+                "claim_evidence_alignment": 5,
+                "limitations_quality": 5,
+                "gaps_quality": 4,
+                "source_grounding": 4,
             },
-        )
+            "major_issues": [],
+            "minor_issues": ["Clarify one wording detail."],
+            "required_revisions": [],
+            "claim_support_verdict": "supported",
+            "overclaim_verdict": "none",
+            "synthesis_quality_verdict": "strong",
+        },
     )
 
     engine = WorkflowEngine(provider=_rubric_revise_provider())
@@ -3337,7 +4199,13 @@ def test_calibration_revise_rubric_fields_stored() -> None:
     submission = _calibration_submission(repo, recommendation="revise")
     engine = WorkflowEngine(provider=_rubric_revise_provider())
 
-    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        )
+    )
     engine.handle_job(intake_job, repo)
     repo.complete_job(intake_job.id)
 
@@ -3367,7 +4235,13 @@ def test_calibration_reject_rubric_fields_stored() -> None:
     submission = _calibration_submission(repo, recommendation="reject")
     engine = WorkflowEngine(provider=_rubric_reject_provider())
 
-    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        )
+    )
     engine.handle_job(intake_job, repo)
     repo.complete_job(intake_job.id)
 
@@ -3412,9 +4286,13 @@ def test_panel_stores_rubric_metadata_in_review() -> None:
                                 "gaps_quality": 4,
                                 "source_grounding": 3,
                             },
-                            "major_issues": ["Key findings are descriptive rather than synthetic."],
+                            "major_issues": [
+                                "Key findings are descriptive rather than synthetic."
+                            ],
                             "minor_issues": [],
-                            "required_revisions": ["Rewrite key findings to integrate evidence."],
+                            "required_revisions": [
+                                "Rewrite key findings to integrate evidence."
+                            ],
                             "claim_support_verdict": "partially_supported",
                             "overclaim_verdict": "mild",
                             "synthesis_quality_verdict": "adequate",
@@ -3423,7 +4301,9 @@ def test_panel_stores_rubric_metadata_in_review() -> None:
                     ),
                     provider=self.provider,
                     model=self.model,
-                    usage=ProviderUsage(input_tokens=33, output_tokens=12, cost_usd=0.9),
+                    usage=ProviderUsage(
+                        input_tokens=33, output_tokens=12, cost_usd=0.9
+                    ),
                     metadata={
                         "route": "consensus",
                         "winner_provider": "mimo",
@@ -3438,7 +4318,13 @@ def test_panel_stores_rubric_metadata_in_review() -> None:
     submission = _calibration_submission(repo, recommendation="revise")
     engine = WorkflowEngine(provider=PanelProviderWithRubric())
 
-    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        )
+    )
     engine.handle_job(intake_job, repo)
     repo.complete_job(intake_job.id)
 
@@ -3452,7 +4338,9 @@ def test_panel_stores_rubric_metadata_in_review() -> None:
     assert review.metadata["rubric_scores"]["synthesis_quality"] == 3
     assert review.metadata["claim_support_verdict"] == "partially_supported"
     assert review.metadata["overclaim_verdict"] == "mild"
-    assert review.metadata["major_issues"] == ["Key findings are descriptive rather than synthetic."]
+    assert review.metadata["major_issues"] == [
+        "Key findings are descriptive rather than synthetic."
+    ]
 
 
 def test_accept_requires_strong_rubric_contract() -> None:
@@ -3475,7 +4363,9 @@ def test_accept_requires_strong_rubric_contract() -> None:
                                 "gaps_quality": 4,
                                 "source_grounding": 3,
                             },
-                            "major_issues": ["Key findings are descriptive rather than synthetic."],
+                            "major_issues": [
+                                "Key findings are descriptive rather than synthetic."
+                            ],
                             "minor_issues": [],
                             "required_revisions": ["Rewrite key findings."],
                             "claim_support_verdict": "partially_supported",
@@ -3486,20 +4376,31 @@ def test_accept_requires_strong_rubric_contract() -> None:
                     ),
                     provider=self.provider,
                     model=self.model,
-                    usage=ProviderUsage(input_tokens=10, output_tokens=10, cost_usd=0.0),
+                    usage=ProviderUsage(
+                        input_tokens=10, output_tokens=10, cost_usd=0.0
+                    ),
                 ),
             )
 
     repo = InMemoryRuntimeRepository()
     submission = _calibration_submission(repo, recommendation="accept")
     engine = WorkflowEngine(provider=WeakAcceptProvider())
-    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        )
+    )
     engine.handle_job(intake_job, repo)
     repo.complete_job(intake_job.id)
 
     review_job = repo.claim_next_job()
     assert review_job is not None
-    with pytest.raises(ValueError, match="accept_rubric_too_weak|accept_has_major_issues|accept_claim_support_not_supported|accept_has_overclaim|accept_has_required_revisions"):
+    with pytest.raises(
+        ValueError,
+        match="accept_rubric_too_weak|accept_has_major_issues|accept_claim_support_not_supported|accept_has_overclaim|accept_has_required_revisions",
+    ):
         engine.handle_job(review_job, repo)
 
 
@@ -3511,7 +4412,9 @@ def test_accept_requires_strong_rubric_contract() -> None:
         ("__missing__", "missing_required_revisions"),
     ],
 )
-def test_non_actionable_revise_is_rejected_before_review_storage(required_revisions: object, expected_error: str) -> None:
+def test_non_actionable_revise_is_rejected_before_review_storage(
+    required_revisions: object, expected_error: str
+) -> None:
     class BadReviseProvider:
         provider = "bad-revise"
         model = "bad-revise-model"
@@ -3528,14 +4431,22 @@ def test_non_actionable_revise_is_rejected_before_review_storage(required_revisi
                     text=json.dumps(payload),
                     provider=self.provider,
                     model=self.model,
-                    usage=ProviderUsage(input_tokens=10, output_tokens=10, cost_usd=0.0),
+                    usage=ProviderUsage(
+                        input_tokens=10, output_tokens=10, cost_usd=0.0
+                    ),
                 ),
             )
 
     repo = InMemoryRuntimeRepository()
     submission = _calibration_submission(repo, recommendation="revise")
     engine = WorkflowEngine(provider=BadReviseProvider())
-    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        )
+    )
     engine.handle_job(intake_job, repo)
     repo.complete_job(intake_job.id)
 
@@ -3563,14 +4474,22 @@ def test_missing_rubric_fields_are_rejected() -> None:
                     ),
                     provider=self.provider,
                     model=self.model,
-                    usage=ProviderUsage(input_tokens=10, output_tokens=10, cost_usd=0.0),
+                    usage=ProviderUsage(
+                        input_tokens=10, output_tokens=10, cost_usd=0.0
+                    ),
                 ),
             )
 
     repo = InMemoryRuntimeRepository()
     submission = _calibration_submission(repo, recommendation="accept")
     engine = WorkflowEngine(provider=LegacyProvider())
-    intake_job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}))
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        )
+    )
     engine.handle_job(intake_job, repo)
     repo.complete_job(intake_job.id)
 
@@ -3599,8 +4518,17 @@ def test_malformed_doi_fails_intake() -> None:
         )
     )
     engine = WorkflowEngine()
-    result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
-    assert result.get("terminal_decision") == Decision.REVISE.value  # author-correctable intake defect
+    result = engine.handle_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        ),
+        repo,
+    )
+    assert (
+        result.get("terminal_decision") == Decision.REVISE.value
+    )  # author-correctable intake defect
     decision = repo.list_objects(ObjectType.DECISION)[0]
     assert "doi_sanity" in {f["name"] for f in decision.metadata["gate_failures"]}
 
@@ -3624,5 +4552,12 @@ def test_valid_doi_passes_intake() -> None:
         )
     )
     engine = WorkflowEngine()
-    result = engine.handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE, payload={"domain_slug": "longevity"}), repo)
+    result = engine.handle_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"domain_slug": "longevity"},
+        ),
+        repo,
+    )
     assert result.get("next_stage") == Stage.REVIEW.value

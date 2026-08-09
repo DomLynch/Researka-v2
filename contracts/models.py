@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import StrEnum
+import json
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 def utc_now() -> datetime:
@@ -16,6 +17,10 @@ class Stage(StrEnum):
     REVIEW = "autonomous_review"
     EDITORIAL = "autonomous_editorial_decision"
     PUBLISH = "autonomous_publish"
+    OSF_DEPOSIT = "osf_deposit"
+    DW_DELIVERY = "derivation_web_delivery"
+    PUBLICATION_FINALIZE = "publication_finalize"
+    AGENT_QUERY = "agent_query"
 
 
 class JobStatus(StrEnum):
@@ -81,6 +86,7 @@ class FailureClass(StrEnum):
     REVIEW_MISSING = "review_missing"
     EXACT_QUOTE_MISSING = "exact_quote_missing"
     PROVIDER_ERROR = "provider_error"
+    SYSTEM_UNAVAILABLE = "system_unavailable"
     OTHER = "other"
 
 
@@ -121,6 +127,7 @@ class RuntimeJob(BaseModel):
     status: JobStatus = JobStatus.QUEUED
     payload: dict = Field(default_factory=dict)
     lease_expires_at: datetime | None = None
+    lease_token: int = 0
     created_at: datetime = Field(default_factory=utc_now)
 
 
@@ -180,8 +187,10 @@ def _source_bundle_from_evidence_bundle(evidence_bundle: dict) -> list[dict]:
 
 
 class SubmissionPayload(BaseModel):
-    title: str
-    abstract: str
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=500)
+    abstract: str = Field(min_length=1, max_length=150_000)
     body_markdown: str | None = None
     sections: dict[str, str] = Field(default_factory=dict)
     source_bundle: list[dict] = Field(default_factory=list)
@@ -197,7 +206,9 @@ class SubmissionPayload(BaseModel):
     metadata: dict = Field(default_factory=dict)
     author_signature: str | None = None
     parent_submission_id: str | None = None
+    public_review_consent: bool = False
     domain_slug: str = "general"
+    category: str | None = None
     institution_name: str | None = None
     institution_ror: str | None = None
     ror_id: str | None = None
@@ -244,6 +255,24 @@ class SubmissionPayload(BaseModel):
             evidence_bundle: dict = raw_evidence_bundle if isinstance(raw_evidence_bundle, dict) else {}
             values["source_bundle"] = _source_bundle_from_evidence_bundle(evidence_bundle)
         return values
+
+    @model_validator(mode="after")
+    def enforce_payload_bounds(self) -> "SubmissionPayload":
+        if len(self.source_bundle) > 100:
+            raise ValueError("source_bundle_max_100")
+        if len(json.dumps(self.source_bundle, ensure_ascii=False, default=str).encode()) > 2_000_000:
+            raise ValueError("source_bundle_too_large")
+        if len(json.dumps(self.evidence_bundle, ensure_ascii=False, default=str).encode()) > 2_000_000:
+            raise ValueError("evidence_bundle_too_large")
+        if len(self.sections) > 40 or any(len(name) > 120 for name in self.sections):
+            raise ValueError("sections_shape_invalid")
+        if sum(len(str(value)) for value in self.sections.values()) > 2_000_000:
+            raise ValueError("sections_too_large")
+        if len(self.body_markdown or self.markdown or "") > 2_000_000:
+            raise ValueError("body_markdown_too_large")
+        if len(json.dumps(self.metadata, ensure_ascii=False, default=str).encode()) > 250_000:
+            raise ValueError("metadata_too_large")
+        return self
 
 
 class WorkflowContext(BaseModel):

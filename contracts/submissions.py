@@ -9,6 +9,8 @@ from pydantic import BaseModel, ValidationError, model_validator
 from .models import ArticleType, GateResult
 from .templates import RAPID_EVIDENCE_SYNTHESIS, publication_template_for
 
+SUBMISSION_POLICY_VERSION = "submission-policy-v2"
+
 _DOI_PATTERN = re.compile(r"^10\.\d{4,}/\S+$")
 # Prose-citation patterns: identifiers an author cites inside section text.
 # Every one must be a member of the submitted source bundle — citing receipts
@@ -78,9 +80,29 @@ _ALPHA_NOVELTY_TERMS = {
     "tension",
 }
 
+# Versioned extension surface observed in the live corpus. Unknown nested keys
+# are rejected instead of being silently ignored, while established producer
+# metadata remains forward-compatible with the v2 gate.
+_SOURCE_BUNDLE_FIELDS = frozenset({
+    "added_in_normalization", "card", "cited_as", "claim_span", "directness",
+    "doi", "effect_direction", "endpoint", "evidence_context", "evidence_origin",
+    "evidence_recency", "evidence_span", "evidence_tier", "evidence_type", "excerpt",
+    "id", "intervention", "is_retracted", "journal", "journal_name", "openalex_id",
+    "outcome_class", "payload", "pmid", "population", "publication_type", "quote",
+    "quote_verified", "registry_id", "relevance", "risk_of_bias", "setting", "source",
+    "source_content_hash", "source_fact", "source_identity_hash", "source_index",
+    "source_record_hash", "source_record_locator", "source_role", "source_type", "title",
+    "type", "url", "year",
+})
+
 
 def _clean_doi(value: str) -> str:
     return value.strip().rstrip(".,;").lower()
+
+
+def _trusted_host(host: str, expected: str) -> bool:
+    normalized = host.strip().lower().rstrip(".")
+    return normalized == expected or normalized.endswith(f".{expected}")
 
 
 def _citation_membership_failures(sections: dict[str, str], source_bundle: list[dict]) -> list[str]:
@@ -99,7 +121,7 @@ def _topic_anchors(title: str) -> set[str]:
     for segment in re.split(r":|\s+[—-]\s+", title.lower()):
         tokens = {
             token for token in re.findall(r"[a-z0-9]+", segment)
-            if len(token) > 2 or token == "ai"
+            if len(token) > 2 or token == "ai"  # nosec B105 - topic acronym, not a credential
         }
         anchors = {token for token in tokens if token not in _TOPIC_STOPWORDS}
         if anchors:
@@ -186,14 +208,17 @@ class SourceBundleEntry(BaseModel):
         if not isinstance(data, dict):
             return data
         values = dict(data)
+        unknown = sorted(str(key) for key in values if str(key) not in _SOURCE_BUNDLE_FIELDS)
+        if unknown:
+            raise ValueError(f"unknown source fields: {', '.join(unknown)}")
         parsed = urllib.parse.urlparse(str(values.get("url") or ""))
         host = parsed.hostname or ""
         path = urllib.parse.unquote(parsed.path).strip("/")
-        if host.endswith("doi.org") and not values.get("doi") and _DOI_PATTERN.match(path):
+        if _trusted_host(host, "doi.org") and not values.get("doi") and _DOI_PATTERN.match(path):
             values["doi"] = path
-        if host.endswith("pubmed.ncbi.nlm.nih.gov") and not values.get("pmid") and path.isdigit():
+        if _trusted_host(host, "pubmed.ncbi.nlm.nih.gov") and not values.get("pmid") and path.isdigit():
             values["pmid"] = path
-        if host.endswith("openalex.org") and not values.get("openalex_id") and re.fullmatch(r"W\d+", path, re.I):
+        if _trusted_host(host, "openalex.org") and not values.get("openalex_id") and re.fullmatch(r"W\d+", path, re.I):
             values["openalex_id"] = path
         if any(values.get(key) for key in ("quote", "evidence_span", "excerpt")):
             return values
@@ -286,7 +311,11 @@ def _normalize_source_bundle(source_bundle: list[dict]) -> list[SourceBundleEntr
         try:
             normalized.append(SourceBundleEntry.model_validate(entry))
         except ValidationError as exc:
-            raise ValueError(f"submission_template:source_bundle_entry_invalid:{index}:{exc.errors()[0]['type']}") from exc
+            error = exc.errors()[0]
+            raise ValueError(
+                f"submission_template:source_bundle_entry_invalid:{index}:"
+                f"{error['type']}:{error.get('msg', '')}"
+            ) from exc
     return normalized
 
 
@@ -314,7 +343,7 @@ def _has_stable_locator(entry: SourceBundleEntry) -> bool:
     )
 
 
-def _stable_locator_key(entry: SourceBundleEntry) -> str | None:
+def _stable_locator_keys(entry: SourceBundleEntry) -> set[str]:
     values = (
         ("doi", _clean_doi(str(entry.doi or ""))),
         ("pmid", str(entry.pmid or "").strip()),
@@ -322,7 +351,7 @@ def _stable_locator_key(entry: SourceBundleEntry) -> str | None:
         ("registry", str(entry.registry_id or "").strip().lower()),
         ("url", str(entry.url or "").strip().lower().rstrip("/")),
     )
-    return next((f"{kind}:{value}" for kind, value in values if value), None)
+    return {f"{kind}:{value}" for kind, value in values if value}
 
 
 def _has_registered_locator(entry: SourceBundleEntry) -> bool:
@@ -373,6 +402,10 @@ def _alpha_source_exception(
 # absent from this set signal insufficient or mismatched evidence, where the
 # corpus itself is inadequate, and stay terminal.
 REVISABLE_INTAKE_GATES = frozenset({
+    "minimum_citations",
+    "recency_ratio",
+    "alpha_title_novelty",
+    "topic_coherence",
     "source_bundle_schema",
     "source_identity",
     "primary_source_identity",
@@ -383,6 +416,7 @@ REVISABLE_INTAKE_GATES = frozenset({
     "citation_membership",
     "research_question_word_budget",
     "minimum_body_word_count",
+    "structure_gate",
     # Publish-gate defects evaluated during intake (runtime_core.gates): stray
     # pipeline text in the body and count bookkeeping are both presentation
     # errors the author can strip or correct. "core_claims_resolved" is
@@ -464,11 +498,11 @@ def run_submission_template_checks(
     duplicate_sources: list[int] = []
     seen_sources: set[str] = set()
     for index, entry in enumerate(normalized_bundle):
-        key = _stable_locator_key(entry)
-        if key in seen_sources:
+        keys = _stable_locator_keys(entry)
+        if keys & seen_sources:
             duplicate_sources.append(index)
-        elif key:
-            seen_sources.add(key)
+        else:
+            seen_sources.update(keys)
     results.append(
         GateResult(
             name="source_uniqueness",
@@ -528,10 +562,10 @@ def run_submission_template_checks(
     eligible_bundle: list[SourceBundleEntry] = []
     eligible_keys: set[str] = set()
     for entry in normalized_bundle:
-        key = _stable_locator_key(entry)
-        if _is_non_load_bearing(entry) or not key or key in eligible_keys:
+        keys = _stable_locator_keys(entry)
+        if _is_non_load_bearing(entry) or not keys or keys & eligible_keys:
             continue
-        eligible_keys.add(key)
+        eligible_keys.update(keys)
         eligible_bundle.append(entry)
     citation_count = len(eligible_bundle)
     citation_floor_exception = _alpha_source_exception(

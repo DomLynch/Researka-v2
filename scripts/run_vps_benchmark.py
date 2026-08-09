@@ -182,8 +182,8 @@ def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float 
                 record["error"] = meta.get("intake_rejected_reason", "intake gate failure")
                 record["duration_s"] = round(time.time() - t0, 3)
                 return record
-        except Exception:
-            pass
+        except (requests.RequestException, ValueError, TypeError, AttributeError) as exc:
+            record["submission_lookup_error"] = str(exc)
         record["stage_reached"] = "pending"
         record["outcome"] = "no_decision"
         record["duration_s"] = round(time.time() - t0, 3)
@@ -220,8 +220,8 @@ def submit_and_drain(paper: dict, base_url: str, api_key: str, timeout_s: float 
                 record["tokens_in"] = last_review.get("tokens_in", 0)
                 record["tokens_out"] = last_review.get("tokens_out", 0)
                 record["cost_usd"] = last_review.get("cost_usd", 0.0)
-    except Exception:
-        pass
+    except (requests.RequestException, ValueError, TypeError, AttributeError) as exc:
+        record["provenance_lookup_error"] = str(exc)
 
     record["stage_reached"] = "done"
     record["outcome"] = decision

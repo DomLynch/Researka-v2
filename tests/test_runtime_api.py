@@ -13,6 +13,8 @@ import pytest
 import starlette.testclient as starlette_testclient
 from fastapi.testclient import TestClient
 
+from apps.worker.main import WorkerApp
+
 from contracts import ArticleType, ClaimCard, ContradictionStatus, Decision, EventType, EvidenceGrade, ObjectType, ResearchObject, RuntimeEvent, Stage
 from runtime_core.goldset import summarize_gold_results
 from runtime_core.judge_release import calibration_metrics_complete, judge_release_id
@@ -24,13 +26,20 @@ def _repository(client: TestClient) -> Any:
     return cast(Any, client.app).state.repository
 
 
+def _public_metadata(**values: object) -> dict[str, object]:
+    return {"public_visibility": "listed", **values}
+
+
 def _seed_publication(client: TestClient, title: str, body: str = "") -> ResearchObject:
     return _repository(client).create_object(
         ResearchObject(
             object_type=ObjectType.PUBLICATION,
             title=title,
             body_markdown=body,
-            metadata={"url": f"https://researka.org/papers/{title.lower().replace(' ', '-')}"},
+            metadata={
+                "url": f"https://researka.org/papers/{title.lower().replace(' ', '-')}",
+                "public_visibility": "listed",
+            },
         )
     )
 
@@ -151,6 +160,30 @@ def test_architecture(client: TestClient) -> None:
     assert data["critical_flow"] == ["intake", "review", "editorial", "publish"]
 
 
+def test_submission_contract_is_generated_from_live_policy(client: TestClient) -> None:
+    response = client.get("/contracts/current")
+
+    assert response.status_code == 200
+    contract = response.json()
+    assert contract["version"] == "submission-policy-v2"
+    assert contract["canonical_input"] == "sections"
+    assert contract["body_markdown_authoritative"] is False
+    assert contract["article_types"]["research_synthesis"]["minimum_citations"] == 12
+    assert "Discussion" in contract["article_types"]["research_synthesis"]["required_sections"]
+    assert contract["submission_schema"]["additionalProperties"] is False
+
+
+def test_submission_contract_examples_are_versioned(client: TestClient) -> None:
+    response = client.get("/contracts/v2/examples/evidence_map")
+
+    assert response.status_code == 200
+    example = response.json()
+    assert example["policy_version"] == "submission-policy-v2"
+    assert example["submission"]["article_type"] == "evidence_map"
+    assert "Evidence Landscape" in example["submission"]["sections"]
+    assert client.get("/contracts/v1").status_code == 404
+
+
 def test_run_once_requires_admin_not_submission_key(client: TestClient, monkeypatch) -> None:
     monkeypatch.setenv("RESEARKA_V2_ADMIN_KEY", "admin-secret-123")
     response = client.post("/jobs/run-once", headers={"x-api-key": "test-legacy-key"})
@@ -237,10 +270,12 @@ def test_submission_flattens_trusted_audit_metadata(client: TestClient) -> None:
     assert response.status_code == 200
     metadata = response.json()["submission"]["metadata"]
     assert metadata["run_id"] == "synthesis-topic-v06-test"
-    assert metadata["content_hash"] == "sha256:paper"
-    assert metadata["source_citation_hash"] == "sha256:sources"
-    assert metadata["submission_identity_key"] == "sha256:identity"
-    assert metadata["submission_payload_hash"] == "sha256:payload"
+    assert metadata["client_claimed_content_hash"] == "sha256:paper"
+    assert metadata["client_claimed_source_citation_hash"] == "sha256:sources"
+    assert metadata["client_claimed_submission_identity_key"] == "sha256:identity"
+    assert metadata["client_claimed_submission_payload_hash"] == "sha256:payload"
+    assert metadata["canonical_package_hash"] == metadata["submission_content_hash"]
+    assert metadata["canonical_package_hash"] != "sha256:paper"
     assert metadata["topic"] == "topic_slug"
     assert "metadata" not in metadata
     assert "unsafe_extra" not in metadata
@@ -251,11 +286,15 @@ def test_osf_oauth_start_uses_authenticated_agent_key(client: TestClient, monkey
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_CLIENT_SECRET", "client-secret")
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_STATE_SECRET", "state-secret")
     monkeypatch.setenv("RESEARKA_V2_OSF_OAUTH_REDIRECT_URI", "https://api.researka.org/oauth/osf/callback")
-    raw_key = _repository(client).create_api_key("agent-v4-alpha-memo").raw_key
+    key = _repository(client).create_api_key("agent-v4-alpha-memo", daily_limit=1)
+    raw_key = key.raw_key
+    assert _repository(client).consume_api_key(raw_key)[1] == "ok"
 
     response = client.get("/oauth/osf/start", headers={"x-api-key": raw_key}, follow_redirects=False)
 
     assert response.status_code == 302
+    key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+    assert _repository(client).get_api_key_usage_today(key_hash) == 1
     location = response.headers["location"]
     parsed = urlparse(location)
     query = parse_qs(parsed.query)
@@ -394,6 +433,40 @@ def test_can_get_created_submission(client: TestClient) -> None:
     assert response.json()["object_type"] == "submission"
 
 
+def test_private_submission_routes_enforce_owner_and_admin_access(client: TestClient) -> None:
+    repo = _repository(client)
+    owner = repo.create_api_key("owner-agent", daily_limit=10)
+    other = repo.create_api_key("other-agent", daily_limit=10)
+    submission = client.post(
+        "/submissions",
+        headers={"x-api-key": owner.raw_key},
+        json={**_minimal_submission_payload(), "author_agent_id": "owner-agent"},
+    ).json()["submission"]
+    paths = (
+        f"/submissions/{submission['id']}",
+        f"/submissions/{submission['id']}/decision",
+        f"/submissions/{submission['id']}/provenance",
+        f"/submissions/{submission['id']}/timeline",
+    )
+
+    for path in paths:
+        assert client.get(path, headers={"x-api-key": other.raw_key}).status_code == 403
+        assert client.get(path, headers={"x-api-key": owner.raw_key}).status_code == 200
+        assert client.get(path, headers={"x-api-key": "test-admin-key"}).status_code == 200
+
+    revision = client.post(
+        "/submissions",
+        headers={"x-api-key": other.raw_key},
+        json={
+            **_minimal_submission_payload(),
+            "author_agent_id": "other-agent",
+            "parent_submission_id": submission["id"],
+        },
+    )
+    assert revision.status_code == 403
+    assert revision.json()["detail"] == "parent_submission_owner_mismatch"
+
+
 def test_agent_query_disabled_by_default(client: TestClient, monkeypatch) -> None:
     monkeypatch.delenv("RESEARKA_V2_AGENT_QUERY_ENABLED", raising=False)
 
@@ -401,6 +474,17 @@ def test_agent_query_disabled_by_default(client: TestClient, monkeypatch) -> Non
 
     assert response.status_code == 503
     assert response.json()["detail"] == "agent_query_disabled"
+
+
+def test_agent_query_rejects_unknown_fields(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_AGENT_QUERY_ENABLED", "1")
+
+    response = client.post(
+        "/agent-query/jobs",
+        json={"query": "rapamycin and immune aging", "unexpected": "ignored-before"},
+    )
+
+    assert response.status_code == 422
 
 
 def test_agent_query_creates_separate_public_job(client: TestClient, monkeypatch) -> None:
@@ -424,7 +508,8 @@ def test_agent_query_creates_separate_public_job(client: TestClient, monkeypatch
     assert job["depth"] == "standard"
     assert job["position"] == 1
     assert job["caps"]["max_runtime_sec"] > 0
-    assert client.get("/jobs/queue", headers=_worker_headers()).json()["queued"] == []
+    queued = client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]
+    assert len(queued) == 1 and queued[0]["target_object_id"] == job["jobId"]
 
     stored = _repository(client).get_object(job["jobId"])
     assert stored.object_type == ObjectType.AGENT_QUERY
@@ -434,6 +519,7 @@ def test_agent_query_creates_separate_public_job(client: TestClient, monkeypatch
     assert "203.0.113.20" not in str(stored.model_dump(mode="json"))
     assert len(stored.metadata["client_bucket_hash"]) == 64
 
+    assert WorkerApp(_repository(client)).run_once()["completed"] == 1
     poll = client.get(f"/agent-query/jobs/{job['jobId']}")
     assert poll.status_code == 200
     assert poll.json()["status"] == "completed"
@@ -483,6 +569,7 @@ def test_agent_query_handles_sample_topics_end_to_end(client: TestClient, monkey
             json={"query": topic, "depth": "brief"},
         )
         assert response.status_code == 202
+        assert WorkerApp(_repository(client)).run_once()["completed"] == 1
         data = client.get(f"/agent-query/jobs/{response.json()['jobId']}").json()
         assert data["status"] == "completed"
         assert data["result"]["citations"]
@@ -647,14 +734,14 @@ def test_publications_list_hides_superseded_records(client: TestClient) -> None:
         ResearchObject(
             object_type=ObjectType.PUBLICATION,
             title="Current memo",
-            metadata={"article_type": "alpha_memo"},
+            metadata={"article_type": "alpha_memo", "public_visibility": "listed"},
         )
     )
     repo.create_object(
         ResearchObject(
             object_type=ObjectType.PUBLICATION,
             title="Superseded memo",
-            metadata={"article_type": "alpha_memo", "superseded_by": kept.id},
+            metadata={"article_type": "alpha_memo", "superseded_by": kept.id, "public_visibility": "listed"},
         )
     )
     repo.create_object(
@@ -668,6 +755,15 @@ def test_publications_list_hides_superseded_records(client: TestClient) -> None:
     listed = client.get("/publications").json()["publications"]
 
     assert [publication["title"] for publication in listed] == ["Current memo"]
+
+
+def test_unmarked_publication_fails_closed(client: TestClient) -> None:
+    publication = _repository(client).create_object(
+        ResearchObject(object_type=ObjectType.PUBLICATION, title="Unmarked publication")
+    )
+
+    assert client.get(f"/publications/{publication.id}").status_code == 404
+    assert publication.id not in [item["id"] for item in client.get("/publications").json()["publications"]]
 
 
 def test_get_publication_claims_404_for_unknown_publication(client: TestClient) -> None:
@@ -684,7 +780,7 @@ def test_get_publication_claims_returns_empty_list_when_no_claims_extracted(clie
         ResearchObject(
             object_type=ObjectType.PUBLICATION,
             title="Accepted memo without extracted claims",
-            metadata={"article_type": "alpha_memo"},
+            metadata=_public_metadata(article_type="alpha_memo"),
         )
     )
 
@@ -700,7 +796,7 @@ def test_get_publication_claims_derives_cards_from_sidecars(client: TestClient) 
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title="Metformin submission",
-            metadata={"source_bundle": _valid_source_bundle()},
+            metadata=_public_metadata(source_bundle=_valid_source_bundle()),
         )
     )
     publication = repo.create_object(
@@ -709,7 +805,7 @@ def test_get_publication_claims_derives_cards_from_sidecars(client: TestClient) 
             parent_object_id=submission.id,
             title="Metformin publication",
             body_markdown="- Metformin evidence suggests a bounded effect on lifespan risk and supports cautious interpretation.",
-            metadata={"article_type": "research_synthesis", "content_hash": "sha256:" + "a" * 64},
+            metadata=_public_metadata(article_type="research_synthesis", content_hash="sha256:" + "a" * 64),
         )
     )
 
@@ -731,8 +827,8 @@ def test_get_publication_claims_labels_mixed_direct_source_support(client: TestC
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title="Caffeine submission",
-            metadata={
-                "source_bundle": [
+            metadata=_public_metadata(
+                source_bundle=[
                     {
                         "title": "Caffeine time-to-exhaustion trial",
                         "doi": "10.1000/caffeine",
@@ -742,7 +838,7 @@ def test_get_publication_claims_labels_mixed_direct_source_support(client: TestC
                             "excerpt": "Caffeine increased run distance in the time-to-exhaustion trial under the tested design.",
                     }
                 ]
-            },
+            ),
         )
     )
     publication = repo.create_object(
@@ -751,7 +847,7 @@ def test_get_publication_claims_labels_mixed_direct_source_support(client: TestC
             parent_object_id=submission.id,
             title="Caffeine endpoint memo",
             body_markdown="- Mixed endpoint evidence suggests caffeine effects depend on trial design and DOI 10.1000/caffeine supports the time-to-exhaustion signal in the source row.",
-            metadata={"article_type": "alpha_memo"},
+            metadata=_public_metadata(article_type="alpha_memo"),
         )
     )
 
@@ -770,7 +866,7 @@ def test_get_publication_claims_resolves_explicit_bundle_reference(client: TestC
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title="Bundle-linked submission",
-            metadata={"source_bundle": _valid_source_bundle()},
+            metadata=_public_metadata(source_bundle=_valid_source_bundle()),
         )
     )
     publication = repo.create_object(
@@ -779,13 +875,13 @@ def test_get_publication_claims_resolves_explicit_bundle_reference(client: TestC
             parent_object_id=submission.id,
             title="Bundle-linked publication",
             body_markdown="## Methods\n\nSources were retained using the declared protocol.",
-            metadata={
-                "article_type": "research_synthesis",
-                "abstract": (
+            metadata=_public_metadata(
+                article_type="research_synthesis",
+                abstract=(
                     "The bounded evidence supports an endpoint-specific finding without a broad causal claim "
                     "and maps directly to the first submitted source [bundle:1]."
                 ),
-            },
+            ),
         )
     )
 
@@ -801,7 +897,7 @@ def test_get_publication_claims_returns_saved_cards_in_created_order(client: Tes
         ResearchObject(
             object_type=ObjectType.PUBLICATION,
             title="Metformin lifespan publication",
-            metadata={"article_type": "research_synthesis"},
+            metadata=_public_metadata(article_type="research_synthesis"),
         )
     )
     first = repo.save_claim_card(
@@ -864,7 +960,7 @@ def test_get_claim_finds_public_claim(client: TestClient) -> None:
             object_type=ObjectType.PUBLICATION,
             title="Claim lookup publication",
             body_markdown="- Aspirin evidence suggests no clinical geroprotection support in current human evidence.",
-            metadata={"article_type": "research_synthesis"},
+            metadata=_public_metadata(article_type="research_synthesis"),
         )
     )
     claim_id = client.get(f"/publications/{publication.id}/claims").json()["claims"][0]["id"]
@@ -881,14 +977,14 @@ def test_publications_surface_filter_splits_alpha_and_papers(client: TestClient)
         ResearchObject(
             object_type=ObjectType.PUBLICATION,
             title="Research paper",
-            metadata={"article_type": "research_synthesis", "publication_class": "research_synthesis"},
+            metadata=_public_metadata(article_type="research_synthesis", publication_class="research_synthesis"),
         )
     )
     alpha = repo.create_object(
         ResearchObject(
             object_type=ObjectType.PUBLICATION,
             title="Alpha memo",
-            metadata={"article_type": "alpha_memo", "publication_class": "alpha_memo"},
+            metadata=_public_metadata(article_type="alpha_memo", publication_class="alpha_memo"),
         )
     )
 
@@ -943,7 +1039,7 @@ def test_publication_response_relabels_scoping_only_research_synthesis(client: T
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title="Tai Chi submission",
-            metadata={"source_bundle": _valid_source_bundle()},
+            metadata=_public_metadata(source_bundle=_valid_source_bundle()),
         )
     )
     publication = repo.create_object(
@@ -951,11 +1047,11 @@ def test_publication_response_relabels_scoping_only_research_synthesis(client: T
             object_type=ObjectType.PUBLICATION,
             parent_object_id=submission.id,
             title="Research Synthesis: Tai Chi Exercise Effects — full paper",
-            metadata={
-                "article_type": "research_synthesis",
-                "publication_class": "research_synthesis",
-                "evidence_profile": {"weak_evidence_ratio": 0.76, "indirect_signal": True},
-            },
+            metadata=_public_metadata(
+                article_type="research_synthesis",
+                publication_class="research_synthesis",
+                evidence_profile={"weak_evidence_ratio": 0.76, "indirect_signal": True},
+            ),
         )
     )
     for claim_text, status in [
@@ -994,7 +1090,7 @@ def test_publication_response_reclassifies_untraced_derived_claim_cards(client: 
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title="Protein supplementation submission",
-            metadata={"source_bundle": _valid_source_bundle()},
+            metadata=_public_metadata(source_bundle=_valid_source_bundle()),
         )
     )
     publication = repo.create_object(
@@ -1008,15 +1104,15 @@ def test_publication_response_reclassifies_untraced_derived_claim_cards(client: 
                 "Mixed and null evidence constrains broad claims, but direct sources still support a "
                 "bounded research synthesis with explicit uncertainty."
             ),
-            metadata={
-                "article_type": "research_synthesis",
-                "publication_class": "research_synthesis",
-                "evidence_profile": {
+            metadata=_public_metadata(
+                article_type="research_synthesis",
+                publication_class="research_synthesis",
+                evidence_profile={
                     "direct_clinical_sources": 11,
                     "indirect_signal": True,
                     "weak_evidence_ratio": 0.0,
                 },
-            },
+            ),
         )
     )
 
@@ -1033,7 +1129,7 @@ def test_publication_response_preserves_verified_research_synthesis(client: Test
         ResearchObject(
             object_type=ObjectType.PUBLICATION,
             title="Research Synthesis: Resistance Training Effects — full paper",
-            metadata={"article_type": "research_synthesis", "publication_class": "research_synthesis"},
+            metadata=_public_metadata(article_type="research_synthesis", publication_class="research_synthesis"),
         )
     )
     repo.save_claim_card(
@@ -1058,7 +1154,7 @@ def test_claims_list_and_agent_profile(client: TestClient) -> None:
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title="Agent profile submission",
-            metadata={"author_agent_id": "agent-profile", "source_bundle": _valid_source_bundle()},
+            metadata=_public_metadata(author_agent_id="agent-profile", source_bundle=_valid_source_bundle()),
         )
     )
     repo.create_object(
@@ -1067,7 +1163,7 @@ def test_claims_list_and_agent_profile(client: TestClient) -> None:
             parent_object_id=submission.id,
             title="Agent profile publication",
             body_markdown="- Rapamycin evidence suggests endpoint-specific effects and supports narrow public claims.",
-            metadata={"article_type": "research_synthesis"},
+            metadata=_public_metadata(article_type="research_synthesis"),
         )
     )
     repo.create_object(
@@ -1075,7 +1171,7 @@ def test_claims_list_and_agent_profile(client: TestClient) -> None:
             object_type=ObjectType.DECISION,
             parent_object_id=submission.id,
             title="Accept decision",
-            metadata={"decision": Decision.ACCEPT.value},
+            metadata=_public_metadata(decision=Decision.ACCEPT.value),
         )
     )
 
@@ -1093,13 +1189,13 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title="Leaderboard submission",
-            metadata={
-                "author_agent_id": "agent-one",
-                "source_bundle": _valid_source_bundle(),
-                "institution_name": "Researka Lab",
-                "institution_ror": "https://ror.org/123456789",
-                "raid_id": "https://raid.org/example",
-            },
+            metadata=_public_metadata(
+                author_agent_id="agent-one",
+                source_bundle=_valid_source_bundle(),
+                institution_name="Researka Lab",
+                institution_ror="https://ror.org/123456789",
+                raid_id="https://raid.org/example",
+            ),
         )
     )
     publication = repo.create_object(
@@ -1108,16 +1204,16 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
             parent_object_id=submission.id,
             title="Leaderboard publication",
             body_markdown="- Exercise evidence suggests endpoint-specific effects and supports narrow public claims.",
-            metadata={
-                "content_hash": "sha256:" + "b" * 64,
-                "doi": "10.17605/OSF.IO/ABC12",
-                "doi_status": "minted",
-                "osf_url": "https://osf.io/example",
-                "institution_name": "Researka Lab",
-                "institution_ror": "https://ror.org/123456789",
-                "raid_id": "https://raid.org/example",
-                "integrity": {"recommendation": "pass", "similarity_score": 0.04},
-            },
+            metadata=_public_metadata(
+                content_hash="sha256:" + "b" * 64,
+                doi="10.17605/OSF.IO/ABC12",
+                doi_status="minted",
+                osf_url="https://osf.io/example",
+                institution_name="Researka Lab",
+                institution_ror="https://ror.org/123456789",
+                raid_id="https://raid.org/example",
+                integrity={"recommendation": "pass", "similarity_score": 0.04},
+            ),
         )
     )
     repo.create_object(
@@ -1125,7 +1221,7 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
             object_type=ObjectType.DECISION,
             parent_object_id=submission.id,
             title="Accept decision",
-            metadata={"decision": Decision.ACCEPT.value},
+            metadata=_public_metadata(decision=Decision.ACCEPT.value),
         )
     )
 
@@ -1154,9 +1250,16 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
     assert crate["provenance_passport"]["content_hash"] == "sha256:" + "b" * 64
     assert {sidecar["name"] for sidecar in crate["sidecars"]} >= {"claim_graph.json", "evidence_table.csv"}
 
-    bare_submission = repo.create_object(ResearchObject(object_type=ObjectType.SUBMISSION, title="Bare submission"))
+    bare_submission = repo.create_object(
+        ResearchObject(object_type=ObjectType.SUBMISSION, title="Bare submission", metadata=_public_metadata())
+    )
     bare_publication = repo.create_object(
-        ResearchObject(object_type=ObjectType.PUBLICATION, parent_object_id=bare_submission.id, title="Bare publication")
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=bare_submission.id,
+            title="Bare publication",
+            metadata=_public_metadata(),
+        )
     )
     bare_passport = client.get(f"/publications/{bare_publication.id}/passport").json()
     assert bare_passport["persistent_identifiers"]["ror_id"] is None
@@ -1164,6 +1267,7 @@ def test_badges_leaderboard_verify_index_and_ro_crate(client: TestClient) -> Non
     assert bare_passport["persistent_identifier_status"]["ror_id"] == "not_supplied"
     assert bare_passport["persistent_identifier_status"]["raid_id"] == "not_supplied"
     assert bare_passport["institution"]["status"] == "not_supplied"
+    assert bare_passport["decision"] is None
 
 
 def test_integrity_unavailable_is_not_public_pass(client: TestClient) -> None:
@@ -1172,13 +1276,13 @@ def test_integrity_unavailable_is_not_public_pass(client: TestClient) -> None:
         ResearchObject(
             object_type=ObjectType.PUBLICATION,
             title="Timeout publication",
-            metadata={
-                "integrity": {
+            metadata=_public_metadata(
+                integrity={
                     "available": False,
                     "recommendation": "pass",
                     "reason": "integrity_unavailable: The read operation timed out",
                 }
-            },
+            ),
         )
     )
 
@@ -1196,7 +1300,7 @@ def test_hidden_records_stay_off_public_trust_surfaces(client: TestClient) -> No
         ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title="Visible submission",
-            metadata={"author_agent_id": "launch-agent", "source_bundle": _valid_source_bundle()},
+            metadata=_public_metadata(author_agent_id="launch-agent", source_bundle=_valid_source_bundle()),
         )
     )
     repo.create_object(
@@ -1205,7 +1309,7 @@ def test_hidden_records_stay_off_public_trust_surfaces(client: TestClient) -> No
             parent_object_id=visible_submission.id,
             title="Visible evidence brief",
             body_markdown="- Exercise evidence suggests endpoint-specific effects and supports narrow public claims.",
-            metadata={"content_hash": "sha256:" + "c" * 64},
+            metadata=_public_metadata(content_hash="sha256:" + "c" * 64),
         )
     )
     hidden_submission = repo.create_object(
@@ -1249,6 +1353,36 @@ def test_hidden_records_stay_off_public_trust_surfaces(client: TestClient) -> No
     assert client.get(f"/reviews/{hidden_decision.id}").status_code == 404
 
 
+@pytest.mark.parametrize(("consent", "expected_status"), [(False, 404), (True, 200)])
+def test_failed_decision_requires_public_review_consent(
+    client: TestClient,
+    consent: bool,
+    expected_status: int,
+) -> None:
+    response = client.post(
+        "/submissions",
+        json={
+            "title": f"Bounded weak submission {consent}",
+            "abstract": "A deliberately incomplete submission used to verify failed-review privacy.",
+            "sections": {"Research Question": "A narrow but incomplete research question."},
+            "source_bundle": [{
+                "title": "One bounded source",
+                "doi": f"10.1234/privacy.{int(consent)}",
+                "evidence_type": "primary",
+                "excerpt": "A source excerpt long enough to form an evidence receipt for this privacy test.",
+            }],
+            "author_agent_id": "agent-demo",
+            "public_review_consent": consent,
+        },
+    )
+    submission_id = response.json()["submission"]["id"]
+    _run_until_idle(client)
+    decision = _repository(client).children_of(submission_id, ObjectType.DECISION)[-1]
+
+    assert decision.metadata["decision"] == Decision.REVISE.value
+    assert client.get(f"/reviews/{decision.id}").status_code == expected_status
+
+
 def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: TestClient) -> None:
     repo = _repository(client)
     submission = repo.create_object(
@@ -1256,12 +1390,12 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
             object_type=ObjectType.SUBMISSION,
             title="Exercise: thin alpha memo",
             body_markdown="failed draft body must not leak",
-            metadata={
-                "article_type": "alpha_memo",
-                "author_agent_id": "agent-v4-alpha-memo",
-                "domain_slug": "exercise",
-                "orcid": "0009-0005-4286-8363",
-            },
+            metadata=_public_metadata(
+                article_type="alpha_memo",
+                author_agent_id="agent-v4-alpha-memo",
+                domain_slug="exercise",
+                orcid="0009-0005-4286-8363",
+            ),
         )
     )
     review = repo.create_object(
@@ -1270,13 +1404,13 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
             parent_object_id=submission.id,
             title="Review for Exercise: thin alpha memo",
             body_markdown="Panel review: strong narrow memo, but single-trial caveat needs to be explicit.",
-            metadata={
-                "recommendation": "reject",
-                "provider": "reviewer-panel",
-                "model": "mimo-v2.5-pro|google/gemma-4-31b-it|mistralai/mistral-small-2603",
-                "route": "fallback_tiebreak",
-                "prompt_version": "editor-v1-clean-runtime",
-                "rubric_scores": {
+            metadata=_public_metadata(
+                recommendation="reject",
+                provider="reviewer-panel",
+                model="mimo-v2.5-pro|google/gemma-4-31b-it|mistralai/mistral-small-2603",
+                route="fallback_tiebreak",
+                prompt_version="editor-v1-clean-runtime",
+                rubric_scores={
                     "research_question_quality": 5,
                     "synthesis_quality": 5,
                     "claim_evidence_alignment": 4,
@@ -1284,13 +1418,13 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
                     "gaps_quality": 5,
                     "source_grounding": 5,
                 },
-                "major_issues": [],
-                "minor_issues": ["Tighten the limitations wording."],
-                "required_revisions": ["Clarify that all evidence comes from a single trial."],
-                "claim_support_verdict": "supported",
-                "overclaim_verdict": "none",
-                "synthesis_quality_verdict": "strong",
-            },
+                major_issues=[],
+                minor_issues=["Tighten the limitations wording."],
+                required_revisions=["Clarify that all evidence comes from a single trial."],
+                claim_support_verdict="supported",
+                overclaim_verdict="none",
+                synthesis_quality_verdict="strong",
+            ),
         )
     )
     rejected = repo.create_object(
@@ -1299,13 +1433,13 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
             parent_object_id=submission.id,
             title="Decision for Exercise: thin alpha memo",
             body_markdown="Editorial decision: reject",
-            metadata={
-                "decision": "reject",
-                "notes": ["editorial decision is terminal; external author must resubmit"],
-                "review_id": review.id,
-                "required_revisions": ["Align title/topic with receipt evidence."],
-                "gate_failures": [{"name": "minimum_citations", "passed": False, "reason": "expected at least 12 sources"}],
-            },
+            metadata=_public_metadata(
+                decision="reject",
+                notes=["editorial decision is terminal; external author must resubmit"],
+                review_id=review.id,
+                required_revisions=["Align title/topic with receipt evidence."],
+                gate_failures=[{"name": "minimum_citations", "passed": False, "reason": "expected at least 12 sources"}],
+            ),
         )
     )
     repo.record_event(
@@ -1335,7 +1469,7 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
     assert decision_payload["claim_support_verdict"] == "supported"
     assert decision_payload["panel_route"] == "fallback_tiebreak"
     assert decision_payload["models"] == ["mimo-v2.5-pro", "google/gemma-4-31b-it", "mistralai/mistral-small-2603"]
-    assert decision_payload["resubmission"] == {"allowed": True, "parent_submission_id": submission.id}
+    assert decision_payload["resubmission"] == {"allowed": False, "parent_submission_id": None}
     assert decision_payload["publication"] is None
 
     repo.create_object(
@@ -1343,7 +1477,7 @@ def test_reviews_list_exposes_failed_decisions_without_failed_draft(client: Test
             object_type=ObjectType.DECISION,
             parent_object_id=submission.id,
             title="Accepted decision should stay off /reviews",
-            metadata={"decision": "accept"},
+            metadata=_public_metadata(decision="accept"),
         )
     )
 
@@ -1496,6 +1630,42 @@ def test_api_key_allows_authorized_submission(client: TestClient, monkeypatch) -
         },
     )
     assert response.status_code == 200
+
+
+def test_production_legacy_key_is_disabled_or_bound_to_one_agent(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("RESEARKA_V2_ENV", "production")
+    monkeypatch.setenv("RESEARKA_INTEGRITY_ENABLED", "1")
+    monkeypatch.setenv("RESEARKA_V2_API_KEY", "legacy-secret")
+    monkeypatch.delenv("RESEARKA_V2_ENABLE_LEGACY_API_KEY", raising=False)
+    monkeypatch.delenv("RESEARKA_V2_LEGACY_AGENT_ID", raising=False)
+
+    disabled = client.post(
+        "/submissions",
+        headers={"x-api-key": "legacy-secret"},
+        json=_minimal_submission_payload(),
+    )
+    assert disabled.status_code == 403
+    assert disabled.json()["detail"] == "legacy_api_key_disabled"
+
+    monkeypatch.setenv("RESEARKA_V2_ENABLE_LEGACY_API_KEY", "1")
+    unbound = client.post(
+        "/submissions",
+        headers={"x-api-key": "legacy-secret"},
+        json=_minimal_submission_payload(),
+    )
+    assert unbound.status_code == 503
+    assert unbound.json()["detail"] == "legacy_api_identity_unconfigured"
+
+    monkeypatch.setenv("RESEARKA_V2_LEGACY_AGENT_ID", "legacy-agent")
+    accepted = client.post(
+        "/submissions",
+        headers={"x-api-key": "legacy-secret"},
+        json=_minimal_submission_payload(),
+    )
+    assert accepted.status_code == 200
+    submission = _repository(client).get_object(accepted.json()["submission"]["id"])
+    assert submission is not None
+    assert submission.metadata["authenticated_agent_id"] == "legacy-agent"
 
 
 def test_api_key_rejects_invalid_key(client: TestClient, monkeypatch) -> None:
@@ -2459,7 +2629,10 @@ def _test_judge_release(code_sha: str) -> dict[str, Any]:
         "editor_prompt_version": "editor-test-v1",
         "provider": "reviewer-panel",
         "models": ["model-a", "model-b"],
+        "observed_models": ["model-a", "model-b"],
         "settings": {"accept_quorum_min": 2},
+        "request_prompt_sha256": "0" * 64,
+        "calibration": {"artifact": "pending.json", "sha256": "0" * 64},
     }
     return {"id": judge_release_id(release), **release}
 
@@ -2494,7 +2667,7 @@ def test_calibration_requires_post_evaluation_signoff_and_active_release_binding
         __import__("json").dumps(
             {
                 **release,
-                "calibration": {
+                "evaluation": {
                     "artifact": calibration_path.name,
                     "sha256": hashlib.sha256(calibration_path.read_bytes()).hexdigest(),
                 },
@@ -2515,7 +2688,7 @@ def test_calibration_requires_post_evaluation_signoff_and_active_release_binding
     artifact["run_meta"]["human_signoff"]["evaluation_sha256"] = unsigned_calibration_sha256(artifact)
     calibration_path.write_text(__import__("json").dumps(artifact))
     active_release = __import__("json").loads(active_release_path.read_text())
-    active_release["calibration"]["sha256"] = hashlib.sha256(calibration_path.read_bytes()).hexdigest()
+    active_release["evaluation"]["sha256"] = hashlib.sha256(calibration_path.read_bytes()).hexdigest()
     active_release_path.write_text(__import__("json").dumps(active_release))
 
     receipt = client.get("/calibration").json()["receipt"]
@@ -2551,7 +2724,7 @@ def test_calibration_rejects_predated_signoff_and_wrong_release_sha(
     calibration_path.write_text(__import__("json").dumps(artifact))
     active_release_path = tmp_path / "active-release.json"
     active_release_path.write_text(
-        __import__("json").dumps({**release, "calibration": {"sha256": "wrong"}})
+        __import__("json").dumps({**release, "evaluation": {"sha256": "wrong"}})
     )
     monkeypatch.setenv("RESEARKA_V2_CALIBRATION_PATH", str(calibration_path))
     monkeypatch.setenv("RESEARKA_V2_ACTIVE_JUDGE_RELEASE_PATH", str(active_release_path))

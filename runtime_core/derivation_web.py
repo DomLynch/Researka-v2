@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from contracts import Decision, ObjectType, ResearchObject
 from runtime_core.publication_sidecars import build_sidecar, screening_summary, sidecar_manifest
+from runtime_core.urls import validated_service_url
 
 ACTOR_ID = "researka:v2"
 
@@ -40,11 +41,17 @@ def _url(path: str) -> str:
 
 
 def _base_url() -> str:
-    return os.getenv("RESEARKA_DW_URL", "https://provenance.researka.org").rstrip("/")
+    return validated_service_url(
+        os.getenv("RESEARKA_DW_URL", "https://provenance.researka.org"),
+        label="derivation_web",
+    )
 
 
 def _public_api_base_url() -> str:
-    return os.getenv("RESEARKA_PUBLIC_API_BASE_URL", "https://api.researka.org").rstrip("/")
+    return validated_service_url(
+        os.getenv("RESEARKA_PUBLIC_API_BASE_URL", "https://api.researka.org"),
+        label="public_api",
+    )
 
 
 def _absolute_sidecar_url(path_or_url: str) -> str:
@@ -71,7 +78,10 @@ def _post(path: str, payload: dict[str, Any], *, api_key: str) -> tuple[int, dic
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=float(os.getenv("RESEARKA_DW_TIMEOUT_SEC", "5"))) as response:
+            with urllib.request.urlopen(  # nosec B310 - base URL is validated above
+                req,
+                timeout=float(os.getenv("RESEARKA_DW_TIMEOUT_SEC", "5")),
+            ) as response:
                 body = response.read().decode("utf-8")
                 return int(response.status), json.loads(body) if body else {}
         except urllib.error.HTTPError as exc:
@@ -139,6 +149,8 @@ def _emit_claim_chain(
     created_at: datetime,
     api_key: str,
     extra_input_payloads: list[dict[str, Any]] | None = None,
+    source_body: str | None = None,
+    source_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     _post("/api/actors", {"id": ACTOR_ID, "kind": "agent", "name": "Researka v2"}, api_key=api_key)
     source_status, source_artifact = _post(
@@ -146,8 +158,8 @@ def _emit_claim_chain(
         {
             "kind": "source",
             "content_type": "text/markdown",
-            "body_text": _artifact_body(submission),
-            "metadata": _source_metadata(submission),
+            "body_text": source_body if source_body is not None else _artifact_body(submission),
+            "metadata": source_metadata or _source_metadata(submission),
             "actor_id": ACTOR_ID,
         },
         api_key=api_key,
@@ -266,13 +278,22 @@ def emit_decision_to_derivation_web(
     try:
         chain = _emit_claim_chain(
             submission=submission,
+            source_body=json.dumps(
+                {
+                    "submission_id": submission.id,
+                    "canonical_package_hash": submission.metadata.get("canonical_package_hash"),
+                    "canonical_manuscript_hash": submission.metadata.get("canonical_manuscript_hash"),
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
             claim_content_type="application/json",
             claim_body=json.dumps(
                 {
                     "decision": decision.metadata.get("decision"),
-                    "notes": decision.metadata.get("notes", []),
-                    "gate_failures": decision.metadata.get("gate_failures", []),
-                    "review_recommendation": (review.metadata.get("recommendation") if review else None),
+                    "disposition": decision.metadata.get("disposition"),
+                    "reason_code": decision.metadata.get("reason_code"),
+                    "policy_version": decision.metadata.get("policy_version"),
                 },
                 ensure_ascii=False,
                 sort_keys=True,
@@ -286,6 +307,12 @@ def emit_decision_to_derivation_web(
                 "model": decision.metadata.get("model"),
                 "prompt_version": decision.metadata.get("prompt_version"),
                 **_fallback_metadata(review),
+            },
+            source_metadata={
+                "researka_object_type": ObjectType.SUBMISSION.value,
+                "researka_submission_id": submission.id,
+                "canonical_package_hash": submission.metadata.get("canonical_package_hash"),
+                "policy_version": decision.metadata.get("policy_version"),
             },
             stage="autonomous_editorial_decision",
             decision_value=decision.metadata.get("decision"),
@@ -314,7 +341,9 @@ def emit_publication_to_derivation_web(
         return {}
 
     try:
-        decision_value = decision.metadata.get("decision") if decision else Decision.ACCEPT.value
+        if decision is None or decision.metadata.get("decision") != Decision.ACCEPT.value:
+            return {"dw_status": "failed", "dw_error": "accepted_decision_required"}
+        decision_value = Decision.ACCEPT.value
         chain = _emit_claim_chain(
             submission=submission,
             claim_content_type="text/markdown",

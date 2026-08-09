@@ -4,7 +4,8 @@ import hashlib
 import json
 import math
 import os
-import subprocess
+import re
+import subprocess  # nosec B404 - used only for fixed git metadata command
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,13 +22,16 @@ JUDGE_RELEASE_IDENTITY_KEYS = (
     "editor_prompt_version",
     "provider",
     "models",
+    "observed_models",
     "settings",
+    "request_prompt_sha256",
+    "calibration",
 )
 
 
 def resolve_git_sha() -> str:
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - fixed executable and arguments
             ["git", "rev-parse", "HEAD"],
             cwd=Path(__file__).resolve().parents[1],
             capture_output=True,
@@ -99,8 +103,15 @@ def judge_release_manifest_valid(raw: object) -> bool:
         and isinstance(raw.get("models"), list)
         and raw["models"]
         and all(str(model).strip() for model in raw["models"])
+        and isinstance(raw.get("observed_models"), list)
+        and raw["observed_models"]
+        and all(str(model).strip() for model in raw["observed_models"])
         and isinstance(raw.get("settings"), dict)
         and raw["settings"]
+        and re.fullmatch(r"[0-9a-f]{64}", str(raw.get("request_prompt_sha256") or "")) is not None
+        and isinstance(raw.get("calibration"), dict)
+        and bool(raw["calibration"].get("artifact"))
+        and re.fullmatch(r"[0-9a-f]{64}", str(raw["calibration"].get("sha256") or "")) is not None
         and raw.get("id") == judge_release_id(raw)
     )
 
@@ -195,10 +206,14 @@ def build_judge_release(
     model: str,
     response_metadata: dict,
 ) -> dict[str, object]:
+    root = Path(__file__).resolve().parents[1]
     calibration_path = Path(
         os.environ.get(
-            "RESEARKA_V2_CALIBRATION_PATH",
-            str(Path(__file__).resolve().parents[1] / "artifacts" / "gold_set_eval_v3_current.json"),
+            "RESEARKA_V2_CALIBRATION_CORPUS_PATH",
+            os.environ.get(
+                "RESEARKA_V2_CALIBRATION_PATH",
+                str(root / "calibration" / "real_gold_set_v1_freeze_receipt.json"),
+            ),
         )
     )
     observed = response_metadata.get("panel_models") or response_metadata.get("accept_quorum_models")

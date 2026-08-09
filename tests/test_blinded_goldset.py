@@ -63,7 +63,10 @@ def _judge_release() -> dict:
         "editor_prompt_version": "editor-test-v1",
         "provider": "reviewer-panel",
         "models": ["panel-primary", "panel-sparring"],
+        "observed_models": ["panel-primary", "panel-sparring"],
         "settings": {"accept_quorum_min": 2},
+        "request_prompt_sha256": "0" * 64,
+        "calibration": {"artifact": "frozen-corpus.json", "sha256": "1" * 64},
     }
     return {"id": judge_release_id(release), **release}
 
@@ -513,7 +516,7 @@ def test_sign_evaluation_binds_human_review_to_release_and_artifact(tmp_path: Pa
     assert signoff["limitations_reviewed"] is True
     assert signed_artifact["run_meta"]["human_signoff"] == signoff
     assert active_release["id"] == release_id
-    assert active_release["calibration"]["sha256"] == hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    assert active_release["evaluation"]["sha256"] == hashlib.sha256(artifact_path.read_bytes()).hexdigest()
     assert stat.S_IMODE(artifact_path.stat().st_mode) == 0o600
     with pytest.raises(ValueError, match="evaluation_not_ready_for_human_signoff"):
         sign_evaluation(

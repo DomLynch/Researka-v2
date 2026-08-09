@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib import error, parse, request
 
-from contracts import ObjectType, ResearchObject
+from contracts import ArticleType, Decision, ObjectType, ResearchObject
+from .compiler import canonical_package_hash
+from .doi_resolver import source_identity
+from .judge_release import judge_release_manifest_valid
+from .review_contract import accept_quorum_satisfied
+from .urls import validated_service_url
 
 
 log = logging.getLogger(__name__)
@@ -88,12 +93,21 @@ def oauth_config_from_env() -> OSFOAuthConfig | None:
     if not state_secret:
         raise RuntimeError("researka_v2_osf_oauth_state_secret_required")
     return OSFOAuthConfig(
-        authorization_url=os.environ.get("RESEARKA_V2_OSF_OAUTH_AUTHORIZE_URL", "https://osf.io/oauth2/authorize"),
-        token_url=os.environ.get("RESEARKA_V2_OSF_OAUTH_TOKEN_URL", "https://accounts.osf.io/oauth2/token"),
-        api_base_url=os.environ.get("RESEARKA_V2_OSF_API_BASE_URL", "https://api.osf.io/v2").rstrip("/"),
+        authorization_url=validated_service_url(
+            os.environ.get("RESEARKA_V2_OSF_OAUTH_AUTHORIZE_URL", "https://osf.io/oauth2/authorize"),
+            label="osf_authorization",
+        ),
+        token_url=validated_service_url(
+            os.environ.get("RESEARKA_V2_OSF_OAUTH_TOKEN_URL", "https://accounts.osf.io/oauth2/token"),
+            label="osf_token",
+        ),
+        api_base_url=validated_service_url(
+            os.environ.get("RESEARKA_V2_OSF_API_BASE_URL", "https://api.osf.io/v2"),
+            label="osf_api",
+        ),
         client_id=client_id.strip(),
         client_secret=client_secret,
-        redirect_uri=redirect_uri.strip(),
+        redirect_uri=validated_service_url(redirect_uri, label="osf_redirect"),
         scope=os.environ.get("RESEARKA_V2_OSF_OAUTH_SCOPE", "osf.full_write").strip(),
         state_secret=state_secret,
         timeout_seconds=float(os.environ.get("RESEARKA_V2_OSF_TIMEOUT_SECONDS", "15")),
@@ -158,7 +172,8 @@ def build_oauth_authorization_url(config: OSFOAuthConfig, *, state: str) -> str:
         "scope": config.scope,
         "state": state,
     }
-    return f"{config.authorization_url}?{parse.urlencode(params)}"
+    base_url = validated_service_url(config.authorization_url, label="osf_authorization")
+    return f"{base_url}?{parse.urlencode(params)}"
 
 
 def exchange_oauth_code(config: OSFOAuthConfig, *, code: str) -> dict[str, Any]:
@@ -172,13 +187,13 @@ def exchange_oauth_code(config: OSFOAuthConfig, *, code: str) -> dict[str, Any]:
         }
     ).encode("utf-8")
     req = request.Request(
-        config.token_url,
+        validated_service_url(config.token_url, label="osf_token"),
         data=payload,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         method="POST",
     )
     try:
-        with request.urlopen(req, timeout=config.timeout_seconds) as response:
+        with request.urlopen(req, timeout=config.timeout_seconds) as response:  # nosec B310 - token URL validated above
             data = response.read().decode("utf-8")
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
@@ -226,14 +241,22 @@ def config_from_env() -> OSFConfig | None:
     root_project_id = os.environ.get("RESEARKA_V2_OSF_PROJECT_ID")
     if not token or not root_project_id:
         return None
-    base_url = os.environ.get("RESEARKA_V2_OSF_API_BASE_URL", "https://api.osf.io/v2").rstrip("/")
+    base_url = validated_service_url(
+        os.environ.get("RESEARKA_V2_OSF_API_BASE_URL", "https://api.osf.io/v2"),
+        label="osf_api",
+    )
     timeout = float(os.environ.get("RESEARKA_V2_OSF_TIMEOUT_SECONDS", "15"))
     return OSFConfig(api_base_url=base_url, token=token, root_project_id=root_project_id.strip(), timeout_seconds=timeout)
 
 
 class OSFClient:
     def __init__(self, config: OSFConfig) -> None:
-        self.config = config
+        self.config = OSFConfig(
+            api_base_url=validated_service_url(config.api_base_url, label="osf_api"),
+            token=config.token,
+            root_project_id=config.root_project_id,
+            timeout_seconds=config.timeout_seconds,
+        )
 
     def _request(
         self,
@@ -255,7 +278,7 @@ class OSFClient:
             method=method,
         )
         try:
-            with request.urlopen(req, timeout=self.config.timeout_seconds) as response:
+            with request.urlopen(req, timeout=self.config.timeout_seconds) as response:  # nosec B310 - config URL validated at construction
                 status = response.status
                 data = response.read().decode("utf-8")
         except error.HTTPError as exc:
@@ -271,6 +294,35 @@ class OSFClient:
             return None
         parsed = json.loads(data)
         return parsed if isinstance(parsed, dict) else None
+
+    def _url_bytes(self, method: str, url: str, *, body: bytes | None = None) -> bytes:
+        parsed_url = parse.urlparse(url)
+        host = (parsed_url.hostname or "").lower()
+        if parsed_url.scheme != "https" or not (host == "osf.io" or host.endswith(".osf.io")):
+            raise RuntimeError("osf_untrusted_file_url")
+        req = request.Request(
+            url,
+            data=body,
+            headers={"Authorization": f"Bearer {self.config.token}"},
+            method=method,
+        )
+        try:
+            with request.urlopen(req, timeout=self.config.timeout_seconds) as response:  # nosec B310 - OSF HTTPS host allowlist above
+                return response.read()
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"osf_file_request_failed:{method}:{exc.code}:{detail}") from exc
+        except TimeoutError as exc:
+            raise RuntimeError(f"osf_file_timeout:{method}:{exc}") from exc
+        except error.URLError as exc:
+            raise RuntimeError(f"osf_file_unreachable:{exc.reason}") from exc
+
+    def _url_json(self, url: str) -> dict[str, Any]:
+        raw = self._url_bytes("GET", url)
+        parsed = json.loads(raw.decode("utf-8"))
+        if not isinstance(parsed, dict):
+            raise RuntimeError("osf_file_response_not_object")
+        return parsed
 
     def list_child_nodes(self, node_id: str) -> list[dict[str, Any]]:
         response = self._request("GET", f"/nodes/{node_id}/children/")
@@ -314,7 +366,7 @@ class OSFClient:
                         "title": title,
                         "category": "project",
                         "description": description,
-                        "public": True,
+                        "public": False,
                         "tags": tags,
                     },
                 }
@@ -346,6 +398,74 @@ class OSFClient:
         if not response or not isinstance(response.get("data"), dict):
             raise RuntimeError("osf_mint_doi_empty_response")
         return response["data"]
+
+    def upload_package(
+        self,
+        node_id: str,
+        files: dict[str, str],
+        *,
+        release_id: str,
+    ) -> list[dict[str, Any]]:
+        providers = self._request("GET", f"/nodes/{node_id}/files/") or {}
+        provider = next(
+            (
+                item
+                for item in providers.get("data", [])
+                if isinstance(item, dict) and item.get("id") == "osfstorage"
+            ),
+            None,
+        )
+        links = provider.get("links", {}) if isinstance(provider, dict) else {}
+        upload_root = links.get("upload") if isinstance(links, dict) else None
+        files_url = links.get("files") if isinstance(links, dict) else None
+        if not isinstance(upload_root, str) or not isinstance(files_url, str):
+            raise RuntimeError("osf_storage_links_missing")
+        existing = self._url_json(files_url).get("data", [])
+        by_name = {
+            str(item.get("attributes", {}).get("name")): item
+            for item in existing
+            if isinstance(item, dict) and isinstance(item.get("attributes"), dict)
+        }
+        receipts: list[dict[str, Any]] = []
+        prefix = f"release-{release_id[:16]}-"
+        for logical_name, text in sorted(files.items()):
+            name = f"{prefix}{logical_name}"
+            raw = text.encode("utf-8")
+            current = by_name.get(name)
+            current_links = current.get("links", {}) if isinstance(current, dict) else {}
+            if current is not None:
+                download_url = current_links.get("download") if isinstance(current_links, dict) else None
+                if not isinstance(download_url, str):
+                    raise RuntimeError(f"osf_package_existing_file_unverifiable:{logical_name}")
+                if self._url_bytes("GET", download_url) != raw:
+                    raise RuntimeError(f"osf_package_release_conflict:{logical_name}")
+                receipts.append({
+                    "name": name,
+                    "logical_name": logical_name,
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "size": len(raw),
+                })
+                continue
+            upload_url = current_links.get("upload") if isinstance(current_links, dict) else None
+            if isinstance(upload_url, str):
+                separator = "&" if "?" in upload_url else "?"
+                upload_url = f"{upload_url}{separator}{parse.urlencode({'kind': 'file'})}"
+            else:
+                separator = "&" if "?" in upload_root else "?"
+                upload_url = f"{upload_root}{separator}{parse.urlencode({'kind': 'file', 'name': name})}"
+            response = json.loads(self._url_bytes("PUT", upload_url, body=raw).decode("utf-8"))
+            file_data = response.get("data", response) if isinstance(response, dict) else {}
+            file_links = file_data.get("links", {}) if isinstance(file_data, dict) else {}
+            download_url = file_links.get("download") if isinstance(file_links, dict) else None
+            if not isinstance(download_url, str) or self._url_bytes("GET", download_url) != raw:
+                raise RuntimeError(f"osf_package_verification_failed:{logical_name}")
+            receipts.append({
+                "name": name,
+                "logical_name": logical_name,
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "size": len(raw),
+            })
+        return receipts
 
 
 def _publication_tag(publication_id: str) -> str:
@@ -438,9 +558,109 @@ def _publication_description(publication: ResearchObject) -> str:
     )
 
 
+def _json_text(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, default=str) + "\n"
+
+
+def build_publication_package(repository: Any, publication: ResearchObject) -> dict[str, str]:
+    submission = repository.get_object(str(publication.parent_object_id or ""))
+    decision = repository.get_object(str(publication.metadata.get("decision_id") or ""))
+    review = repository.get_object(str(publication.metadata.get("review_id") or ""))
+    package_hash = str(publication.metadata.get("canonical_package_hash") or "")
+    source_bundle = submission.metadata.get("source_bundle") if submission else None
+    sections = submission.metadata.get("sections") if submission else None
+    expected_hash = (
+        canonical_package_hash(
+            title=submission.title,
+            abstract=str(submission.metadata.get("abstract") or ""),
+            sections=sections,
+            source_bundle=source_bundle,
+            article_type=str(
+                submission.metadata.get(
+                    "article_type", ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
+                )
+            ),
+        )
+        if submission is not None
+        and isinstance(sections, dict)
+        and isinstance(source_bundle, list)
+        else ""
+    )
+    if (
+        submission is None
+        or submission.object_type != ObjectType.SUBMISSION
+        or decision is None
+        or decision.object_type != ObjectType.DECISION
+        or decision.parent_object_id != submission.id
+        or decision.metadata.get("decision") != Decision.ACCEPT.value
+        or decision.metadata.get("superseded_by")
+        or review is None
+        or review.object_type != ObjectType.REVIEW
+        or review.parent_object_id != submission.id
+        or decision.metadata.get("review_id") != review.id
+        or not package_hash.startswith("sha256:")
+        or expected_hash != package_hash
+        or decision.metadata.get("canonical_package_hash") != package_hash
+        or review.metadata.get("reviewed_package_hash") != package_hash
+        or publication.metadata.get("judge_release_id")
+        != review.metadata.get("judge_release_id")
+        or not judge_release_manifest_valid(review.metadata.get("judge_release"))
+        or not accept_quorum_satisfied(review.metadata)
+    ):
+        raise RuntimeError("osf_scientific_package_lineage_invalid")
+    sources = source_bundle if isinstance(source_bundle, list) else []
+    verification = submission.metadata.get("source_verification")
+    verification = verification if isinstance(verification, dict) else {}
+    verified_evidence = {str(item) for item in verification.get("evidence_text_verified", [])}
+    files = {
+        "manuscript.md": publication.body_markdown.rstrip() + "\n",
+        "source_bundle.json": _json_text(sources),
+        "verified_evidence_spans.json": _json_text([
+            {
+                "source_id": source.get("source_id") or source.get("doi") or source.get("pmid") or source.get("openalex_id"),
+                "evidence_text": source.get("evidence_span") or source.get("quote") or source.get("excerpt"),
+                "evidence_text_verified": source_identity(source) in verified_evidence,
+                "source_content_hash": source.get("source_content_hash"),
+            }
+            for source in sources
+            if isinstance(source, dict)
+        ]),
+        "review_receipts.json": _json_text({"body_markdown": review.body_markdown, "metadata": review.metadata}),
+        "decision.json": _json_text({"id": decision.id, "metadata": decision.metadata}),
+        "policy_release.json": _json_text(review.metadata.get("judge_release") or {
+            "judge_release_id": review.metadata.get("judge_release_id"),
+            "policy_version": review.metadata.get("policy_version"),
+        }),
+        "ro-crate-metadata.json": _json_text({
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [{
+                "@id": "./",
+                "@type": "Dataset",
+                "name": publication.title,
+                "identifier": publication.id,
+                "canonicalPackageHash": package_hash,
+            }],
+        }),
+    }
+    manifest = {
+        "publication_id": publication.id,
+        "submission_id": submission.id,
+        "review_id": review.id,
+        "decision_id": decision.id,
+        "canonical_package_hash": package_hash,
+        "files": {
+            name: {"sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(), "size": len(content.encode("utf-8"))}
+            for name, content in sorted(files.items())
+        },
+    }
+    files["manifest-sha256.json"] = _json_text(manifest)
+    return files
+
+
 def mint_publication_doi(
     publication: ResearchObject,
     *,
+    package_files: dict[str, str],
     config: OSFConfig | None = None,
     client: OSFClient | None = None,
 ) -> dict[str, Any]:
@@ -457,6 +677,10 @@ def mint_publication_doi(
             tags=["researka", "researka-publication", _publication_tag(publication.id)],
         )
     node_id = str(node["id"])
+    package_hash = str(publication.metadata.get("canonical_package_hash") or "").removeprefix("sha256:")
+    if not package_hash or "manifest-sha256.json" not in package_files:
+        raise RuntimeError("osf_scientific_package_missing")
+    package_receipts = resolved_client.upload_package(node_id, package_files, release_id=package_hash)
     resolved_client.update_node(node_id, public=True)
     identifiers = _list_identifiers_with_retry(resolved_client, node_id)
     doi = next((value for value in (_doi_from_identifier(item) for item in identifiers) if value), None)
@@ -472,6 +696,8 @@ def mint_publication_doi(
         "osf_project_id": resolved_config.root_project_id,
         "osf_guid": node_id,
         "osf_url": osf_url,
+        "osf_package_hash": f"sha256:{hashlib.sha256(package_files['manifest-sha256.json'].encode()).hexdigest()}",
+        "osf_package_files": package_receipts,
         "osf": {
             "enabled": True,
             "status": "minted",
@@ -509,6 +735,7 @@ def mint_publication_doi_with_oauth(
     publication: ResearchObject,
     *,
     token_metadata: dict[str, Any],
+    package_files: dict[str, str],
     api_base_url: str | None = None,
     client_factory: Callable[[OSFConfig], OSFClient] = OSFClient,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -531,6 +758,7 @@ def mint_publication_doi_with_oauth(
         updated_token_metadata["root_project_url"] = _node_html_url(root_node)
     metadata = mint_publication_doi(
         publication,
+        package_files=package_files,
         config=OSFConfig(api_base_url=base_url, token=access_token, root_project_id=root_project_id, timeout_seconds=timeout),
         client=client_factory(OSFConfig(api_base_url=base_url, token=access_token, root_project_id=root_project_id, timeout_seconds=timeout)),
     )
@@ -546,19 +774,24 @@ def _publication_osf_agent_ids(publication: ResearchObject) -> list[str]:
 
 
 def mint_publication_doi_from_repository(repository: Any, publication: ResearchObject) -> dict[str, Any]:
+    package_files = build_publication_package(repository, publication)
     primary_agent = str(publication.metadata.get("author_agent_id") or publication.metadata.get("authenticated_agent_id") or "").strip()
     for agent_id in _publication_osf_agent_ids(publication):
         token_metadata = repository.get_osf_oauth_token(agent_id)
         if not token_metadata:
             continue
-        metadata, updated_token_metadata = mint_publication_doi_with_oauth(publication, token_metadata=token_metadata)
+        metadata, updated_token_metadata = mint_publication_doi_with_oauth(
+            publication,
+            token_metadata=token_metadata,
+            package_files=package_files,
+        )
         if updated_token_metadata != token_metadata:
             repository.store_osf_oauth_token(agent_id, updated_token_metadata)
         if agent_id != primary_agent:
             metadata["osf_auth_source"] = "oauth_default_agent_token"
             metadata["osf_agent_id"] = agent_id
         return metadata
-    return mint_publication_doi(publication)
+    return mint_publication_doi(publication, package_files=package_files)
 
 
 def backfill_missing_publication_dois(
@@ -610,7 +843,11 @@ def backfill_missing_publication_dois(
         try:
             metadata = mint_publication_doi_from_repository(repository, publication)
             if not metadata and resolved_config is not None:
-                metadata = mint_fn(publication, config=resolved_config)
+                metadata = mint_fn(
+                    publication,
+                    package_files=build_publication_package(repository, publication),
+                    config=resolved_config,
+                )
             if not metadata:
                 raise RuntimeError("osf_not_configured_for_agent")
             updated = repository.update_object_metadata(publication.id, {**publication.metadata, **metadata})

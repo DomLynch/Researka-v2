@@ -13,6 +13,8 @@ from typing import Any
 
 import httpx
 
+from .urls import validated_service_url
+
 log = logging.getLogger(__name__)
 
 
@@ -26,7 +28,20 @@ class UnsafeSourceLocator(ValueError):
 
 
 def _base_url() -> str:
-    return os.getenv("RESEARKA_DOI_RESOLVER_URL", "https://doi.org/api/handles").rstrip("/")
+    return validated_service_url(
+        os.getenv("RESEARKA_DOI_RESOLVER_URL", "https://doi.org/api/handles"),
+        label="doi_resolver",
+    )
+
+
+def validate_resolver_urls() -> None:
+    for label, env_name, default in (
+        ("pubmed", "RESEARKA_PUBMED_URL", "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"),
+        ("crossref", "RESEARKA_CROSSREF_URL", "https://api.crossref.org/works"),
+        ("openalex", "RESEARKA_OPENALEX_URL", "https://api.openalex.org/works"),
+    ):
+        validated_service_url(os.getenv(env_name, default), label=label)
+    _base_url()
 
 
 def _enabled() -> bool:
@@ -129,6 +144,11 @@ def _text_matches(left: object, right: object, *, floor: float) -> bool:
     return overlap >= minimum_overlap and overlap / min(len(left_tokens), len(right_tokens)) >= floor
 
 
+def _normalized_text(value: object) -> str:
+    text = html.unescape(re.sub(r"<[^>]+>", " ", str(value or ""))).lower()
+    return " ".join(re.findall(r"[a-z0-9]+", text))
+
+
 def _openalex_abstract(payload: dict[str, Any]) -> str:
     index = payload.get("abstract_inverted_index")
     if not isinstance(index, dict):
@@ -170,11 +190,11 @@ def _source_identity(source: dict[str, Any]) -> tuple[str, str | None, str | Non
     parsed = urllib.parse.urlparse(url)
     host = parsed.hostname or ""
     path = urllib.parse.unquote(parsed.path).strip("/")
-    if host.endswith("doi.org") and re.match(r"^10\.\d{4,}/\S+$", path):
+    if _trusted_host(host, "doi.org") and re.match(r"^10\.\d{4,}/\S+$", path):
         return f"doi:{path.lower()}", path.lower(), f"https://doi.org/{urllib.parse.quote(path, safe='')}"
-    if host.endswith("pubmed.ncbi.nlm.nih.gov") and path.isdigit():
+    if _trusted_host(host, "pubmed.ncbi.nlm.nih.gov") and path.isdigit():
         return f"pmid:{path}", None, f"pmid:{path}"
-    if host.endswith("openalex.org") and re.fullmatch(r"W\d+", path, re.I):
+    if _trusted_host(host, "openalex.org") and re.fullmatch(r"W\d+", path, re.I):
         return f"openalex:{path.lower()}", None, urllib.parse.quote(path, safe="")
     if registry := str(source.get("registry_id") or "").strip():
         return f"registry:{registry.lower()}", None, None
@@ -183,16 +203,38 @@ def _source_identity(source: dict[str, Any]) -> tuple[str, str | None, str | Non
     return None
 
 
+def source_identity(source: dict[str, Any]) -> str | None:
+    identity = _source_identity(source)
+    return identity[0] if identity else None
+
+
+def _source_aliases(source: dict[str, Any]) -> set[str]:
+    aliases: set[str] = set()
+    for key, prefix in (("doi", "doi"), ("pmid", "pmid"), ("registry_id", "registry")):
+        if value := str(source.get(key) or "").strip().lower():
+            aliases.add(f"{prefix}:{value}")
+    if value := str(source.get("openalex_id") or "").strip().lower():
+        aliases.add(f"openalex:{value.rstrip('/').rsplit('/', 1)[-1]}")
+    if identity := _source_identity(source):
+        aliases.add(identity[0])
+    return aliases
+
+
+def _trusted_host(host: str, expected: str) -> bool:
+    normalized = host.strip().lower().rstrip(".")
+    return normalized == expected or normalized.endswith(f".{expected}")
+
+
 def _pubmed_identifier_checks(
     client: httpx.Client,
     sources: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    rows = [(source, str(source.get("pmid") or "").strip()) for source in sources]
-    rows = [(source, pmid) for source, pmid in rows if pmid]
+    rows = [(index, source, str(source.get("pmid") or "").strip()) for index, source in enumerate(sources)]
+    rows = [(index, source, pmid) for index, source, pmid in rows if pmid]
     if not rows:
         return []
 
-    valid_pmids = sorted({pmid for _, pmid in rows if pmid.isdigit()})
+    valid_pmids = sorted({pmid for _, _, pmid in rows if pmid.isdigit()})
     records: dict[str, Any] = {}
     if valid_pmids:
         query = {
@@ -203,20 +245,29 @@ def _pubmed_identifier_checks(
         }
         if email := os.getenv("RESEARKA_NCBI_EMAIL", os.getenv("RESEARKA_CROSSREF_MAILTO", "")):
             query["email"] = email
-        base = os.getenv(
-            "RESEARKA_PUBMED_URL",
-            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+        base = validated_service_url(
+            os.getenv(
+                "RESEARKA_PUBMED_URL",
+                "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+            ),
+            label="pubmed",
         )
         payload = _registry_payload(client, f"{base}?{urllib.parse.urlencode(query)}")
         result = payload.get("result") if payload else None
         records = result if isinstance(result, dict) else {}
 
     checks: list[dict[str, Any]] = []
-    for source, pmid in rows:
+    for source_index, source, pmid in rows:
         identity = f"pmid:{pmid}"
         record = records.get(pmid) if pmid.isdigit() else None
         if not isinstance(record, dict) or not str(record.get("title") or "").strip():
-            checks.append({"identity": identity, "checked": False, "mismatch": not pmid.isdigit()})
+            checks.append({
+                "identity": identity,
+                "source_index": source_index,
+                "registered_dois": [],
+                "checked": False,
+                "mismatch": not pmid.isdigit(),
+            })
             continue
         articleids = record.get("articleids")
         articleids = articleids if isinstance(articleids, list) else []
@@ -228,6 +279,8 @@ def _pubmed_identifier_checks(
         submitted_doi = str(source.get("doi") or "").strip().lower()
         checks.append({
             "identity": identity,
+            "source_index": source_index,
+            "registered_dois": sorted(registered_dois),
             "checked": True,
             "mismatch": (
                 not _text_matches(source.get("title"), record.get("title"), floor=0.6)
@@ -237,16 +290,49 @@ def _pubmed_identifier_checks(
     return checks
 
 
+def _canonical_duplicate_indices(
+    sources: list[dict[str, Any]], identifier_checks: list[dict[str, Any]]
+) -> list[int]:
+    aliases = [_source_aliases(source) for source in sources]
+    for row in identifier_checks:
+        index = row.get("source_index")
+        if not isinstance(index, int) or not 0 <= index < len(aliases):
+            continue
+        aliases[index].update(f"doi:{doi}" for doi in row.get("registered_dois", []) if doi)
+    seen: set[str] = set()
+    duplicates: list[int] = []
+    for index, values in enumerate(aliases):
+        if values & seen:
+            duplicates.append(index)
+        seen.update(values)
+    return duplicates
+
+
 def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Verify registered source identity, evidence text, and retraction state."""
     if not _metadata_enabled():
         return None
-    candidates = [(source, identity) for source in sources if (identity := _source_identity(source))][:_max_sources()]
+    candidates = [(source, identity) for source in sources if (identity := _source_identity(source))]
     if not candidates:
         return None
+    if len(candidates) > _max_sources():
+        return {
+            "verification_version": 2,
+            "available": False,
+            "recommendation": "revise",
+            "reason": f"source_metadata_capacity_exceeded:{len(candidates)}>{_max_sources()}",
+            "checked": [],
+            "unverified": [identity[0] for _, identity in candidates],
+        }
 
-    crossref_base = os.getenv("RESEARKA_CROSSREF_URL", "https://api.crossref.org/works").rstrip("/")
-    openalex_base = os.getenv("RESEARKA_OPENALEX_URL", "https://api.openalex.org/works").rstrip("/")
+    crossref_base = validated_service_url(
+        os.getenv("RESEARKA_CROSSREF_URL", "https://api.crossref.org/works"),
+        label="crossref",
+    )
+    openalex_base = validated_service_url(
+        os.getenv("RESEARKA_OPENALEX_URL", "https://api.openalex.org/works"),
+        label="openalex",
+    )
 
     def check(client: httpx.Client, item: tuple[dict[str, Any], tuple[str, str | None, str | None]]) -> dict[str, Any]:
         source, (identity, doi, openalex_id) = item
@@ -268,7 +354,7 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
                 if message.get("abstract"):
                     abstracts.append(str(message["abstract"]))
                 retracted = retracted or _crossref_retracted(message)
-        if openalex_id and not authority_count:
+        if openalex_id and (not authority_count or not abstracts):
             payload = _registry_payload(client, f"{openalex_base}/{openalex_id}")
             if payload:
                 authority_count += 1
@@ -282,6 +368,13 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
             for key in ("quote", "evidence_span", "excerpt")
             if str(source.get(key) or "").strip()
         ]
+        evidence_text_available = bool(evidence and abstracts)
+        evidence_text_verified = evidence_text_available and any(
+            len(normalized) >= 20 and normalized in _normalized_text(abstract)
+            for value in evidence
+            if (normalized := _normalized_text(value))
+            for abstract in abstracts
+        )
         return {
             "identity": identity,
             "checked": authority_count > 0,
@@ -289,6 +382,9 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
             "title_mismatch": bool(titles) and not any(_text_matches(source.get("title"), title, floor=0.6) for title in titles),
             "evidence_mismatch": bool(evidence and abstracts)
             and not any(_text_matches(value, abstract, floor=0.35) for value in evidence for abstract in abstracts),
+            "evidence_text_submitted": bool(evidence),
+            "evidence_text_available": evidence_text_available,
+            "evidence_text_verified": evidence_text_verified,
         }
 
     try:
@@ -306,8 +402,14 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
         log.warning("source_metadata_unavailable", extra={"error": str(exc)})
         results = [{"identity": identity[0], "checked": False} for _, identity in candidates]
         identifier_results = [
-            {"identity": f"pmid:{pmid}", "checked": False, "mismatch": False}
-            for source, _ in candidates
+            {
+                "identity": f"pmid:{pmid}",
+                "source_index": index,
+                "registered_dois": [],
+                "checked": False,
+                "mismatch": False,
+            }
+            for index, source in enumerate(sources)
             if (pmid := str(source.get("pmid") or "").strip())
         ]
 
@@ -316,6 +418,12 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
     retracted = [row["identity"] for row in results if row.get("retracted")]
     title_mismatches = [row["identity"] for row in results if row.get("title_mismatch")]
     evidence_mismatches = [row["identity"] for row in results if row.get("evidence_mismatch")]
+    evidence_text_verified = [row["identity"] for row in results if row.get("evidence_text_verified")]
+    evidence_text_unverified = [
+        row["identity"]
+        for row in results
+        if row.get("evidence_text_submitted") and not row.get("evidence_text_verified")
+    ]
     identifier_checked = sorted({row["identity"] for row in identifier_results if row.get("checked")})
     identifier_mismatches = sorted({row["identity"] for row in identifier_results if row.get("mismatch")})
     identifier_unverified = sorted({
@@ -323,8 +431,9 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
         for row in identifier_results
         if not row.get("checked") and not row.get("mismatch")
     })
+    canonical_duplicate_indices = _canonical_duplicate_indices(sources, identifier_results)
     blocked = retracted or title_mismatches or identifier_mismatches
-    uncertain = evidence_mismatches or unverified or identifier_unverified
+    uncertain = evidence_mismatches or unverified or identifier_unverified or canonical_duplicate_indices
     recommendation = "reject" if blocked else _metadata_unavailable_recommendation() if uncertain else "pass"
     return {
         "verification_version": 2,
@@ -335,9 +444,12 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
         "retracted": retracted,
         "title_mismatches": title_mismatches,
         "evidence_mismatches": evidence_mismatches,
+        "evidence_text_verified": evidence_text_verified,
+        "evidence_text_unverified": evidence_text_unverified,
         "identifier_checked": identifier_checked,
         "identifier_unverified": identifier_unverified,
         "identifier_mismatches": identifier_mismatches,
+        "canonical_duplicate_indices": canonical_duplicate_indices,
     }
 
 
@@ -349,11 +461,19 @@ def resolve_dois(dois: list[str]) -> dict[str, Any] | None:
     """
     if not _enabled() or not dois:
         return None
+    if len(dois) > _max_dois():
+        return {
+            "available": False,
+            "recommendation": "revise",
+            "reason": f"doi_check_capacity_exceeded:{len(dois)}>{_max_dois()}",
+            "checked": [],
+            "missing": [],
+        }
     checked: list[str] = []
     missing: list[str] = []
     try:
         with httpx.Client(timeout=_timeout_s(), follow_redirects=True) as client:
-            for doi in dois[: _max_dois()]:
+            for doi in dois:
                 # Encode the DOI as a path segment ('/' stays); a stray '?' or
                 # '#' must not truncate the handle lookup into a false 404.
                 response = client.get(f"{_base_url()}/{urllib.parse.quote(doi, safe='/')}")
@@ -408,13 +528,22 @@ def resolve_source_locators(sources: list[dict[str, Any]]) -> dict[str, Any] | N
     """Resolve every non-DOI source locator without serially blocking intake."""
     if not _source_enabled():
         return None
-    locators = list(dict.fromkeys(filter(None, (_non_doi_locator(source) for source in sources))))[: _max_sources()]
+    locators = list(dict.fromkeys(filter(None, (_non_doi_locator(source) for source in sources))))
     if not locators:
         return None
+    if len(locators) > _max_sources():
+        return {
+            "available": False,
+            "recommendation": "revise",
+            "reason": f"source_check_capacity_exceeded:{len(locators)}>{_max_sources()}",
+            "checked": [],
+            "missing": [],
+        }
 
     def check(client: httpx.Client, locator: str) -> tuple[str, str]:
         try:
-            status = client.get(locator, headers={"Range": "bytes=0-0"}).status_code
+            with client.stream("GET", locator, headers={"Range": "bytes=0-0"}) as response:
+                status = response.status_code
         except UnsafeSourceLocator:
             return locator, "missing"
         except Exception:

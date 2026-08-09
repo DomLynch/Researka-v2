@@ -54,14 +54,25 @@ RESEARKA_V2_PROVIDER=judge_panel
 ```
 
 Default live judge stack:
-- primary: `mimo-v2.5-pro`
+- primary: `MiniMax-M3`
 - sparring: `google/gemma-4-31b-it` via OpenRouter
 - fallback / tiebreak: `mistralai/mistral-small-2603` via OpenRouter
 
-The default remains deterministic for local tests and offline development.
+The default remains deterministic for local tests and offline development;
+production refuses deterministic or unknown reviewer configurations.
+
+## Production runtime
+
+The tracked systemd units run both API and worker as the unprivileged
+`researka` account from `/opt/researka-v2`. Create the account once with
+`useradd --system --home-dir /var/lib/researka-v2 --shell /usr/sbin/nologin researka`.
+Systemd owns `/var/lib/researka-v2` through `StateDirectory=researka-v2`; code
+and configuration remain read-only to the service.
 
 ## Derivation Web
-When `/etc/derivation-web/researka.key` exists, decisions are mirrored to `https://dw.domlynch.com` as non-blocking provenance artifacts. DW failures do not block Researka decisions.
+When `/etc/derivation-web/researka.key` exists, decisions are mirrored to
+Derivation Web without changing the editorial verdict. Accepted artifacts stay
+provisional until their publication provenance is registered successfully.
 
 ## OSF DOI minting
 Researka core mints OSF DOIs after accepted-publication storage, before Derivation Web provenance emission. The writing agents do not mint DOIs.

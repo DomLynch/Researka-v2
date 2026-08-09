@@ -26,6 +26,8 @@ _BILLING_WAIVER_FIELDS = (
     "secondary_review_skipped",
     "accept_quorum_count",
     "accept_quorum_models",
+    "accept_quorum_identities",
+    "accept_quorum_providers",
     "accept_quorum_waiver",
     "sparring_provider",
     "sparring_http_status",
@@ -78,6 +80,12 @@ _SOURCE_ID_CONTEXT = re.compile(
 )
 _SOURCE_IDENTIFIER_CONTEXT = re.compile(r"\b(?:pmids?|dois?|identifiers?)\b", re.IGNORECASE)
 _DOI = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
+_MISSING_MANUSCRIPT = re.compile(
+    r"\b(?:missing|no) (?:full )?(?:manuscript|submission)? ?(?:text|content)\b|"
+    r"\b(?:manuscript|submission)(?: text| content)? (?:is )?(?:missing|absent|not (?:provided|present|included))\b|"
+    r"\bcontent between\b.{0,80}\bmarkers?\b|\bprovide the full manuscript text\b",
+    re.IGNORECASE,
+)
 
 
 def _normalized_words(value: str) -> str:
@@ -93,6 +101,20 @@ def _fenced_submission_text(user_prompt: str) -> str:
     if end < 0:
         return ""
     return user_prompt[start_match.end() : end]
+
+
+def _has_manuscript_content(user_prompt: str) -> bool:
+    try:
+        payload = json.loads(_fenced_submission_text(user_prompt))
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    sections = payload.get("sections")
+    return bool(
+        str(payload.get("abstract") or "").strip()
+        or isinstance(sections, dict) and any(str(value).strip() for value in sections.values())
+    )
 
 
 def _is_integrity_allegation(value: str) -> bool:
@@ -157,6 +179,8 @@ def review_grounding_failure(
         value = payload.get(field)
         if isinstance(value, list):
             feedback.extend(str(item) for item in value)
+    if _has_manuscript_content(user_prompt) and any(_MISSING_MANUSCRIPT.search(item) for item in feedback):
+        return "false_missing_manuscript"
     if source_failure := _source_integrity_failure(feedback, source_verification):
         return source_failure
     allegations = [item for item in feedback if _is_integrity_allegation(item)]
@@ -192,13 +216,26 @@ def accept_quorum_satisfied(
 ) -> bool:
     models = metadata.get("accept_quorum_models")
     distinct_models = {model.strip() for model in models if isinstance(model, str) and model.strip()} if isinstance(models, list) else set()
+    identities = metadata.get("accept_quorum_identities")
+    distinct_identities = {
+        identity.strip() for identity in identities if isinstance(identity, str) and identity.strip()
+    } if isinstance(identities, list) else set()
+    providers = metadata.get("accept_quorum_providers")
+    distinct_providers = {
+        item.strip() for item in providers if isinstance(item, str) and item.strip()
+    } if isinstance(providers, list) else set()
     try:
         count = int(metadata.get("accept_quorum_count") or 0)
     except (TypeError, ValueError):
         return False
     if (provider or metadata.get("provider")) != "reviewer-panel":
         return False
-    if count >= 2 and len(distinct_models) >= 2:
+    if (
+        count >= 2
+        and len(distinct_models) >= 2
+        and len(distinct_identities) >= 2
+        and len(distinct_providers) >= 2
+    ):
         return True
     return allow_billing_waiver and billing_waiver_receipt_valid(metadata, provider=provider)
 

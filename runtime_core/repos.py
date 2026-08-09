@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import secrets
+import threading
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -24,7 +25,7 @@ from contracts import (
     RuntimeJob,
 )
 
-OSF_TOKEN_METADATA_ENCRYPTION_PREFIX = "fernet:v1:"
+OSF_TOKEN_METADATA_ENCRYPTION_PREFIX = "fernet:v1:"  # nosec B105 - ciphertext format marker
 
 
 def _job_available(job: RuntimeJob, now: datetime) -> bool:
@@ -106,7 +107,9 @@ def _osf_token_cipher():
 def _encode_osf_token_metadata(token_metadata: dict) -> str:
     payload = json.dumps(token_metadata, separators=(",", ":"), sort_keys=True)
     cipher = _osf_token_cipher()
-    return OSF_TOKEN_METADATA_ENCRYPTION_PREFIX + cipher.encrypt(payload.encode("utf-8")).decode("ascii")
+    return OSF_TOKEN_METADATA_ENCRYPTION_PREFIX + cipher.encrypt(
+        payload.encode("utf-8")
+    ).decode("ascii")
 
 
 def _decode_osf_token_metadata(raw: str) -> dict | None:
@@ -121,19 +124,37 @@ def _decode_osf_token_metadata(raw: str) -> dict | None:
 
 
 class RuntimeRepository(Protocol):
+    def healthcheck(self) -> bool: ...
     def reset(self) -> None: ...
     def create_object(self, obj: ResearchObject) -> ResearchObject: ...
-    def create_object_and_enqueue_job(self, obj: ResearchObject, job: RuntimeJob) -> tuple[ResearchObject, RuntimeJob]: ...
+    def create_object_and_enqueue_job(
+        self, obj: ResearchObject, job: RuntimeJob
+    ) -> tuple[ResearchObject, RuntimeJob]: ...
     def get_object(self, object_id: str) -> ResearchObject | None: ...
-    def update_object_metadata(self, object_id: str, metadata: dict) -> ResearchObject | None: ...
+    def update_object_metadata(
+        self, object_id: str, metadata: dict
+    ) -> ResearchObject | None: ...
+    def update_objects_metadata(
+        self, updates: dict[str, dict]
+    ) -> list[ResearchObject]: ...
+    def update_object_metadata_and_enqueue_job(
+        self,
+        object_id: str,
+        metadata: dict,
+        job: RuntimeJob,
+    ) -> tuple[ResearchObject, RuntimeJob]: ...
     def list_objects(
         self,
         object_type: ObjectType | str | None = None,
         *,
         summaries_only: bool = False,
     ) -> list[ResearchObject]: ...
-    def children_of(self, parent_object_id: str, object_type: ObjectType | str | None = None) -> list[ResearchObject]: ...
-    def publication_for_target(self, target_object_id: str) -> ResearchObject | None: ...
+    def children_of(
+        self, parent_object_id: str, object_type: ObjectType | str | None = None
+    ) -> list[ResearchObject]: ...
+    def publication_for_target(
+        self, target_object_id: str
+    ) -> ResearchObject | None: ...
     def enqueue_job(self, job: RuntimeJob) -> RuntimeJob: ...
     def get_job(self, job_id: str) -> RuntimeJob | None: ...
     def queued_jobs(self, stage: str | None = None) -> list[RuntimeJob]: ...
@@ -144,13 +165,21 @@ class RuntimeRepository(Protocol):
         target_object_id: str | None = None,
         worker_id: str | None = None,
     ) -> RuntimeJob | None: ...
-    def complete_job(self, job_id: str, *, event: RuntimeEvent | None = None) -> None: ...
+    def renew_job_lease(self, job_id: str, lease_token: int) -> bool: ...
+    def complete_job(
+        self,
+        job_id: str,
+        *,
+        lease_token: int | None = None,
+        event: RuntimeEvent | None = None,
+    ) -> None: ...
     def fail_job(
         self,
         job_id: str,
         *,
         reason: str,
         failure_class: FailureClass | None = None,
+        lease_token: int | None = None,
         event: RuntimeEvent | None = None,
     ) -> None: ...
     def record_event(self, event: RuntimeEvent) -> None: ...
@@ -158,8 +187,11 @@ class RuntimeRepository(Protocol):
     def events_for_target(self, target_object_id: str) -> list[RuntimeEvent]: ...
 
     # API key management
-    def create_api_key(self, agent_id: str, *, label: str = "", daily_limit: int = 0) -> ApiKeyCreateResponse: ...
+    def create_api_key(
+        self, agent_id: str, *, label: str = "", daily_limit: int = 0
+    ) -> ApiKeyCreateResponse: ...
     def validate_api_key(self, raw_key: str) -> str | None: ...
+    def consume_api_key(self, raw_key: str) -> tuple[str | None, str]: ...
     def revoke_api_key(self, key_hash: str) -> bool: ...
     def list_api_keys(self) -> list[ApiKeyInfo]: ...
     def record_api_key_usage(self, key_hash: str) -> None: ...
@@ -169,7 +201,9 @@ class RuntimeRepository(Protocol):
 
     # Audit review management
     def create_audit_review(self, review: AuditReview) -> AuditReview: ...
-    def list_audit_reviews(self, submission_id: str | None = None) -> list[AuditReview]: ...
+    def list_audit_reviews(
+        self, submission_id: str | None = None
+    ) -> list[AuditReview]: ...
     def audit_summary(self, submission_id: str | None = None) -> dict: ...
 
     # Claim cards (per-publication atomic claims)
@@ -178,7 +212,7 @@ class RuntimeRepository(Protocol):
 
 
 class InMemoryRuntimeRepository:
-    def __init__(self, *, lease_ttl_seconds: int = 300) -> None:
+    def __init__(self, *, lease_ttl_seconds: float = 300) -> None:
         self.objects: dict[str, ResearchObject] = {}
         self.jobs: dict[str, RuntimeJob] = {}
         self.events: list[RuntimeEvent] = []
@@ -191,6 +225,7 @@ class InMemoryRuntimeRepository:
         self.audit_reviews: list[AuditReview] = []
         self.claim_cards: list[ClaimCard] = []
         self.lease_ttl_seconds = lease_ttl_seconds
+        self._api_key_lock = threading.Lock()
 
     def reset(self) -> None:
         self.objects.clear()
@@ -205,6 +240,9 @@ class InMemoryRuntimeRepository:
         self.audit_reviews.clear()
         self.claim_cards.clear()
 
+    def healthcheck(self) -> bool:
+        return True
+
     def create_object(self, obj: ResearchObject) -> ResearchObject:
         self.objects[obj.id] = obj
         if obj.parent_object_id:
@@ -213,8 +251,10 @@ class InMemoryRuntimeRepository:
             self.publication_by_target[obj.parent_object_id] = obj.id
         return obj
 
-    def create_object_and_enqueue_job(self, obj: ResearchObject, job: RuntimeJob) -> tuple[ResearchObject, RuntimeJob]:
-        if job.target_object_id != obj.id:
+    def create_object_and_enqueue_job(
+        self, obj: ResearchObject, job: RuntimeJob
+    ) -> tuple[ResearchObject, RuntimeJob]:
+        if job.target_object_id not in {obj.id, obj.parent_object_id}:
             raise ValueError("job_target_must_match_object")
         self.create_object(obj)
         try:
@@ -228,13 +268,47 @@ class InMemoryRuntimeRepository:
     def get_object(self, object_id: str) -> ResearchObject | None:
         return self.objects.get(object_id)
 
-    def update_object_metadata(self, object_id: str, metadata: dict) -> ResearchObject | None:
+    def update_object_metadata(
+        self, object_id: str, metadata: dict
+    ) -> ResearchObject | None:
         obj = self.objects.get(object_id)
         if obj is None:
             return None
         updated = obj.model_copy(update={"metadata": dict(metadata)})
         self.objects[object_id] = updated
         return updated
+
+    def update_objects_metadata(self, updates: dict[str, dict]) -> list[ResearchObject]:
+        if any(object_id not in self.objects for object_id in updates):
+            raise ValueError("object_not_found")
+        changed = [
+            self.objects[object_id].model_copy(update={"metadata": dict(metadata)})
+            for object_id, metadata in updates.items()
+        ]
+        for obj in changed:
+            self.objects[obj.id] = obj
+        return changed
+
+    def update_object_metadata_and_enqueue_job(
+        self,
+        object_id: str,
+        metadata: dict,
+        job: RuntimeJob,
+    ) -> tuple[ResearchObject, RuntimeJob]:
+        if job.target_object_id != object_id:
+            raise ValueError("job_target_must_match_object")
+        current = self.objects.get(object_id)
+        if current is None:
+            raise ValueError("object_not_found")
+        event_count = len(self.events)
+        updated = current.model_copy(update={"metadata": dict(metadata)})
+        self.objects[object_id] = updated
+        try:
+            return updated, self.enqueue_job(job)
+        except Exception:
+            self.objects[object_id] = current
+            del self.events[event_count:]
+            raise
 
     def list_objects(
         self,
@@ -247,8 +321,13 @@ class InMemoryRuntimeRepository:
             return objects
         return [obj for obj in objects if obj.object_type == object_type]
 
-    def children_of(self, parent_object_id: str, object_type: ObjectType | str | None = None) -> list[ResearchObject]:
-        children = [self.objects[obj_id] for obj_id in self.objects_by_parent.get(parent_object_id, [])]
+    def children_of(
+        self, parent_object_id: str, object_type: ObjectType | str | None = None
+    ) -> list[ResearchObject]:
+        children = [
+            self.objects[obj_id]
+            for obj_id in self.objects_by_parent.get(parent_object_id, [])
+        ]
         if object_type is None:
             return children
         return [obj for obj in children if obj.object_type == object_type]
@@ -260,18 +339,6 @@ class InMemoryRuntimeRepository:
         return self.objects.get(publication_id)
 
     def enqueue_job(self, job: RuntimeJob) -> RuntimeJob:
-        if job.stage.value == "autonomous_publish":
-            existing_publication = self.publication_for_target(job.target_object_id)
-            if existing_publication is not None:
-                completed = RuntimeJob(
-                    target_object_id=job.target_object_id,
-                    stage=job.stage,
-                    status=JobStatus.COMPLETED,
-                    payload={"deduped_to_existing_publication": True},
-                )
-                self.jobs[completed.id] = completed
-                self.jobs_by_target[completed.target_object_id].append(completed.id)
-                return completed
         for existing_id in self.jobs_by_target[job.target_object_id]:
             existing = self.jobs[existing_id]
             if existing.stage == job.stage and existing.status in {
@@ -316,7 +383,11 @@ class InMemoryRuntimeRepository:
     ) -> RuntimeJob | None:
         now = datetime.now(timezone.utc)
         for job in self.jobs.values():
-            if job.status == JobStatus.LEASED and job.lease_expires_at and job.lease_expires_at <= now:
+            if (
+                job.status == JobStatus.LEASED
+                and job.lease_expires_at
+                and job.lease_expires_at <= now
+            ):
                 job.status = JobStatus.QUEUED
                 job.lease_expires_at = None
                 self.record_event(
@@ -337,6 +408,7 @@ class InMemoryRuntimeRepository:
             return None
         job = jobs[0]
         job.status = JobStatus.LEASED
+        job.lease_token += 1
         job.lease_expires_at = now + timedelta(seconds=self.lease_ttl_seconds)
         self.record_event(
             RuntimeEvent(
@@ -344,13 +416,34 @@ class InMemoryRuntimeRepository:
                 target_object_id=job.target_object_id,
                 job_id=job.id,
                 worker_id=worker_id,
-                payload={"stage": job.stage.value},
+                payload={"stage": job.stage.value, "lease_token": job.lease_token},
                 ts=now,
             )
         )
         return job
 
-    def complete_job(self, job_id: str, *, event: RuntimeEvent | None = None) -> None:
+    def renew_job_lease(self, job_id: str, lease_token: int) -> bool:
+        job = self.jobs.get(job_id)
+        if (
+            job is None
+            or job.status != JobStatus.LEASED
+            or job.lease_token != lease_token
+        ):
+            return False
+        job.lease_expires_at = datetime.now(timezone.utc) + timedelta(
+            seconds=self.lease_ttl_seconds
+        )
+        return True
+
+    def complete_job(
+        self,
+        job_id: str,
+        *,
+        lease_token: int | None = None,
+        event: RuntimeEvent | None = None,
+    ) -> None:
+        if lease_token is not None and not self._lease_matches(job_id, lease_token):
+            raise RuntimeError("stale_job_lease")
         self.jobs[job_id].status = JobStatus.COMPLETED
         self.jobs[job_id].lease_expires_at = None
         if event is not None:
@@ -362,8 +455,13 @@ class InMemoryRuntimeRepository:
         *,
         reason: str,
         failure_class: FailureClass | None = None,
+        lease_token: int | None = None,
         event: RuntimeEvent | None = None,
     ) -> None:
+        if lease_token is not None and not self._lease_matches(
+            job_id, lease_token, statuses={JobStatus.LEASED, JobStatus.FAILED}
+        ):
+            raise RuntimeError("stale_job_lease")
         self.jobs[job_id].status = JobStatus.FAILED
         self.jobs[job_id].lease_expires_at = None
         self.jobs[job_id].payload["failure_reason"] = reason
@@ -371,6 +469,20 @@ class InMemoryRuntimeRepository:
             self.jobs[job_id].payload["failure_class"] = failure_class.value
         if event is not None:
             self.record_event(event)
+
+    def _lease_matches(
+        self,
+        job_id: str,
+        lease_token: int,
+        *,
+        statuses: set[JobStatus] | None = None,
+    ) -> bool:
+        job = self.jobs.get(job_id)
+        return bool(
+            job
+            and job.status in (statuses or {JobStatus.LEASED})
+            and job.lease_token == lease_token
+        )
 
     def record_event(self, event: RuntimeEvent) -> None:
         self.events.append(event)
@@ -380,7 +492,11 @@ class InMemoryRuntimeRepository:
 
     def events_for_target(self, target_object_id: str) -> list[RuntimeEvent]:
         return sorted(
-            (event for event in self.events if event.target_object_id == target_object_id),
+            (
+                event
+                for event in self.events
+                if event.target_object_id == target_object_id
+            ),
             key=lambda event: event.ts,
         )
 
@@ -389,7 +505,9 @@ class InMemoryRuntimeRepository:
     def _hash_key(self, raw_key: str) -> str:
         return hashlib.sha256(raw_key.encode()).hexdigest()
 
-    def create_api_key(self, agent_id: str, *, label: str = "", daily_limit: int = 0) -> ApiKeyCreateResponse:
+    def create_api_key(
+        self, agent_id: str, *, label: str = "", daily_limit: int = 0
+    ) -> ApiKeyCreateResponse:
         raw_key = f"rk_{secrets.token_urlsafe(32)}"
         key_hash = self._hash_key(raw_key)
         info = ApiKeyInfo(
@@ -414,12 +532,20 @@ class InMemoryRuntimeRepository:
         info = self.api_keys.get(key_hash)
         if info is None or info.revoked:
             return None
-        if info.daily_limit > 0:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            used = self.api_key_usage.get((key_hash, today), 0)
-            if used >= info.daily_limit:
-                return None
         return info.agent_id
+
+    def consume_api_key(self, raw_key: str) -> tuple[str | None, str]:
+        key_hash = self._hash_key(raw_key)
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._api_key_lock:
+            info = self.api_keys.get(key_hash)
+            if info is None or info.revoked:
+                return None, "invalid"
+            used = self.api_key_usage.get((key_hash, today), 0)
+            if info.daily_limit > 0 and used >= info.daily_limit:
+                return None, "quota"
+            self.api_key_usage[(key_hash, today)] = used + 1
+            return info.agent_id, "ok"
 
     def revoke_api_key(self, key_hash: str) -> bool:
         info = self.api_keys.get(key_hash)
@@ -433,7 +559,9 @@ class InMemoryRuntimeRepository:
 
     def record_api_key_usage(self, key_hash: str) -> None:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        self.api_key_usage[(key_hash, today)] = self.api_key_usage.get((key_hash, today), 0) + 1
+        self.api_key_usage[(key_hash, today)] = (
+            self.api_key_usage.get((key_hash, today), 0) + 1
+        )
 
     def get_api_key_usage_today(self, key_hash: str) -> int:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -459,7 +587,12 @@ class InMemoryRuntimeRepository:
         reviews = self.list_audit_reviews(submission_id)
         total = len(reviews)
         if total == 0:
-            return {"total_audits": 0, "agreement_rate": 0.0, "by_auditor": {}, "by_verdict": {}}
+            return {
+                "total_audits": 0,
+                "agreement_rate": 0.0,
+                "by_auditor": {},
+                "by_verdict": {},
+            }
         agree = sum(1 for r in reviews if r.verdict_match == AuditVerdict.AGREE)
         by_auditor: dict[str, dict] = {}
         by_verdict: dict[str, int] = {}
@@ -491,7 +624,9 @@ class InMemoryRuntimeRepository:
 
 
 def postgres_dsn_from_env() -> str | None:
-    return os.environ.get("TEST_POSTGRES_DSN") or os.environ.get("RESEARKA_V2_POSTGRES_DSN")
+    return os.environ.get("TEST_POSTGRES_DSN") or os.environ.get(
+        "RESEARKA_V2_POSTGRES_DSN"
+    )
 
 
 def postgres_runtime_available() -> bool:
@@ -510,12 +645,14 @@ def _postgres_connect_timeout_seconds() -> int:
 
 
 class PostgresRuntimeRepository:
-    def __init__(self, dsn: str, *, lease_ttl_seconds: int = 300) -> None:
+    def __init__(self, dsn: str, *, lease_ttl_seconds: float = 300) -> None:
         try:
             import psycopg
             from psycopg.rows import dict_row
         except Exception as exc:
-            raise RuntimeError("psycopg is required for PostgresRuntimeRepository") from exc
+            raise RuntimeError(
+                "psycopg is required for PostgresRuntimeRepository"
+            ) from exc
         self._psycopg = psycopg
         self._dict_row = dict_row
         self.dsn = dsn
@@ -530,9 +667,23 @@ class PostgresRuntimeRepository:
             connect_timeout=self.connect_timeout_seconds,
         )
 
+    def healthcheck(self) -> bool:
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute("SELECT 1 AS ok")
+                row = cur.fetchone()
+                return bool(row and row.get("ok") == 1)
+        except Exception:
+            return False
+
     def _ensure_schema(self) -> None:
         if self._alembic_manages_schema():
             return
+        if (
+            os.getenv("RESEARKA_V2_ENV", "development").strip().lower()
+            == "production"
+        ):
+            raise RuntimeError("alembic_schema_required_in_production")
         self._create_tables_raw()
 
     def _alembic_manages_schema(self) -> bool:
@@ -553,20 +704,35 @@ class PostgresRuntimeRepository:
             # Version table exists — assume managed.  Auto-migrate handles upgrades.
             self._auto_migrate()
             return True
-        except Exception:
+        except Exception as exc:
+            if (
+                os.getenv("RESEARKA_V2_ENV", "development").strip().lower()
+                == "production"
+            ):
+                raise RuntimeError("runtime_schema_migration_failed") from exc
             return False
 
     def _auto_migrate(self) -> None:
-        """Run alembic upgrade head if available. Best-effort."""
+        """Run Alembic to head when the database is migration-managed."""
         try:
             from alembic import command as alembic_command  # type: ignore[attr-defined]
             from alembic.config import Config
-        except ImportError:
-            pass
-        else:
-            config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-            config.set_main_option("sqlalchemy.url", self.dsn)
-            alembic_command.upgrade(config, "head")
+        except ImportError as exc:
+            if (
+                os.getenv("RESEARKA_V2_ENV", "development").strip().lower()
+                == "production"
+            ):
+                raise RuntimeError("alembic_required_in_production") from exc
+            return
+        config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+        config.set_main_option("sqlalchemy.url", self.dsn)
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_lock(62004202)")
+            try:
+                alembic_command.upgrade(config, "head")
+            finally:
+                cur.execute("SELECT pg_advisory_unlock(62004202)")
+                conn.commit()
 
     def _create_tables_raw(self) -> None:
         """Fallback: create all tables via raw SQL (no Alembic dependency).
@@ -597,13 +763,18 @@ class PostgresRuntimeRepository:
                     status TEXT NOT NULL,
                     payload TEXT NOT NULL,
                     lease_expires_at TIMESTAMPTZ NULL,
+                    lease_token BIGINT NOT NULL DEFAULT 0,
                     created_at TIMESTAMPTZ NOT NULL
                 )
                 """
             )
             cur.execute(
+                "ALTER TABLE runtime_jobs ADD COLUMN IF NOT EXISTS lease_token BIGINT NOT NULL DEFAULT 0"
+            )
+            cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS runtime_events (
+                    id BIGSERIAL PRIMARY KEY,
                     ts TIMESTAMPTZ NOT NULL,
                     event_type TEXT NOT NULL,
                     target_object_id TEXT NOT NULL,
@@ -612,6 +783,9 @@ class PostgresRuntimeRepository:
                     payload TEXT NOT NULL
                 )
                 """
+            )
+            cur.execute(
+                "ALTER TABLE runtime_events ADD COLUMN IF NOT EXISTS id BIGSERIAL"
             )
             cur.execute(
                 """
@@ -714,7 +888,9 @@ class PostgresRuntimeRepository:
             parent_object_id=row["parent_object_id"],
             title=row["title"],
             body_markdown=row["body_markdown"],
-            metadata=raw_metadata if isinstance(raw_metadata, dict) else json.loads(raw_metadata),
+            metadata=raw_metadata
+            if isinstance(raw_metadata, dict)
+            else json.loads(raw_metadata),
             created_at=row["created_at"],
         )
 
@@ -728,6 +904,7 @@ class PostgresRuntimeRepository:
             status=row["status"],
             payload=json.loads(row["payload"]),
             lease_expires_at=row["lease_expires_at"],
+            lease_token=int(row.get("lease_token") or 0),
             created_at=row["created_at"],
         )
 
@@ -761,8 +938,10 @@ class PostgresRuntimeRepository:
             conn.commit()
         return obj
 
-    def create_object_and_enqueue_job(self, obj: ResearchObject, job: RuntimeJob) -> tuple[ResearchObject, RuntimeJob]:
-        if job.target_object_id != obj.id:
+    def create_object_and_enqueue_job(
+        self, obj: ResearchObject, job: RuntimeJob
+    ) -> tuple[ResearchObject, RuntimeJob]:
+        if job.target_object_id not in {obj.id, obj.parent_object_id}:
             raise ValueError("job_target_must_match_object")
         event = RuntimeEvent(
             event_type=EventType.JOB_QUEUED,
@@ -788,8 +967,8 @@ class PostgresRuntimeRepository:
             )
             cur.execute(
                 """
-                INSERT INTO runtime_jobs (id, target_object_id, stage, status, payload, lease_expires_at, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO runtime_jobs (id, target_object_id, stage, status, payload, lease_expires_at, lease_token, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     job.id,
@@ -798,6 +977,7 @@ class PostgresRuntimeRepository:
                     job.status.value,
                     json.dumps(job.payload),
                     job.lease_expires_at,
+                    job.lease_token,
                     job.created_at,
                 ),
             )
@@ -810,7 +990,9 @@ class PostgresRuntimeRepository:
             cur.execute("SELECT * FROM research_objects WHERE id = %s", (object_id,))
             return self._object_from_row(cur.fetchone())
 
-    def update_object_metadata(self, object_id: str, metadata: dict) -> ResearchObject | None:
+    def update_object_metadata(
+        self, object_id: str, metadata: dict
+    ) -> ResearchObject | None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
@@ -825,6 +1007,92 @@ class PostgresRuntimeRepository:
             conn.commit()
             return self._object_from_row(row)
 
+    def update_objects_metadata(self, updates: dict[str, dict]) -> list[ResearchObject]:
+        changed: list[ResearchObject] = []
+        with self._connect() as conn, conn.cursor() as cur:
+            for object_id, metadata in updates.items():
+                cur.execute(
+                    "UPDATE research_objects SET metadata = %s WHERE id = %s RETURNING *",
+                    (json.dumps(metadata), object_id),
+                )
+                obj = self._object_from_row(cur.fetchone())
+                if obj is None:
+                    raise ValueError("object_not_found")
+                changed.append(obj)
+            conn.commit()
+        return changed
+
+    def update_object_metadata_and_enqueue_job(
+        self,
+        object_id: str,
+        metadata: dict,
+        job: RuntimeJob,
+    ) -> tuple[ResearchObject, RuntimeJob]:
+        if job.target_object_id != object_id:
+            raise ValueError("job_target_must_match_object")
+        event = RuntimeEvent(
+            event_type=EventType.JOB_QUEUED,
+            target_object_id=job.target_object_id,
+            job_id=job.id,
+            payload={"stage": job.stage.value, **job.payload},
+        )
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE research_objects SET metadata = %s WHERE id = %s RETURNING *",
+                (json.dumps(metadata), object_id),
+            )
+            updated = self._object_from_row(cur.fetchone())
+            if updated is None:
+                raise ValueError("object_not_found")
+            cur.execute(
+                """
+                SELECT * FROM runtime_jobs
+                WHERE target_object_id = %s AND stage = %s
+                  AND status IN ('queued', 'leased', 'completed')
+                ORDER BY created_at ASC LIMIT 1
+                """,
+                (job.target_object_id, job.stage.value),
+            )
+            existing = self._job_from_row(cur.fetchone())
+            if existing is None:
+                cur.execute(
+                    """
+                    INSERT INTO runtime_jobs
+                        (id, target_object_id, stage, status, payload, lease_expires_at, lease_token, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (target_object_id, stage)
+                        WHERE status IN ('queued', 'leased') DO NOTHING
+                    """,
+                    (
+                        job.id,
+                        job.target_object_id,
+                        job.stage.value,
+                        job.status.value,
+                        json.dumps(job.payload),
+                        job.lease_expires_at,
+                        job.lease_token,
+                        job.created_at,
+                    ),
+                )
+                if cur.rowcount:
+                    self._insert_event(cur, event)
+                    existing = job
+                else:
+                    cur.execute(
+                        """
+                        SELECT * FROM runtime_jobs
+                        WHERE target_object_id = %s AND stage = %s
+                          AND status IN ('queued', 'leased')
+                        ORDER BY created_at ASC LIMIT 1
+                        """,
+                        (job.target_object_id, job.stage.value),
+                    )
+                    existing = self._job_from_row(cur.fetchone())
+            if existing is None:
+                raise RuntimeError("job_enqueue_failed")
+            conn.commit()
+            return updated, existing
+
     def list_objects(
         self,
         object_type: ObjectType | str | None = None,
@@ -838,16 +1106,20 @@ class PostgresRuntimeRepository:
         )
         with self._connect() as conn, conn.cursor() as cur:
             if object_type is None:
-                cur.execute(f"SELECT {fields} FROM research_objects ORDER BY created_at ASC")
+                cur.execute(
+                    f"SELECT {fields} FROM research_objects ORDER BY created_at ASC"  # nosec B608 - fields is one of two fixed literals
+                )
             else:
                 cur.execute(
-                    f"SELECT {fields} FROM research_objects WHERE object_type = %s ORDER BY created_at ASC",
+                    f"SELECT {fields} FROM research_objects WHERE object_type = %s ORDER BY created_at ASC",  # nosec B608 - fixed field list
                     (str(object_type),),
                 )
             objects = [self._object_from_row(row) for row in cur.fetchall()]
             return [obj for obj in objects if obj is not None]
 
-    def children_of(self, parent_object_id: str, object_type: ObjectType | str | None = None) -> list[ResearchObject]:
+    def children_of(
+        self, parent_object_id: str, object_type: ObjectType | str | None = None
+    ) -> list[ResearchObject]:
         with self._connect() as conn, conn.cursor() as cur:
             if object_type is None:
                 cur.execute(
@@ -876,17 +1148,6 @@ class PostgresRuntimeRepository:
             return self._object_from_row(cur.fetchone())
 
     def enqueue_job(self, job: RuntimeJob) -> RuntimeJob:
-        if job.stage.value == "autonomous_publish":
-            existing_publication = self.publication_for_target(job.target_object_id)
-            if existing_publication is not None:
-                completed = RuntimeJob(
-                    target_object_id=job.target_object_id,
-                    stage=job.stage,
-                    status=JobStatus.COMPLETED,
-                    payload={"deduped_to_existing_publication": True},
-                )
-                self._insert_job(completed)
-                return completed
         existing_job = self._existing_job_for_stage(job)
         if existing_job is not None:
             return existing_job
@@ -917,8 +1178,8 @@ class PostgresRuntimeRepository:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO runtime_jobs (id, target_object_id, stage, status, payload, lease_expires_at, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO runtime_jobs (id, target_object_id, stage, status, payload, lease_expires_at, lease_token, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     job.id,
@@ -927,6 +1188,7 @@ class PostgresRuntimeRepository:
                     job.status.value,
                     json.dumps(job.payload),
                     job.lease_expires_at,
+                    job.lease_token,
                     job.created_at,
                 ),
             )
@@ -950,7 +1212,9 @@ class PostgresRuntimeRepository:
     def queued_jobs(self, stage: str | None = None) -> list[RuntimeJob]:
         with self._connect() as conn, conn.cursor() as cur:
             if stage is None:
-                cur.execute("SELECT * FROM runtime_jobs WHERE status = 'queued' ORDER BY created_at ASC")
+                cur.execute(
+                    "SELECT * FROM runtime_jobs WHERE status = 'queued' ORDER BY created_at ASC"
+                )
             else:
                 cur.execute(
                     "SELECT * FROM runtime_jobs WHERE status = 'queued' AND stage = %s ORDER BY created_at ASC",
@@ -1010,7 +1274,7 @@ class PostgresRuntimeRepository:
                         LIMIT 1
                     )
                     UPDATE runtime_jobs
-                    SET status = 'leased', lease_expires_at = %s
+                    SET status = 'leased', lease_expires_at = %s, lease_token = lease_token + 1
                     WHERE id = (SELECT id FROM next_job)
                     RETURNING *
                     """,
@@ -1029,7 +1293,7 @@ class PostgresRuntimeRepository:
                         LIMIT 1
                     )
                     UPDATE runtime_jobs
-                    SET status = 'leased', lease_expires_at = %s
+                    SET status = 'leased', lease_expires_at = %s, lease_token = lease_token + 1
                     WHERE id = (SELECT id FROM next_job)
                     RETURNING *
                     """,
@@ -1049,16 +1313,46 @@ class PostgresRuntimeRepository:
                     target_object_id=job.target_object_id,
                     job_id=job.id,
                     worker_id=worker_id,
-                    payload={"stage": job.stage.value},
+                    payload={"stage": job.stage.value, "lease_token": job.lease_token},
                     ts=now,
                 ),
             )
             conn.commit()
             return job
 
-    def complete_job(self, job_id: str, *, event: RuntimeEvent | None = None) -> None:
+    def renew_job_lease(self, job_id: str, lease_token: int) -> bool:
+        lease_expires_at = datetime.now(timezone.utc) + timedelta(
+            seconds=self.lease_ttl_seconds
+        )
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("UPDATE runtime_jobs SET status = 'completed', lease_expires_at = NULL WHERE id = %s", (job_id,))
+            cur.execute(
+                """
+                UPDATE runtime_jobs
+                SET lease_expires_at = %s
+                WHERE id = %s AND status = 'leased' AND lease_token = %s
+                """,
+                (lease_expires_at, job_id, lease_token),
+            )
+            renewed = cur.rowcount == 1
+            conn.commit()
+            return renewed
+
+    def complete_job(
+        self,
+        job_id: str,
+        *,
+        lease_token: int | None = None,
+        event: RuntimeEvent | None = None,
+    ) -> None:
+        with self._connect() as conn, conn.cursor() as cur:
+            query = "UPDATE runtime_jobs SET status = 'completed', lease_expires_at = NULL WHERE id = %s"
+            params: tuple[object, ...] = (job_id,)
+            if lease_token is not None:
+                query += " AND status = 'leased' AND lease_token = %s"
+                params += (lease_token,)
+            cur.execute(query, params)
+            if lease_token is not None and cur.rowcount != 1:
+                raise RuntimeError("stale_job_lease")
             if event is not None:
                 self._insert_event(cur, event)
             conn.commit()
@@ -1069,12 +1363,20 @@ class PostgresRuntimeRepository:
         *,
         reason: str,
         failure_class: FailureClass | None = None,
+        lease_token: int | None = None,
         event: RuntimeEvent | None = None,
     ) -> None:
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT payload FROM runtime_jobs WHERE id = %s FOR UPDATE", (job_id,))
+            query = "SELECT payload FROM runtime_jobs WHERE id = %s"
+            params: tuple[object, ...] = (job_id,)
+            if lease_token is not None:
+                query += " AND status IN ('leased', 'failed') AND lease_token = %s"
+                params += (lease_token,)
+            cur.execute(f"{query} FOR UPDATE", params)
             row = cur.fetchone()
             if row is None:
+                if lease_token is not None:
+                    raise RuntimeError("stale_job_lease")
                 conn.commit()
                 return
             payload = json.loads(row["payload"])
@@ -1129,7 +1431,9 @@ class PostgresRuntimeRepository:
     def _hash_key(self, raw_key: str) -> str:
         return hashlib.sha256(raw_key.encode()).hexdigest()
 
-    def create_api_key(self, agent_id: str, *, label: str = "", daily_limit: int = 0) -> ApiKeyCreateResponse:
+    def create_api_key(
+        self, agent_id: str, *, label: str = "", daily_limit: int = 0
+    ) -> ApiKeyCreateResponse:
         raw_key = f"rk_{secrets.token_urlsafe(32)}"
         key_hash = self._hash_key(raw_key)
         created_at = datetime.now(timezone.utc)
@@ -1153,24 +1457,45 @@ class PostgresRuntimeRepository:
 
     def validate_api_key(self, raw_key: str) -> str | None:
         key_hash = self._hash_key(raw_key)
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT * FROM api_keys WHERE key_hash = %s", (key_hash,))
+            cur.execute(
+                "SELECT agent_id, revoked FROM api_keys WHERE key_hash = %s",
+                (key_hash,),
+            )
             row = cur.fetchone()
             if row is None or row["revoked"]:
                 return None
-            daily_limit = row["daily_limit"]
-            agent_id = row["agent_id"]
-            if daily_limit > 0:
-                cur.execute(
-                    "SELECT count FROM api_key_usage WHERE key_hash = %s AND day = %s",
-                    (key_hash, today),
-                )
-                usage_row = cur.fetchone()
-                used = usage_row["count"] if usage_row else 0
-                if used >= daily_limit:
-                    return None
-            return agent_id
+            return str(row["agent_id"])
+
+    def consume_api_key(self, raw_key: str) -> tuple[str | None, str]:
+        key_hash = self._hash_key(raw_key)
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM api_keys WHERE key_hash = %s FOR UPDATE", (key_hash,)
+            )
+            row = cur.fetchone()
+            if row is None or row["revoked"]:
+                return None, "invalid"
+            cur.execute(
+                "SELECT count FROM api_key_usage WHERE key_hash = %s AND day = %s FOR UPDATE",
+                (key_hash, today),
+            )
+            usage_row = cur.fetchone()
+            used = usage_row["count"] if usage_row else 0
+            if row["daily_limit"] > 0 and used >= row["daily_limit"]:
+                return None, "quota"
+            cur.execute(
+                """
+                INSERT INTO api_key_usage (key_hash, day, count)
+                VALUES (%s, %s, 1)
+                ON CONFLICT (key_hash, day)
+                DO UPDATE SET count = api_key_usage.count + 1
+                """,
+                (key_hash, today),
+            )
+            conn.commit()
+            return str(row["agent_id"]), "ok"
 
     def revoke_api_key(self, key_hash: str) -> bool:
         with self._connect() as conn, conn.cursor() as cur:
@@ -1230,13 +1555,20 @@ class PostgresRuntimeRepository:
                 ON CONFLICT (agent_id)
                 DO UPDATE SET token_metadata = EXCLUDED.token_metadata, updated_at = EXCLUDED.updated_at
                 """,
-                (agent_id, _encode_osf_token_metadata(token_metadata), datetime.now(timezone.utc)),
+                (
+                    agent_id,
+                    _encode_osf_token_metadata(token_metadata),
+                    datetime.now(timezone.utc),
+                ),
             )
             conn.commit()
 
     def get_osf_oauth_token(self, agent_id: str) -> dict | None:
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT token_metadata FROM osf_oauth_tokens WHERE agent_id = %s", (agent_id,))
+            cur.execute(
+                "SELECT token_metadata FROM osf_oauth_tokens WHERE agent_id = %s",
+                (agent_id,),
+            )
             row = cur.fetchone()
         if row is None:
             return None
@@ -1278,7 +1610,10 @@ class PostgresRuntimeRepository:
     def list_audit_reviews(self, submission_id: str | None = None) -> list[AuditReview]:
         with self._connect() as conn, conn.cursor() as cur:
             if submission_id:
-                cur.execute("SELECT * FROM audit_reviews WHERE submission_id = %s ORDER BY created_at ASC", (submission_id,))
+                cur.execute(
+                    "SELECT * FROM audit_reviews WHERE submission_id = %s ORDER BY created_at ASC",
+                    (submission_id,),
+                )
             else:
                 cur.execute("SELECT * FROM audit_reviews ORDER BY created_at ASC")
             rows = cur.fetchall()
@@ -1287,14 +1622,22 @@ class PostgresRuntimeRepository:
     def audit_summary(self, submission_id: str | None = None) -> dict:
         with self._connect() as conn, conn.cursor() as cur:
             if submission_id:
-                cur.execute("SELECT * FROM audit_reviews WHERE submission_id = %s", (submission_id,))
+                cur.execute(
+                    "SELECT * FROM audit_reviews WHERE submission_id = %s",
+                    (submission_id,),
+                )
             else:
                 cur.execute("SELECT * FROM audit_reviews")
             rows = cur.fetchall()
         reviews = [self._audit_from_row(r) for r in rows]
         total = len(reviews)
         if total == 0:
-            return {"total_audits": 0, "agreement_rate": 0.0, "by_auditor": {}, "by_verdict": {}}
+            return {
+                "total_audits": 0,
+                "agreement_rate": 0.0,
+                "by_auditor": {},
+                "by_verdict": {},
+            }
         agree = sum(1 for r in reviews if r.verdict_match == AuditVerdict.AGREE)
         by_auditor: dict[str, dict] = {}
         by_verdict: dict[str, int] = {}

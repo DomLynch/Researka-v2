@@ -8,15 +8,30 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import BackgroundTasks, Body, FastAPI, HTTPException, Request
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from apps.runtime_api import rate_limits
 from apps.worker.main import WorkerApp
-from contracts import AuditReview, AuditVerdict, ClaimCard, Decision, EventType, ObjectType, ResearchObject, RuntimeJob, Stage, SubmissionPayload
+from contracts import (
+    PUBLICATION_TEMPLATES,
+    SUBMISSION_POLICY_VERSION,
+    AuditReview,
+    AuditVerdict,
+    ClaimCard,
+    Decision,
+    EventType,
+    ObjectType,
+    ResearchObject,
+    RuntimeJob,
+    SourceBundleEntry,
+    Stage,
+    SubmissionPayload,
+    submission_template_for,
+)
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
-from runtime_core.agent_query import fail_agent_query_job, run_agent_query_job
+from runtime_core.compiler import canonical_manuscript_body, canonical_package_hash
 from runtime_core.evidence_quality import classified_title, contradiction_status_for_text, evidence_profile
 from runtime_core.failure_classifier import classify_failure_reason
 from runtime_core.judge_release import (
@@ -54,12 +69,69 @@ DEFAULT_INTAKE_REJECTION_BACKOFF = 3
 # locks an agent out indefinitely; the window bounds the blackout instead.
 DEFAULT_INTAKE_REJECTION_BACKOFF_WINDOW_HOURS = 6
 _AGENT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,62}$")
+_UNRESOLVED_CLAIM_RE = re.compile(
+    r"(?:\b(?:todo|tbd|unresolved|placeholder)\b|\[(?:to fill|insert|pending)[^]]*\]|\?\?\?)",
+    re.IGNORECASE,
+)
 
 
 class AgentQueryPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     query: str = Field(min_length=3, max_length=240)
     depth: str = "standard"
     contactEmail: str | None = Field(default=None, max_length=320)
+
+
+def _submission_contract() -> dict:
+    article_types = {}
+    for article_type, publication_template in PUBLICATION_TEMPLATES.items():
+        intake = submission_template_for(article_type)
+        article_types[article_type] = {
+            "label": publication_template.label,
+            "required_sections": list(intake.required_sections),
+            "recommended_sections": list(intake.recommended_sections),
+            "research_question_section": intake.research_question_section,
+            "minimum_research_question_words": intake.minimum_research_question_words,
+            "minimum_body_word_count": intake.minimum_body_word_count,
+            "minimum_citations": intake.minimum_citations,
+            "minimum_recency_ratio": intake.minimum_recency_ratio,
+            "review_checks": list(intake.review_checks),
+        }
+    return {
+        "version": SUBMISSION_POLICY_VERSION,
+        "canonical_input": "sections",
+        "body_markdown_authoritative": False,
+        "article_types": article_types,
+        "submission_schema": SubmissionPayload.model_json_schema(),
+        "source_schema": SourceBundleEntry.model_json_schema(),
+    }
+
+
+def _submission_example(article_type: str) -> dict:
+    if article_type not in PUBLICATION_TEMPLATES:
+        raise HTTPException(status_code=404, detail="article_type_not_found")
+    template = submission_template_for(article_type)
+    section_names = template.required_sections or (template.research_question_section,)
+    return {
+        "policy_version": SUBMISSION_POLICY_VERSION,
+        "replace_placeholders": True,
+        "submission": {
+            "title": "<specific, human-readable title>",
+            "abstract": "<bounded abstract with source-linked claims>",
+            "article_type": article_type,
+            "author_agent_id": "<registered agent id>",
+            "domain_slug": "<domain>",
+            "sections": {name: f"<{name} text with inline source references>" for name in section_names},
+            "source_bundle": [{
+                "title": "<exact source title>",
+                "doi": "<registered DOI>",
+                "year": "<publication year>",
+                "evidence_type": "primary",
+                "evidence_span": "<exact or normalized text from the trusted source>",
+            }],
+        },
+    }
 
 
 def reset_calibration_cache() -> None:
@@ -184,16 +256,16 @@ def _judge_release_matches_calibration(receipt: dict) -> bool:
         release = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return False
-    calibration = release.get("calibration") if isinstance(release, dict) else None
+    evaluation = release.get("evaluation") if isinstance(release, dict) else None
     release_id = str(receipt.get("evaluated_judge_release_id") or "")
     return bool(
-        isinstance(calibration, dict)
+        isinstance(evaluation, dict)
         and judge_release_manifest_valid(release)
         and release_id.startswith("sha256:")
         and len(release_id) == 71
         and release.get("id") == release_id
         and release.get("code_sha") == _JUDGE_CODE_SHA
-        and calibration.get("sha256") == receipt.get("sha256")
+        and evaluation.get("sha256") == receipt.get("sha256")
     )
 
 
@@ -285,7 +357,12 @@ def _require_agent_enabled(agent_id: object) -> None:
         raise HTTPException(status_code=403, detail="agent_disabled")
 
 
-def _check_api_key(repo: RuntimeRepository, request: Request) -> str | None:
+def _check_api_key(
+    repo: RuntimeRepository,
+    request: Request,
+    *,
+    record_usage: bool = True,
+) -> str | None:
     """Validate API key. Returns agent_id if valid, raises 403 if not.
 
     Check order:
@@ -296,26 +373,51 @@ def _check_api_key(repo: RuntimeRepository, request: Request) -> str | None:
     if not provided:
         raise HTTPException(status_code=403, detail="missing_api_key")
 
-    # Legacy env-var key
+    # Legacy key is disabled by default in production. When explicitly retained,
+    # it must map to one fixed owner so it cannot bypass object-level access.
     legacy_key = os.environ.get("RESEARKA_V2_API_KEY")
-    if legacy_key and provided == legacy_key:
-        return None  # legacy key, no agent_id
+    if legacy_key and hmac.compare_digest(provided, legacy_key):
+        production = os.getenv("RESEARKA_V2_ENV", "development").strip().lower() == "production"
+        if production and os.getenv("RESEARKA_V2_ENABLE_LEGACY_API_KEY", "0") != "1":
+            raise HTTPException(status_code=403, detail="legacy_api_key_disabled")
+        legacy_agent_id = os.getenv("RESEARKA_V2_LEGACY_AGENT_ID", "").strip()
+        if production and not legacy_agent_id:
+            raise HTTPException(status_code=503, detail="legacy_api_identity_unconfigured")
+        if legacy_agent_id:
+            _require_agent_enabled(legacy_agent_id)
+            return legacy_agent_id
+        return None
 
-    # Per-agent key
-    key_hash = hashlib.sha256(provided.encode()).hexdigest()
-    key_info = next((key for key in repo.list_api_keys() if key.key_hash == key_hash), None)
-    if key_info is not None and not key_info.revoked and key_info.daily_limit > 0:
-        used = repo.get_api_key_usage_today(key_hash)
-        if used >= key_info.daily_limit:
+    # Per-agent key. Submission usage is checked and incremented atomically;
+    # status polling authenticates without consuming the daily submit quota.
+    if record_usage:
+        agent_id, status = repo.consume_api_key(provided)
+        if status == "quota":
             raise HTTPException(status_code=429, detail="daily_limit_exceeded")
-
-    agent_id = repo.validate_api_key(provided)
+    else:
+        agent_id = repo.validate_api_key(provided)
     if agent_id is not None:
         _require_agent_enabled(agent_id)
-        repo.record_api_key_usage(key_hash)
         return agent_id
 
     raise HTTPException(status_code=403, detail="invalid_api_key")
+
+
+def _require_submission_access(
+    repo: RuntimeRepository,
+    request: Request,
+    submission: ResearchObject,
+) -> None:
+    provided = request.headers.get("x-api-key", "")
+    admin_key = os.environ.get("RESEARKA_V2_ADMIN_KEY")
+    if admin_key and hmac.compare_digest(provided, admin_key):
+        return
+    agent_id = _check_api_key(repo, request, record_usage=False)
+    if agent_id is None:
+        return
+    owner = str(submission.metadata.get("authenticated_agent_id") or "").strip()
+    if not owner or owner != agent_id:
+        raise HTTPException(status_code=403, detail="submission_access_denied")
 
 
 def _check_admin(request: Request) -> None:
@@ -429,13 +531,6 @@ def _agent_query_response(obj: ResearchObject, *, repo: RuntimeRepository) -> di
     }
 
 
-def _run_agent_query_background(repo: RuntimeRepository, job_id: str) -> None:
-    try:
-        run_agent_query_job(repo, job_id)
-    except Exception as exc:
-        fail_agent_query_job(repo, job_id, str(exc))
-
-
 def _daily_limit_from_body(body: dict) -> int:
     if "daily_limit" not in body:
         return _env_int("RESEARKA_V2_DEFAULT_DAILY_LIMIT", DEFAULT_AGENT_DAILY_LIMIT)
@@ -446,12 +541,13 @@ def _daily_limit_from_body(body: dict) -> int:
 
 
 def _submission_content_hash(payload: SubmissionPayload) -> str:
-    data = payload.model_dump(
-        mode="json",
-        exclude={"submitted_at", "parent_submission_id", "author_signature", "author_agent_id", "agent_id"},
+    return canonical_package_hash(
+        title=payload.title,
+        abstract=payload.abstract,
+        sections=payload.sections,
+        source_bundle=payload.source_bundle,
+        article_type=payload.article_type.value,
     )
-    canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
 
 
 def _matching_agent(metadata: dict, agent_id: str) -> bool:
@@ -489,7 +585,25 @@ SUBMISSION_AUDIT_METADATA_KEYS = {
 
 
 def _trusted_submission_metadata(metadata: dict) -> dict:
-    return {key: metadata[key] for key in SUBMISSION_AUDIT_METADATA_KEYS if metadata.get(key) not in (None, "")}
+    trusted = {
+        key: metadata[key]
+        for key in SUBMISSION_AUDIT_METADATA_KEYS - {
+            "content_hash",
+            "source_citation_hash",
+            "submission_identity_key",
+            "submission_payload_hash",
+        }
+        if metadata.get(key) not in (None, "")
+    }
+    for key in (
+        "content_hash",
+        "source_citation_hash",
+        "submission_identity_key",
+        "submission_payload_hash",
+    ):
+        if metadata.get(key) not in (None, ""):
+            trusted[f"client_claimed_{key}"] = metadata[key]
+    return trusted
 
 
 def _is_intake_rejection(decision: ResearchObject) -> bool:
@@ -554,8 +668,24 @@ def _osf_oauth_config_or_error():
 
 
 def _submission_metadata_for_agent(payload: SubmissionPayload, agent_id: str | None) -> dict:
-    metadata = payload.model_dump(mode="json", exclude={"metadata"})
+    metadata = payload.model_dump(
+        mode="json",
+        exclude={"metadata", "body_markdown", "markdown", "author_signature", "submitted_at"},
+    )
     metadata.update(_trusted_submission_metadata(payload.metadata))
+    metadata["client_claimed_core_claims_resolved"] = payload.core_claims_resolved
+    decisive_text = "\n".join(
+        [
+            payload.title,
+            payload.abstract,
+            *(
+                text
+                for name, text in payload.sections.items()
+                if name.strip().lower() == "conclusion"
+            ),
+        ]
+    )
+    metadata["core_claims_resolved"] = _UNRESOLVED_CLAIM_RE.search(decisive_text) is None
     metadata["domain_slug"] = payload.domain_slug
     metadata["category"] = str(metadata.get("category") or payload.domain_slug).removesuffix("_research")
     metadata["topic"] = payload.topic or metadata.get("topic")
@@ -575,7 +705,7 @@ def _is_hidden_public_record(obj: ResearchObject | None) -> bool:
         return False
     # "provisional" = published by a not-yet-trusted agent: quarantined from
     # every public surface (listings AND direct fetch) until promoted via /ops.
-    return str(obj.metadata.get("public_visibility") or "listed").strip().lower() in {"hidden", "provisional"}
+    return str(obj.metadata.get("public_visibility") or "hidden").strip().lower() != "listed"
 
 
 def _is_publicly_listed(publication: ResearchObject) -> bool:
@@ -649,6 +779,12 @@ def _publication_response(repo: RuntimeRepository, publication: ResearchObject) 
     payload["doi_status"] = publication.metadata.get("doi_status")
     payload["osf_url"] = publication.metadata.get("osf_url")
     payload["judge_release_id"] = publication.metadata.get("judge_release_id")
+    calibration = _load_calibration_data().get("receipt", {})
+    payload["scientific_validation_status"] = (
+        "independently_validated" if isinstance(calibration, dict) and calibration.get("valid") is True
+        else "independent_validation_pending"
+    )
+    payload["evidence_text_verification"] = publication.metadata.get("evidence_text_verification")
     return payload
 
 
@@ -726,7 +862,7 @@ def _publication_passport(repo: RuntimeRepository, publication: ResearchObject) 
         "publication_id": publication.id,
         "submission_id": publication.parent_object_id,
         "artifact_type": _artifact_type_for_submission(submission),
-        "decision": (latest_decision.metadata.get("decision") if latest_decision else Decision.ACCEPT.value),
+        "decision": latest_decision.metadata.get("decision") if latest_decision else None,
         "content_hash": content_hash,
         "persistent_identifiers": identifiers,
         "persistent_identifier_status": {key: "supplied" if value else "not_supplied" for key, value in identifiers.items()},
@@ -774,11 +910,6 @@ def _agent_rows(repo: RuntimeRepository) -> list[dict[str, int | str | float]]:
     for decision in repo.list_objects(ObjectType.DECISION):
         if decision.parent_object_id and not _is_hidden_public_record(decision):
             decisions_by_parent.setdefault(decision.parent_object_id, []).append(decision)
-    published_targets = {
-        publication.parent_object_id
-        for publication in repo.list_objects(ObjectType.PUBLICATION)
-        if publication.parent_object_id and _is_publicly_listed(publication)
-    }
     for submission in repo.list_objects(ObjectType.SUBMISSION):
         if _is_hidden_public_record(submission):
             continue
@@ -788,8 +919,6 @@ def _agent_rows(repo: RuntimeRepository) -> list[dict[str, int | str | float]]:
         decisions = decisions_by_parent.get(submission.id, [])
         if decisions:
             decision_value = str(decisions[-1].metadata.get("decision") or "")
-        elif submission.id in published_targets:
-            decision_value = Decision.ACCEPT.value
         else:
             decision_value = ""
         if decision_value in {Decision.ACCEPT.value, Decision.REVISE.value, Decision.REJECT.value}:
@@ -954,15 +1083,22 @@ def _publication_feedback(publication: ResearchObject | None, *, deduped: bool =
     metadata = publication.metadata
     artifact_type = _artifact_type_for_submission(publication)
     public_path = "alpha" if artifact_type == "alpha_memo" else "papers"
+    state = str(metadata.get("publication_state") or "").strip() or (
+        "PUBLISHED" if not _is_hidden_public_record(publication) else "ACCEPTED_QUARANTINED"
+    )
+    is_public = state == "PUBLISHED" and not _is_hidden_public_record(publication)
     return {
         "publication_id": publication.id,
-        "url": f"https://researka.org/{public_path}/{publication.id}",
+        "url": f"https://researka.org/{public_path}/{publication.id}" if is_public else None,
         "deduped": deduped,
+        "public": is_public,
+        "publication_state": state,
         "doi": metadata.get("doi") or metadata.get("osf_doi"),
         "doi_status": metadata.get("doi_status"),
         "osf_url": metadata.get("osf_url"),
         "dw_artifact_id": metadata.get("dw_artifact_id"),
         "dw_chain_url": metadata.get("dw_chain_url"),
+        "failure": metadata.get("osf_error") or metadata.get("dw_error"),
     }
 
 
@@ -1033,15 +1169,40 @@ def _submission_decision_response(
     publication = _decision_publication_feedback(repo, submission_id)
     publication_failure = None if publication else _publication_failure_feedback(repo, submission_id)
     if publication:
-        publication_status = "deduped" if publication["deduped"] else "published"
+        state = publication["publication_state"]
+        if publication["public"]:
+            publication_status = "deduped" if publication["deduped"] else "published"
+        elif state == "PUBLISH_BLOCKED_EXTERNAL" or state == "PUBLISH_BLOCKED_INTEGRITY":
+            publication_status = "blocked"
+            publication_failure = {
+                "stage": "external_delivery",
+                "reason": publication.get("failure") or state,
+                "failure_class": "publish_deferred",
+            }
+        elif state == "ACCEPTED_QUARANTINED":
+            publication_status = "quarantined"
+        else:
+            publication_status = "publishing"
     elif publication_failure:
         publication_status = "blocked"
     else:
         publication_status = "pending" if decision_value == Decision.ACCEPT.value else "not_applicable"
-    resubmission_allowed = decision_value in {Decision.REVISE.value, Decision.REJECT.value} or publication_failure is not None
+    resubmission_allowed = bool(
+        decision.metadata.get(
+            "resubmission_allowed",
+            decision_value == Decision.REVISE.value,
+        )
+    )
     response = {
         "status": "complete",
         "decision": decision_value,
+        "evaluation_verdict": decision.metadata.get("evaluation_verdict") or decision_value,
+        "disposition": decision.metadata.get("disposition"),
+        "reason_code": decision.metadata.get("reason_code"),
+        "fault_domain": decision.metadata.get("fault_domain"),
+        "retryable": bool(decision.metadata.get("retryable")),
+        "policy_version": decision.metadata.get("policy_version"),
+        "canonical_package_hash": decision.metadata.get("canonical_package_hash"),
         "notes": decision.metadata.get("notes", []),
         "gate_failures": public_record["gate_failures"],
         "decision_object_id": decision.id,
@@ -1072,6 +1233,7 @@ def _submission_decision_response(
             "parent_submission_id": submission_id if resubmission_allowed else None,
         },
         "publication_status": publication_status,
+        "publication_state": publication["publication_state"] if publication else decision.metadata.get("publication_state"),
         "publication_failure": publication_failure,
         "publication": publication,
         "pipeline": submission_lifecycle(repo, submission_id),
@@ -1086,14 +1248,23 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     elif dsn := postgres_dsn_from_env():
         repo = PostgresRuntimeRepository(dsn)
     else:
+        if os.getenv("RESEARKA_V2_ENV", "development").strip().lower() == "production":
+            raise RuntimeError("researka_v2_postgres_dsn_required_in_production")
         repo = InMemoryRuntimeRepository()
     app = FastAPI(title="Researka v2 Runtime API")
     app.state.repository = repo
     app.state.engine = WorkflowEngine()
     app.state.worker = WorkerApp(repo, worker_id="api-worker", engine=app.state.engine)
 
+    @app.get("/live")
+    def live() -> dict[str, str]:
+        return {"status": "ok", "service": "researka-v2-runtime-api"}
+
+    @app.get("/ready")
     @app.get("/health")
-    def health() -> dict[str, str]:
+    def ready() -> dict[str, str]:
+        if not app.state.repository.healthcheck():
+            raise HTTPException(status_code=503, detail="repository_unavailable")
         return {"status": "ok", "service": "researka-v2-runtime-api"}
 
     @app.get("/version")
@@ -1112,9 +1283,25 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             "critical_flow": ["intake", "review", "editorial", "publish"],
         }
 
+    @app.get("/contracts/current")
+    def current_contract() -> dict:
+        return _submission_contract()
+
+    @app.get("/contracts/{version}")
+    def versioned_contract(version: str) -> dict:
+        if version not in {"v2", SUBMISSION_POLICY_VERSION}:
+            raise HTTPException(status_code=404, detail="contract_version_not_found")
+        return _submission_contract()
+
+    @app.get("/contracts/{version}/examples/{article_type}")
+    def contract_example(version: str, article_type: str) -> dict:
+        if version not in {"v2", SUBMISSION_POLICY_VERSION}:
+            raise HTTPException(status_code=404, detail="contract_version_not_found")
+        return _submission_example(article_type)
+
     @app.get("/oauth/osf/start")
     def osf_oauth_start(request: Request) -> RedirectResponse:
-        agent_id = _check_api_key(app.state.repository, request)
+        agent_id = _check_api_key(app.state.repository, request, record_usage=False)
         if not agent_id:
             raise HTTPException(status_code=400, detail="per_agent_api_key_required")
         config = _osf_oauth_config_or_error()
@@ -1177,6 +1364,9 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             parent = app.state.repository.get_object(payload.parent_submission_id)
             if parent is None or parent.object_type != ObjectType.SUBMISSION:
                 raise HTTPException(status_code=400, detail="parent_submission_not_found")
+            parent_agent = str(parent.metadata.get("authenticated_agent_id") or "").strip()
+            if agent_id and parent_agent and parent_agent != agent_id:
+                raise HTTPException(status_code=403, detail="parent_submission_owner_mismatch")
         if agent_id:
             backoff_limit = _env_int("RESEARKA_V2_INTAKE_REJECTION_BACKOFF", DEFAULT_INTAKE_REJECTION_BACKOFF)
             if (
@@ -1190,11 +1380,19 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail={"error": "duplicate_submission", "submission_id": duplicate_id})
         metadata = _submission_metadata_for_agent(payload, agent_id)
         _require_agent_enabled(metadata.get("authenticated_agent_id") or metadata.get("author_agent_id") or metadata.get("agent_id"))
+        metadata["canonical_package_hash"] = content_hash
         metadata["submission_content_hash"] = content_hash
+        canonical_body = canonical_manuscript_body(
+            sections=payload.sections,
+            article_type=payload.article_type.value,
+        )
+        metadata["canonical_manuscript_hash"] = (
+            f"sha256:{hashlib.sha256(canonical_body.encode()).hexdigest()}"
+        )
         submission = ResearchObject(
             object_type=ObjectType.SUBMISSION,
             title=payload.title,
-            body_markdown=payload.body_markdown or payload.abstract,
+            body_markdown=canonical_body or payload.abstract,
             metadata=metadata,
         )
         job = RuntimeJob(
@@ -1233,27 +1431,28 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         }
 
     @app.post("/agent-query/jobs", status_code=202)
-    def create_agent_query_job(payload: AgentQueryPayload, request: Request, background_tasks: BackgroundTasks) -> dict:
+    def create_agent_query_job(payload: AgentQueryPayload, request: Request) -> dict:
         query = _clean_query(payload.query)
         depth = payload.depth if payload.depth in {"brief", "standard"} else "standard"
         request_bucket = _check_agent_query(request)
-        obj = app.state.repository.create_object(
-            ResearchObject(
-                object_type=ObjectType.AGENT_QUERY,
-                title=query,
-                body_markdown="",
-                metadata={
-                    "status": "queued",
-                    "query": query,
-                    "depth": depth,
-                    "lane": "public_on_demand_agent_query",
-                    "caps": _query_caps(depth),
-                    "contact_email_provided": bool(payload.contactEmail),
-                    **request_bucket,
-                },
-            )
+        obj = ResearchObject(
+            object_type=ObjectType.AGENT_QUERY,
+            title=query,
+            body_markdown="",
+            metadata={
+                "status": "queued",
+                "query": query,
+                "depth": depth,
+                "lane": "public_on_demand_agent_query",
+                "caps": _query_caps(depth),
+                "contact_email_provided": bool(payload.contactEmail),
+                **request_bucket,
+            },
         )
-        background_tasks.add_task(_run_agent_query_background, app.state.repository, obj.id)
+        obj, _ = app.state.repository.create_object_and_enqueue_job(
+            obj,
+            RuntimeJob(target_object_id=obj.id, stage=Stage.AGENT_QUERY),
+        )
         return _agent_query_response(obj, repo=app.state.repository)
 
     @app.get("/agent-query/jobs/{job_id}")
@@ -1264,10 +1463,11 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         return _agent_query_response(obj, repo=app.state.repository)
 
     @app.get("/submissions/{submission_id}")
-    def get_submission(submission_id: str) -> dict:
+    def get_submission(submission_id: str, request: Request) -> dict:
         submission = app.state.repository.get_object(submission_id)
         if submission is None or submission.object_type != ObjectType.SUBMISSION:
             raise HTTPException(status_code=404, detail="submission_not_found")
+        _require_submission_access(app.state.repository, request, submission)
         return submission.model_dump(mode="json")
 
     @app.post("/jobs/run-once")
@@ -1286,10 +1486,11 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         }
 
     @app.get("/submissions/{submission_id}/decision")
-    def get_submission_decision(submission_id: str) -> dict:
+    def get_submission_decision(submission_id: str, request: Request) -> dict:
         submission = app.state.repository.get_object(submission_id)
         if submission is None or submission.object_type != ObjectType.SUBMISSION:
             raise HTTPException(status_code=404, detail="submission_not_found")
+        _require_submission_access(app.state.repository, request, submission)
         pipeline = submission_lifecycle(app.state.repository, submission_id)
         decisions = app.state.repository.children_of(submission_id, ObjectType.DECISION)
         if not decisions:
@@ -1298,6 +1499,13 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                 return {
                     "status": "failed",
                     "decision": None,
+                    "evaluation_verdict": None,
+                    "disposition": "DEFERRED_SYSTEM",
+                    "reason_code": str(failure["failure_class"] or "SYSTEM_UNAVAILABLE").upper(),
+                    "fault_domain": "system",
+                    "retryable": True,
+                    "resubmission": {"allowed": False, "parent_submission_id": None},
+                    "publication_state": "NOT_PUBLISHED",
                     "notes": [],
                     "gate_failures": [],
                     "failure_stage": failure["stage"],
@@ -1545,10 +1753,11 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         )
 
     @app.get("/submissions/{submission_id}/provenance")
-    def get_submission_provenance(submission_id: str) -> dict:
+    def get_submission_provenance(submission_id: str, request: Request) -> dict:
         submission = app.state.repository.get_object(submission_id)
         if submission is None or submission.object_type != ObjectType.SUBMISSION:
             raise HTTPException(status_code=404, detail="submission_not_found")
+        _require_submission_access(app.state.repository, request, submission)
         reviews = app.state.repository.children_of(submission_id, ObjectType.REVIEW)
         decisions = app.state.repository.children_of(submission_id, ObjectType.DECISION)
         reviews_out = []
@@ -1603,10 +1812,11 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         }
 
     @app.get("/submissions/{submission_id}/timeline")
-    def get_submission_timeline(submission_id: str) -> dict:
+    def get_submission_timeline(submission_id: str, request: Request) -> dict:
         submission = app.state.repository.get_object(submission_id)
         if submission is None or submission.object_type != ObjectType.SUBMISSION:
             raise HTTPException(status_code=404, detail="submission_not_found")
+        _require_submission_access(app.state.repository, request, submission)
         reviews = app.state.repository.children_of(submission_id, ObjectType.REVIEW)
         decisions = app.state.repository.children_of(submission_id, ObjectType.DECISION)
         publications = app.state.repository.children_of(submission_id, ObjectType.PUBLICATION)

@@ -8,9 +8,18 @@ from threading import Event
 
 from apps.worker.main import WorkerApp
 from runtime_core import WorkflowEngine
+from runtime_core.derivation_web import is_configured as derivation_web_configured
 from runtime_core.ops import operational_alerts, reconcile_stalled_submissions
-from runtime_core.osf import warn_if_osf_default_owner_missing
-from runtime_core.repos import PostgresRuntimeRepository, postgres_dsn_from_env
+from runtime_core.osf import (
+    config_from_env as osf_service_config,
+    oauth_config_from_env,
+    warn_if_osf_default_owner_missing,
+)
+from runtime_core.repos import (
+    PostgresRuntimeRepository,
+    RuntimeRepository,
+    postgres_dsn_from_env,
+)
 
 
 def _sleep_seconds(env_name: str, default: float) -> float:
@@ -24,6 +33,24 @@ def _sleep_seconds(env_name: str, default: float) -> float:
     return max(value, 0.1)
 
 
+def _assert_production_dependencies(repository: RuntimeRepository) -> None:
+    if os.getenv("RESEARKA_V2_ENV", "development").strip().lower() != "production":
+        return
+    if not os.getenv("RESEARKA_INTEGRITY_API_KEY"):
+        raise RuntimeError("integrity_credential_required_in_production")
+    if not derivation_web_configured():
+        raise RuntimeError("derivation_web_required_in_production")
+    if osf_service_config() is not None:
+        return
+    default_agent = os.getenv("RESEARKA_V2_OSF_DEFAULT_AGENT_ID", "").strip()
+    if (
+        oauth_config_from_env() is None
+        or not default_agent
+        or not repository.get_osf_oauth_token(default_agent)
+    ):
+        raise RuntimeError("osf_delivery_required_in_production")
+
+
 def main() -> None:
     warn_if_osf_default_owner_missing()
     dsn = postgres_dsn_from_env()
@@ -31,6 +58,7 @@ def main() -> None:
         raise RuntimeError("researka_v2_postgres_dsn_required_for_worker")
 
     repository = PostgresRuntimeRepository(dsn)
+    _assert_production_dependencies(repository)
     worker = WorkerApp(
         repository,
         worker_id=os.environ.get("RESEARKA_V2_WORKER_ID", "researka-v2-worker"),

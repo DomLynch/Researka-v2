@@ -29,6 +29,7 @@ from .models import (
 from .templates import ALPHA_MEMO, EMPIRICAL_STUDY, EVIDENCE_MAP, PUBLICATION_TEMPLATES, PublicationTemplate, RAPID_EVIDENCE_SYNTHESIS, RESEARCH_SYNTHESIS, publication_template_for
 from .submissions import (
     SourceBundleEntry,
+    SUBMISSION_POLICY_VERSION,
     SubmissionTemplateV1,
     intake_failures_are_revisable,
     run_submission_template_checks,
@@ -72,6 +73,7 @@ __all__ = [
     "ResearchObject",
     "SUBMISSION_CONTRACT",
     "SourceBundleEntry",
+    "SUBMISSION_POLICY_VERSION",
     "SubmissionPayload",
     "SubmissionTemplateV1",
     "publication_template_for",

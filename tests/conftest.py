@@ -40,9 +40,9 @@ def isolate_rate_limit_db(monkeypatch, tmp_path):
 def deterministic_review_panel(monkeypatch):
     def factory():
         return ReviewerPanel(
-            primary=DeterministicProvider(model="deterministic-primary"),
-            sparring=DeterministicProvider(model="deterministic-sparring"),
-            fallback=DeterministicProvider(model="deterministic-fallback"),
+            primary=DeterministicProvider(provider="test-primary", model="deterministic-primary"),
+            sparring=DeterministicProvider(provider="test-sparring", model="deterministic-sparring"),
+            fallback=DeterministicProvider(provider="test-fallback", model="deterministic-fallback"),
         )
 
     monkeypatch.setattr("runtime_core.workflow.reviewer_from_env", factory)

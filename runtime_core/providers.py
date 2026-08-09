@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 
 from contracts import ProviderErrorClass, ProviderUsage
 
+from .urls import validated_service_url
+
 
 class ProviderRequest(BaseModel):
     system_prompt: str
@@ -106,7 +108,7 @@ class OpenAICompatibleProvider:
         self.provider = provider
         self.model = model
         self.api_key = api_key
-        self.base_url = base_url.rstrip("/")
+        self.base_url = validated_service_url(base_url, label=f"{provider}_provider")
         self.input_cost_per_million = input_cost_per_million
         self.output_cost_per_million = output_cost_per_million
         self.max_attempts = max_attempts
@@ -134,7 +136,7 @@ class OpenAICompatibleProvider:
         last_error: ProviderError | None = None
         while True:
             try:
-                with urllib.request.urlopen(req, timeout=request.timeout_sec) as response:
+                with urllib.request.urlopen(req, timeout=request.timeout_sec) as response:  # nosec B310 - provider URL validated at construction
                     raw = json.loads(response.read().decode("utf-8"))
                 break
             except urllib.error.HTTPError as exc:
@@ -244,7 +246,7 @@ class OpenAICompatibleProvider:
     def _jittered_backoff(self, base_seconds: float, attempt: int) -> float:
         """Exponential backoff with ±25% jitter to avoid thundering-herd retries."""
         raw = base_seconds * (2**attempt)
-        jitter = raw * 0.25 * (2 * random.random() - 1)
+        jitter = raw * 0.25 * (2 * random.random() - 1)  # nosec B311 - retry timing is not security-sensitive
         return max(0.0, raw + jitter)
 
     def _rate_limit_sleep(self, exc: urllib.error.HTTPError, attempt: int) -> float:
@@ -449,4 +451,8 @@ def provider_from_env() -> LanguageModelProvider:
             model=os.getenv("RESEARKA_V2_OPENROUTER_MODEL", "google/gemma-4-31b-it"),
             base_url=os.getenv("RESEARKA_V2_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         )
-    return DeterministicProvider()
+    if selected == "deterministic":
+        if os.getenv("RESEARKA_V2_ENV", "development").strip().lower() == "production":
+            raise RuntimeError("deterministic_provider_forbidden_in_production")
+        return DeterministicProvider()
+    raise RuntimeError(f"unknown_researka_provider:{selected}")

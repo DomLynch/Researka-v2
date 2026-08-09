@@ -26,7 +26,12 @@ def test_emit_decision_to_derivation_web_posts_actor_artifacts_and_step(monkeypa
         object_type=ObjectType.SUBMISSION,
         title="Submission",
         body_markdown="Submission body",
-        metadata={"domain_slug": "longevity", "article_type": "rapid_evidence_synthesis"},
+        metadata={
+            "domain_slug": "longevity",
+            "article_type": "rapid_evidence_synthesis",
+            "canonical_package_hash": "sha256:package",
+            "canonical_manuscript_hash": "sha256:manuscript",
+        },
     )
     review = ResearchObject(
         object_type=ObjectType.REVIEW,
@@ -38,7 +43,15 @@ def test_emit_decision_to_derivation_web_posts_actor_artifacts_and_step(monkeypa
         object_type=ObjectType.DECISION,
         parent_object_id=submission.id,
         title="Decision",
-        metadata={"decision": "revise", "notes": ["revise"], "model": "panel"},
+        metadata={
+            "decision": "revise",
+            "notes": ["private revision detail"],
+            "gate_failures": [{"reason": "private evidence detail"}],
+            "disposition": "REVISE_EVIDENCE",
+            "reason_code": "SOURCE_EVIDENCE_MATCH",
+            "policy_version": "submission-policy-v2",
+            "model": "panel",
+        },
     )
 
     result = emit_decision_to_derivation_web(submission=submission, review=review, decision=decision)
@@ -48,6 +61,16 @@ def test_emit_decision_to_derivation_web_posts_actor_artifacts_and_step(monkeypa
     assert calls[-1][1]["input_artifact_ids"] == ["art_submission"]
     assert calls[-1][1]["output_artifact_id"] == "art_decision"
     assert all(api_key == "dwk_test" for _, _, api_key in calls)
+    source_payload = calls[1][1]
+    claim_payload = calls[2][1]
+    assert "Submission" not in source_payload["body_text"]
+    assert "Submission body" not in source_payload["body_text"]
+    assert "private revision detail" not in claim_payload["body_text"]
+    assert "private evidence detail" not in claim_payload["body_text"]
+    assert claim_payload["body_text"] == (
+        '{"decision": "revise", "disposition": "REVISE_EVIDENCE", '
+        '"policy_version": "submission-policy-v2", "reason_code": "SOURCE_EVIDENCE_MATCH"}'
+    )
 
 
 def test_emit_decision_to_derivation_web_skips_without_key(monkeypatch):

@@ -23,6 +23,7 @@ _PATTERNS: list[tuple[FailureClass, tuple[str, ...]]] = [
     (FailureClass.REVIEW_MISSING, ("requires at least one completed review",)),
     (FailureClass.EXACT_QUOTE_MISSING, ("expected at least one exact quote",)),
     (FailureClass.PROVIDER_ERROR, ("provider_error:",)),
+    (FailureClass.SYSTEM_UNAVAILABLE, ("system_unavailable:",)),
     (FailureClass.PUBLISH_GATES_FAILED, ("publish_gates_failed", "publish_blocked_by_integrity")),
 ]
 
