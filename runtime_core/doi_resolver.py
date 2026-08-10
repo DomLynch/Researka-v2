@@ -7,6 +7,7 @@ import re
 import socket
 import time
 import urllib.parse
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from ipaddress import ip_address
 from typing import Any
@@ -37,6 +38,7 @@ def _base_url() -> str:
 def validate_resolver_urls() -> None:
     for label, env_name, default in (
         ("pubmed", "RESEARKA_PUBMED_URL", "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"),
+        ("pmc", "RESEARKA_PMC_URL", "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"),
         ("crossref", "RESEARKA_CROSSREF_URL", "https://api.crossref.org/works"),
         ("openalex", "RESEARKA_OPENALEX_URL", "https://api.openalex.org/works"),
     ):
@@ -161,6 +163,46 @@ def _openalex_abstract(payload: dict[str, Any]) -> str:
         if isinstance(position, int)
     ]
     return " ".join(word for _, word in sorted(positioned))
+
+
+def _pmc_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> dict[str, str]:
+    requested: dict[str, tuple[str, dict[str, Any]]] = {}
+    for source in sources:
+        match = re.search(r"PMC\d+", str(source.get("source_record_locator") or ""), re.I)
+        source_identity_tuple = _source_identity(source)
+        if match and source_identity_tuple and str(source.get("evidence_origin") or "").strip().lower() == "full_text":
+            requested[match.group().upper()] = (source_identity_tuple[0], source)
+    if not requested:
+        return {}
+    base = validated_service_url(
+        os.getenv("RESEARKA_PMC_URL", "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"),
+        label="pmc",
+    )
+    verified: dict[str, str] = {}
+    pmc_ids = sorted(requested)
+    for start in range(0, len(pmc_ids), 15):
+        url = f"{base}?{urllib.parse.urlencode({'db': 'pmc', 'id': ','.join(pmc_ids[start:start + 15]), 'retmode': 'xml', 'tool': 'researka'})}"
+        try:
+            response = client.get(url)
+            response.raise_for_status()
+            root = ET.fromstring(response.text)
+            articles = [root] if root.tag.rsplit("}", 1)[-1] == "article" else root.findall(".//article")
+        except (httpx.HTTPError, OSError, ValueError, ET.ParseError):
+            continue
+        for article in articles:
+            ids = {
+                str(node.get("pub-id-type") or "").lower(): "".join(node.itertext()).strip().lower()
+                for node in article.findall(".//article-id")
+            }
+            record = requested.get(ids.get("pmcid", "").upper())
+            if not record:
+                continue
+            source_key, source = record
+            doi, pmid = (str(source.get(key) or "").strip().lower() for key in ("doi", "pmid"))
+            if not (doi and ids.get("doi") == doi or not doi and pmid and ids.get("pmid") == pmid):
+                continue
+            verified[source_key] = ET.tostring(article, encoding="unicode")
+    return verified
 
 
 def _crossref_retracted(payload: dict[str, Any]) -> bool:
@@ -368,20 +410,27 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
             for key in ("quote", "evidence_span", "excerpt")
             if str(source.get(key) or "").strip()
         ]
-        evidence_text_available = bool(evidence and abstracts)
+        full_text_origin = str(source.get("evidence_origin") or "").strip().lower() == "full_text"
+        full_text = full_texts.get(identity, "") if full_text_origin else ""
+        authority_texts = [full_text] if full_text else abstracts
+        evidence_text_available = bool(evidence and authority_texts)
         evidence_text_verified = evidence_text_available and any(
-            len(normalized) >= 20 and normalized in _normalized_text(abstract)
+            len(normalized) >= 20 and normalized in _normalized_text(authority)
             for value in evidence
             if (normalized := _normalized_text(value))
-            for abstract in abstracts
+            for authority in authority_texts
+        )
+        evidence_mismatch = bool(evidence and authority_texts) and not any(
+            _text_matches(value, authority, floor=0.35)
+            for value in evidence for authority in authority_texts
         )
         return {
             "identity": identity,
             "checked": authority_count > 0,
             "retracted": retracted,
             "title_mismatch": bool(titles) and not any(_text_matches(source.get("title"), title, floor=0.6) for title in titles),
-            "evidence_mismatch": bool(evidence and abstracts)
-            and not any(_text_matches(value, abstract, floor=0.35) for value in evidence for abstract in abstracts),
+            "evidence_mismatch": evidence_mismatch,
+            "evidence_authority_unavailable": bool(evidence) and not authority_texts,
             "evidence_text_submitted": bool(evidence),
             "evidence_text_available": evidence_text_available,
             "evidence_text_verified": evidence_text_verified,
@@ -393,6 +442,7 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
             follow_redirects=True,
             headers={"User-Agent": "Researka/1.0 (https://researka.org)"},
         ) as client:
+            full_texts = _pmc_full_texts(client, [source for source, _ in candidates])
             results = [check(client, item) for item in candidates]
             identifier_results = _pubmed_identifier_checks(
                 client,
@@ -424,6 +474,9 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
         for row in results
         if row.get("evidence_text_submitted") and not row.get("evidence_text_verified")
     ]
+    evidence_authority_unavailable = [
+        row["identity"] for row in results if row.get("evidence_authority_unavailable")
+    ]
     identifier_checked = sorted({row["identity"] for row in identifier_results if row.get("checked")})
     identifier_mismatches = sorted({row["identity"] for row in identifier_results if row.get("mismatch")})
     identifier_unverified = sorted({
@@ -433,7 +486,7 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
     })
     canonical_duplicate_indices = _canonical_duplicate_indices(sources, identifier_results)
     blocked = retracted or title_mismatches or identifier_mismatches
-    uncertain = evidence_mismatches or unverified or identifier_unverified or canonical_duplicate_indices
+    uncertain = evidence_mismatches or evidence_authority_unavailable or unverified or identifier_unverified or canonical_duplicate_indices
     recommendation = "reject" if blocked else _metadata_unavailable_recommendation() if uncertain else "pass"
     return {
         "verification_version": 2,
@@ -446,6 +499,7 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
         "evidence_mismatches": evidence_mismatches,
         "evidence_text_verified": evidence_text_verified,
         "evidence_text_unverified": evidence_text_unverified,
+        "evidence_authority_unavailable": evidence_authority_unavailable,
         "identifier_checked": identifier_checked,
         "identifier_unverified": identifier_unverified,
         "identifier_mismatches": identifier_mismatches,

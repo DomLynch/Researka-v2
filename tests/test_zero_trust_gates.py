@@ -285,9 +285,10 @@ class _LocatorClient(_HandleClient):
 
 
 class _MetadataResponse:
-    def __init__(self, payload: dict[str, Any], status_code: int = 200) -> None:
+    def __init__(self, payload: dict[str, Any], status_code: int = 200, text: str = "") -> None:
         self.payload = payload
         self.status_code = status_code
+        self.text = text
 
     def raise_for_status(self) -> None:
         return None
@@ -296,7 +297,9 @@ class _MetadataResponse:
         return self.payload
 
 
-def _metadata_client(message: dict[str, Any], pubmed: dict[str, Any] | None = None) -> type:
+def _metadata_client(
+    message: dict[str, Any], pubmed: dict[str, Any] | None = None, pmc: str = "",
+) -> type:
     class MetadataClient:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
@@ -310,6 +313,8 @@ def _metadata_client(message: dict[str, Any], pubmed: dict[str, Any] | None = No
         def get(self, url: str) -> _MetadataResponse:
             if "crossref" in url:
                 return _MetadataResponse({"message": message})
+            if "db=pmc" in url:
+                return _MetadataResponse({}, text=pmc) if pmc else _MetadataResponse({}, status_code=404)
             if "eutils" in url and pubmed is not None:
                 return _MetadataResponse({"result": pubmed})
             return _MetadataResponse({}, status_code=404)
@@ -681,6 +686,60 @@ def test_source_evidence_mismatch_is_held_for_revision(monkeypatch: pytest.Monke
     assert result["evidence_text_unverified"] == ["doi:10.1000/evidence-mismatch"]
 
 
+def test_full_text_evidence_is_not_compared_with_abstract(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    exact = "The discussion describes a secondary analysis absent from the abstract."
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client(
+            {"title": ["Registered intervention trial in adults"], "abstract": "Recruitment."},
+            pmc=("<article><article-meta><article-id pub-id-type='pmcid'>PMC123456</article-id>"
+                 "<article-id pub-id-type='doi'>10.1000/full-text-evidence"
+                 f"</article-id></article-meta><body><p>{exact}</p></body></article>"),
+        ),
+    )
+
+    result = verify_source_metadata([{
+        "title": "Registered intervention trial in adults",
+        "doi": "10.1000/full-text-evidence",
+        "evidence_origin": "full_text",
+        "source_record_locator": "snapshot:PMC123456_source",
+        "evidence_span": exact,
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == "pass"
+    assert result["evidence_mismatches"] == []
+    assert result["evidence_text_verified"] == ["doi:10.1000/full-text-evidence"]
+    assert result["evidence_authority_unavailable"] == []
+
+
+def test_unverified_full_text_evidence_is_held_for_revision(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    exact = "A client-controlled origin label cannot verify this evidence."
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client(
+            {"title": ["Registered intervention trial in adults"]},
+            pmc=("<article><article-meta><article-id pub-id-type='pmcid'>PMC123456</article-id>"
+                 f"</article-meta><body><p>{exact}</p></body></article>"),
+        ),
+    )
+
+    result = verify_source_metadata([{
+        "title": "Registered intervention trial in adults",
+        "openalex_id": "W123",
+        "evidence_origin": "full_text",
+        "source_record_locator": "snapshot:PMC123456_source",
+        "evidence_span": exact,
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == Decision.REVISE.value
+    assert result["evidence_mismatches"] == []
+    assert result["evidence_authority_unavailable"] == ["openalex:w123"]
+
+
 def test_source_evidence_requires_exact_authoritative_text(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
     exact = "Adults receiving the intervention showed a bounded endpoint-specific improvement."
@@ -719,9 +778,10 @@ def test_source_without_authoritative_text_is_explicitly_unverified(monkeypatch:
     }])
 
     assert result is not None
-    assert result["recommendation"] == "pass"
+    assert result["recommendation"] == Decision.REVISE.value
     assert result["evidence_text_verified"] == []
     assert result["evidence_text_unverified"] == ["doi:10.1000/no-authoritative-text"]
+    assert result["evidence_authority_unavailable"] == ["doi:10.1000/no-authoritative-text"]
 
 
 def test_intake_proceeds_when_later_evidence_receipt_matches(monkeypatch: pytest.MonkeyPatch) -> None:

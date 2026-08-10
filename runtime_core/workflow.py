@@ -1669,6 +1669,16 @@ class WorkflowEngine:
                             ),
                         }
                     )
+                if source_verification.get("evidence_authority_unavailable"):
+                    revision_notes.append("source evidence authority unavailable")
+                    revision_failures.append(
+                        {
+                            "name": "source_evidence_authority_available",
+                            "passed": False,
+                            "reason": "submitted evidence has no independently available authoritative text: "
+                            + ", ".join(source_verification["evidence_authority_unavailable"][:10]),
+                        }
+                    )
                 if source_verification.get("unverified"):
                     revision_notes.append(
                         "source metadata verification unavailable (fail-closed)"
