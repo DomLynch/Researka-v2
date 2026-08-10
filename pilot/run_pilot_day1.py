@@ -10,6 +10,7 @@ Usage:
 Inputs:
     - pilot/pilot_keys_2026-04-26.json  (gitignored; contains pilot-house-bot raw key)
     - 5 hardcoded RES file paths under ~/Downloads/
+    - RESEARKA_V2_ADMIN_KEY in the process environment
 
 Outputs:
     - pilot/pilot_run_2026-04-26.json
@@ -18,16 +19,15 @@ Outputs:
 from __future__ import annotations
 
 import json
+import os
 import re
-import subprocess
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
 
-URL = "http://49.12.7.18:8000"
-ADMIN_KEY = "ResearkaAdmin2026!"
+URL = os.environ.get("RESEARKA_V2_API_URL", "https://api.researka.org").rstrip("/")
 KEYS_FILE = Path(__file__).parent / "pilot_keys_2026-04-26.json"
 OUT_JSON = Path(__file__).parent / "pilot_run_2026-04-26.json"
 REPORT_MD = Path(__file__).parent / "PILOT_DAY_1_REPORT.md"
@@ -50,6 +50,10 @@ def load_pilot_key() -> str:
     keys = json.loads(KEYS_FILE.read_text())["keys"]
     house = next(k for k in keys if k["agent_id"] == "pilot-house-bot")
     return house["raw"]
+
+
+def load_admin_key() -> str:
+    return os.environ["RESEARKA_V2_ADMIN_KEY"]
 
 
 SECTION_HEADER = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
@@ -169,32 +173,27 @@ def post_submission(payload: dict, api_key: str) -> dict:
         return {"status": 0, "error": str(exc)[:500]}
 
 
-def drain_queue(api_key: str, max_iters: int = 60) -> int:
+def drain_queue(admin_key: str, max_iters: int = 60) -> int:
     """Drain the queue using admin /jobs/run-once. Returns final queue depth."""
     for it in range(max_iters):
         try:
             req = urllib.request.Request(
                 f"{URL}/jobs/queue",
-                headers={"X-Api-Key": ADMIN_KEY},
+                headers={"X-Api-Key": admin_key},
             )
             with urllib.request.urlopen(req, timeout=20) as response:
                 q = json.loads(response.read())["queued"]
             if len(q) == 0:
                 print(f"  Drained at iter {it}", flush=True)
                 return 0
-            # Run 4 jobs in parallel via subprocess curl
-            procs = []
             for _ in range(4):
-                procs.append(subprocess.Popen(
-                    ["curl", "-s", "-X", "POST", "-H", f"x-api-key: {ADMIN_KEY}",
-                     "--max-time", "180", f"{URL}/jobs/run-once"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                ))
-            for p in procs:
-                try:
-                    p.wait(timeout=200)
-                except subprocess.TimeoutExpired:
-                    p.kill()
+                run_once = urllib.request.Request(
+                    f"{URL}/jobs/run-once",
+                    headers={"X-Api-Key": admin_key},
+                    method="POST",
+                )
+                with urllib.request.urlopen(run_once, timeout=180):
+                    pass
             if it % 3 == 0:
                 print(f"  iter {it}: queue={len(q)}", flush=True)
         except Exception as exc:
@@ -249,7 +248,7 @@ def main() -> None:
 
     print()
     print("=== Drain queue ===")
-    drain_queue(api_key)
+    drain_queue(load_admin_key())
 
     print()
     print("=== Poll decisions ===")

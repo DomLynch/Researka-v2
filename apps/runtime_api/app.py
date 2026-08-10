@@ -69,8 +69,8 @@ DEFAULT_INTAKE_REJECTION_BACKOFF = 3
 # locks an agent out indefinitely; the window bounds the blackout instead.
 DEFAULT_INTAKE_REJECTION_BACKOFF_WINDOW_HOURS = 6
 _AGENT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,62}$")
-_UNRESOLVED_CLAIM_RE = re.compile(
-    r"(?:\b(?:todo|tbd|unresolved|placeholder)\b|\[(?:to fill|insert|pending)[^]]*\]|\?\?\?)",
+_EDITORIAL_PLACEHOLDER_RE = re.compile(
+    r"(?:\b(?:todo|tbd|fixme|placeholder)\b|\[(?:to fill|insert|pending|todo)[^]]*\]|\?\?\?)",
     re.IGNORECASE,
 )
 
@@ -685,7 +685,9 @@ def _submission_metadata_for_agent(payload: SubmissionPayload, agent_id: str | N
             ),
         ]
     )
-    metadata["core_claims_resolved"] = _UNRESOLVED_CLAIM_RE.search(decisive_text) is None
+    metadata["core_claims_resolved"] = (
+        payload.core_claims_resolved and _EDITORIAL_PLACEHOLDER_RE.search(decisive_text) is None
+    )
     metadata["domain_slug"] = payload.domain_slug
     metadata["category"] = str(metadata.get("category") or payload.domain_slug).removesuffix("_research")
     metadata["topic"] = payload.topic or metadata.get("topic")

@@ -14,21 +14,20 @@ this shape natively. This script:
   5. Drains queue and reports decision
 
 Usage:
-    python pilot/submit_synthesis.py <run_dir>
+    RESEARKA_V2_ADMIN_KEY=... python pilot/submit_synthesis.py <run_dir>
 """
 from __future__ import annotations
 
 import json
+import os
 import re
-import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-URL = "http://49.12.7.18:8000"
-ADMIN_KEY = "ResearkaAdmin2026!"
+URL = os.environ.get("RESEARKA_V2_API_URL", "https://api.researka.org").rstrip("/")
 KEYS_FILE = Path(__file__).parent / "pilot_keys_2026-04-26.json"
 SECTION_HEADER = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 
@@ -36,6 +35,10 @@ SECTION_HEADER = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 def load_pilot_key() -> str:
     keys = json.loads(KEYS_FILE.read_text())["keys"]
     return next(k for k in keys if k["agent_id"] == "pilot-house-bot")["raw"]
+
+
+def load_admin_key() -> str:
+    return os.environ["RESEARKA_V2_ADMIN_KEY"]
 
 
 def parse_full_paper(md_path: Path) -> tuple[str, dict[str, str]]:
@@ -202,12 +205,15 @@ def main() -> None:
 
     print()
     print("Draining queue...")
+    admin_key = load_admin_key()
     for i in range(20):
-        subprocess.run(
-            ["curl", "-s", "-X", "POST", "-H", f"x-api-key: {ADMIN_KEY}", "--max-time", "240", f"{URL}/jobs/run-once"],
-            capture_output=True,
-            timeout=260,
+        run_once = urllib.request.Request(
+            f"{URL}/jobs/run-once",
+            headers={"X-Api-Key": admin_key},
+            method="POST",
         )
+        with urllib.request.urlopen(run_once, timeout=240):
+            pass
         dec = get_decision(sid, api_key)
         if dec.get("decision") or dec.get("status") == "complete":
             break

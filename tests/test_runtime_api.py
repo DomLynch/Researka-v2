@@ -1608,6 +1608,33 @@ def _minimal_submission_payload() -> dict:
     }
 
 
+@pytest.mark.parametrize(
+    ("client_claim", "conclusion", "expected"),
+    [
+        (True, "Where effect modifiers remain unresolved, the conclusion stays conditional.", True),
+        (True, "Fewer unresolved cross-source tensions would increase confidence.", True),
+        (True, "TODO: verify this claim", False),
+        (True, "[pending citation]", False),
+        (True, "???", False),
+        (False, "The prose contains no editorial marker.", False),
+    ],
+)
+def test_core_claim_resolution_distinguishes_uncertainty_from_editorial_placeholders(
+    client: TestClient, client_claim: bool, conclusion: str, expected: bool
+) -> None:
+    payload = _minimal_submission_payload()
+    payload["title"] = f"Rapid Evidence Synthesis: {conclusion[:32]}"
+    payload["sections"]["Conclusion"] = conclusion
+    payload["core_claims_resolved"] = client_claim
+
+    response = client.post("/submissions", json=payload)
+
+    assert response.status_code == 200
+    metadata = response.json()["submission"]["metadata"]
+    assert metadata["client_claimed_core_claims_resolved"] is client_claim
+    assert metadata["core_claims_resolved"] is expected
+
+
 def _ops_headers(admin_key: str = "admin-secret-123") -> dict:
     return {"x-api-key": admin_key}
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=Researka v2 deterministic publish canary
+Description=Researka v2 publish and reviewer-contract canary
 After=researka-v2.service researka-v2-worker.service
 
 [Service]
@@ -12,7 +12,7 @@ Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStartPre=/usr/bin/systemctl is-active --quiet researka-v2.service
 ExecStartPre=/usr/bin/systemctl is-active --quiet researka-v2-worker.service
 ExecStartPre=/usr/bin/curl --fail --silent --show-error http://127.0.0.1:8000/health
-ExecStart=/opt/researka-v2/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_e2e_publish.py::test_end_to_end_publish_happy_path
+ExecStart=/opt/researka-v2/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_e2e_publish.py::test_end_to_end_publish_happy_path tests/test_runtime_core.py::test_reviewer_panel_treats_malformed_primary_as_failure tests/test_runtime_core.py::test_single_provider_accept_cannot_bypass_panel_quorum
 NoNewPrivileges=true
 PrivateDevices=true
 PrivateTmp=true
