@@ -599,7 +599,7 @@ def reviewer_from_env() -> LanguageModelProvider:
         def _make_fallback() -> OpenRouterProvider:
             return OpenRouterProvider(model=fallback_model, base_url=or_base_url)
 
-        primary_provider = os.getenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "minimax").strip().lower()
+        primary_provider = os.getenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "mimo").strip().lower()
         if primary_provider == "mimo":
             primary_inner: LanguageModelProvider = MimoProvider(
                 model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2.5-pro"),

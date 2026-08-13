@@ -54,7 +54,7 @@ RESEARKA_V2_PROVIDER=judge_panel
 ```
 
 Default live judge stack:
-- primary: `MiniMax-M3`
+- primary: `mimo-v2.5-pro`
 - sparring: `google/gemma-4-31b-it` via OpenRouter
 - fallback / tiebreak: `mistralai/mistral-small-2603` via OpenRouter
 

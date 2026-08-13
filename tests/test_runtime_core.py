@@ -2224,12 +2224,12 @@ def test_openrouter_provider_retries_rate_limits(
     assert sleeps[0] == pytest.approx(2.0, abs=0.5)
 
 
-def test_reviewer_panel_from_env_uses_minimax_gemma_mistral(
+def test_reviewer_panel_from_env_uses_mimo_gemma_mistral(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
     monkeypatch.delenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", raising=False)
-    monkeypatch.delenv("RESEARKA_V2_MINIMAX_MODEL", raising=False)
+    monkeypatch.delenv("RESEARKA_V2_MIMO_MODEL", raising=False)
     monkeypatch.delenv("RESEARKA_V2_REVIEWER_MODEL", raising=False)
     monkeypatch.delenv("RESEARKA_V2_JUDGE_MODEL", raising=False)
     monkeypatch.delenv("RESEARKA_V2_SKIP_SPARRING_ON_BILLING_ERROR", raising=False)
@@ -2244,11 +2244,11 @@ def test_reviewer_panel_from_env_uses_minimax_gemma_mistral(
     assert isinstance(provider.sparring, FallbackProvider)
     assert isinstance(provider.fallback, OpenRouterProvider)
     # The wrapper exposes the primary inner model in its .model attribute.
-    assert provider.primary.model == "MiniMax-M3"
+    assert provider.primary.model == "mimo-v2.5-pro"
     assert provider.sparring.model == "google/gemma-4-31b-it"
     assert provider.fallback.model == "mistralai/mistral-small-2603"
     # Inner primaries must be the right concrete provider type.
-    assert isinstance(provider.primary.primary, MiniMaxProvider)
+    assert isinstance(provider.primary.primary, MimoProvider)
     assert isinstance(provider.sparring.primary, OpenRouterProvider)
     # The fallback inside each wrapper is Mistral via OpenRouter.
     assert provider.primary.fallback.model == "mistralai/mistral-small-2603"
@@ -2280,7 +2280,7 @@ def test_reviewer_panel_from_env_can_disable_per_slot_fallback(
     provider = reviewer_from_env()
 
     assert isinstance(provider, ReviewerPanel)
-    assert isinstance(provider.primary, MiniMaxProvider)
+    assert isinstance(provider.primary, MimoProvider)
     assert isinstance(provider.sparring, OpenRouterProvider)
 
 
@@ -2315,18 +2315,18 @@ def test_reviewer_panel_billing_skip_requires_attestation_secret(
         reviewer_from_env()
 
 
-def test_reviewer_panel_from_env_can_select_mimo_primary(
+def test_reviewer_panel_from_env_can_select_minimax_primary_for_rollback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
-    monkeypatch.setenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "mimo")
+    monkeypatch.setenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "minimax")
     monkeypatch.setenv("RESEARKA_V2_REVIEWER_FALLBACK_ENABLED", "0")
 
     provider = reviewer_from_env()
 
     assert isinstance(provider, ReviewerPanel)
-    assert isinstance(provider.primary, MimoProvider)
-    assert provider.primary.model == "mimo-v2.5-pro"
+    assert isinstance(provider.primary, MiniMaxProvider)
+    assert provider.primary.model == "MiniMax-M3"
 
 
 def test_editorial_requires_recommendation_metadata() -> None:
