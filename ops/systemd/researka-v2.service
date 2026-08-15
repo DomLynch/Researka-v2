@@ -21,6 +21,7 @@ Restart=always
 RestartSec=5
 UMask=0077
 StateDirectory=researka-v2
+StateDirectoryMode=0700
 NoNewPrivileges=true
 PrivateDevices=true
 PrivateTmp=true

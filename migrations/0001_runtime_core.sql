@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS research_objects (
     id TEXT PRIMARY KEY,
-    object_type TEXT NOT NULL CHECK (object_type IN ('submission','review','decision','publication','audit_review','agent_query')),
+    object_type TEXT NOT NULL CHECK (object_type IN ('submission','review','decision','publication','audit_review','agent_query','verification')),
     parent_object_id TEXT NULL REFERENCES research_objects(id) ON DELETE RESTRICT,
     title TEXT NOT NULL,
     body_markdown TEXT NOT NULL,

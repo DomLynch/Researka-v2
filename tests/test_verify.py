@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -17,6 +19,16 @@ The intervention reduced risk by 47% [1]. The authors wrote "The trial enrolled 
 ## References
 1. Smith J. (2024). Trial report. https://doi.org/10.1234/example
 """
+
+
+def test_database_constraint_covers_all_object_types() -> None:
+    migration = (
+        Path(__file__).parents[1]
+        / "alembic/versions/0012_add_verification_object_type.py"
+    ).read_text()
+    allowed = set(re.findall(r"'([a-z_]+)'", migration))
+
+    assert {value.value for value in ObjectType} <= allowed
 
 
 def test_manifest_separates_pass_fail_and_unchecked(monkeypatch) -> None:
