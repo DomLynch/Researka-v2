@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 
+from .evidence_quality import quantity_tokens
 from .urls import validated_service_url
 
 log = logging.getLogger(__name__)
@@ -325,7 +326,8 @@ def _pubmed_identifier_checks(
             "registered_dois": sorted(registered_dois),
             "checked": True,
             "mismatch": (
-                not _text_matches(source.get("title"), record.get("title"), floor=0.6)
+                bool(str(source.get("title") or "").strip())
+                and not _text_matches(source.get("title"), record.get("title"), floor=0.6)
                 or bool(submitted_doi and registered_dois and submitted_doi not in registered_dois)
             ),
         })
@@ -350,7 +352,7 @@ def _canonical_duplicate_indices(
     return duplicates
 
 
-def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | None:
+def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = False) -> dict[str, Any] | None:
     """Verify registered source identity, evidence text, and retraction state."""
     if not _metadata_enabled():
         return None
@@ -410,6 +412,16 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
             for key in ("quote", "evidence_span", "excerpt")
             if str(source.get(key) or "").strip()
         ]
+        verification_quotes = [
+            str(value).strip()[:500]
+            for value in source.get("verification_quotes", [])
+            if str(value).strip()
+        ]
+        verification_claims = [
+            str(value).strip()[:500]
+            for value in source.get("verification_claims", [])
+            if str(value).strip() and quantity_tokens(str(value))
+        ]
         full_text_origin = str(source.get("evidence_origin") or "").strip().lower() == "full_text"
         full_text = full_texts.get(identity, "") if full_text_origin else ""
         authority_texts = [full_text] if full_text else abstracts
@@ -424,16 +436,43 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
             _text_matches(value, authority, floor=0.35)
             for value in evidence for authority in authority_texts
         )
+        quote_checks = [
+            {
+                "identity": identity,
+                "text": value,
+                "authority_available": bool(authority_texts),
+                "matched": bool(authority_texts) and _normalized_text(value) in " ".join(
+                    _normalized_text(authority) for authority in authority_texts
+                ),
+            }
+            for value in verification_quotes
+        ]
+        authority_quantities = {
+            token for authority in authority_texts for token in quantity_tokens(authority)
+        }
+        number_checks = [
+            {
+                "identity": identity,
+                "text": value,
+                "authority_available": bool(authority_texts),
+                "matched": bool(authority_texts) and quantity_tokens(value) <= authority_quantities,
+            }
+            for value in verification_claims
+        ]
         return {
             "identity": identity,
             "checked": authority_count > 0,
             "retracted": retracted,
-            "title_mismatch": bool(titles) and not any(_text_matches(source.get("title"), title, floor=0.6) for title in titles),
+            "title_mismatch": bool(str(source.get("title") or "").strip()) and bool(titles) and not any(
+                _text_matches(source.get("title"), title, floor=0.6) for title in titles
+            ),
             "evidence_mismatch": evidence_mismatch,
             "evidence_authority_unavailable": bool(evidence) and not authority_texts,
             "evidence_text_submitted": bool(evidence),
             "evidence_text_available": evidence_text_available,
             "evidence_text_verified": evidence_text_verified,
+            "quote_checks": quote_checks,
+            "number_checks": number_checks,
         }
 
     try:
@@ -443,7 +482,11 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
             headers={"User-Agent": "Researka/1.0 (https://researka.org)"},
         ) as client:
             full_texts = _pmc_full_texts(client, [source for source, _ in candidates])
-            results = [check(client, item) for item in candidates]
+            if parallel and len(candidates) > 1:
+                with ThreadPoolExecutor(max_workers=min(8, len(candidates))) as pool:
+                    results = list(pool.map(lambda item: check(client, item), candidates))
+            else:
+                results = [check(client, item) for item in candidates]
             identifier_results = _pubmed_identifier_checks(
                 client,
                 [source for source, _ in candidates],
@@ -504,10 +547,12 @@ def verify_source_metadata(sources: list[dict[str, Any]]) -> dict[str, Any] | No
         "identifier_unverified": identifier_unverified,
         "identifier_mismatches": identifier_mismatches,
         "canonical_duplicate_indices": canonical_duplicate_indices,
+        "quote_checks": [check for row in results for check in row.get("quote_checks", [])],
+        "number_checks": [check for row in results for check in row.get("number_checks", [])],
     }
 
 
-def resolve_dois(dois: list[str]) -> dict[str, Any] | None:
+def resolve_dois(dois: list[str], *, parallel: bool = False) -> dict[str, Any] | None:
     """Check that every DOI is registered in the global handle system.
 
     Returns None when disabled or nothing to check; otherwise a stamped result:
@@ -525,17 +570,26 @@ def resolve_dois(dois: list[str]) -> dict[str, Any] | None:
         }
     checked: list[str] = []
     missing: list[str] = []
+    def check(client: httpx.Client, doi: str) -> tuple[str, bool]:
+        response = client.get(f"{_base_url()}/{urllib.parse.quote(doi, safe='/')}")
+        if response.status_code == 404:
+            return doi, False
+        response.raise_for_status()
+        return doi, True
+
     try:
         with httpx.Client(timeout=_timeout_s(), follow_redirects=True) as client:
-            for doi in dois:
-                # Encode the DOI as a path segment ('/' stays); a stray '?' or
-                # '#' must not truncate the handle lookup into a false 404.
-                response = client.get(f"{_base_url()}/{urllib.parse.quote(doi, safe='/')}")
-                if response.status_code == 404:
-                    missing.append(doi)
-                else:
-                    response.raise_for_status()
-                checked.append(doi)
+            if parallel and len(dois) > 1:
+                with ThreadPoolExecutor(max_workers=min(8, len(dois))) as pool:
+                    results = list(pool.map(lambda doi: check(client, doi), dois))
+                checked = [doi for doi, _ in results]
+                missing = [doi for doi, exists in results if not exists]
+            else:
+                for doi in dois:
+                    checked_doi, exists = check(client, doi)
+                    checked.append(checked_doi)
+                    if not exists:
+                        missing.append(checked_doi)
     except Exception as exc:
         log.warning("doi_resolution_unavailable", extra={"error": str(exc)})
         return {

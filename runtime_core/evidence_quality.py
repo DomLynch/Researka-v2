@@ -225,6 +225,10 @@ def _quantity_tokens(text: str, sources: list[dict[str, Any]] | None = None) -> 
     return tokens
 
 
+def quantity_tokens(text: str, sources: list[dict[str, Any]] | None = None) -> set[tuple[str, str]]:
+    return _quantity_tokens(text, sources)
+
+
 def quantitative_claim_candidates(text: str) -> list[str]:
     return [
         part.strip()

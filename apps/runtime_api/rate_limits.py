@@ -11,7 +11,8 @@ DB_PATH = Path("/var/lib/researka-v2/rate_limits.db")
 def _db_path(db_path: str | os.PathLike[str] | None = None) -> Path:
     if db_path is not None:
         return Path(db_path)
-    return Path(os.environ.get("RESEARKA_V2_RATE_LIMIT_DB_PATH", str(DB_PATH)))
+    default = DB_PATH if os.environ.get("RESEARKA_V2_ENV") == "production" else Path.home() / ".local/state/researka-v2/rate_limits.db"
+    return Path(os.environ.get("RESEARKA_V2_RATE_LIMIT_DB_PATH", str(default)))
 
 
 def ensure_schema(db_path: str | os.PathLike[str] | None = None) -> None:

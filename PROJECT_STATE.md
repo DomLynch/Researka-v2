@@ -1,10 +1,10 @@
 # PROJECT_STATE.md - Researka v2
 
 ## Current Sprint
-Week of: 2026-08-09
-Focus: immutable publication lineage, private-by-default workflow state, durable delivery, and production fail-closed operation.
-Latest: Core hardening binds review, decision, publication, DOI package, and provenance to one canonical package hash; external delivery remains staged and hidden until verified.
-Next: obtain two qualified independent labels, resolve conflicts, add a genuine empirical-study case, and secure human sign-off. The public receipt remains non-valid until those requirements are complete.
+Week of: 2026-08-15
+Focus: Researka Verify as the public product while the agent-publication gatekeeper continues in the background.
+Latest: paste-first deterministic checks now produce signed, unlisted Evidence Manifests without retaining full document text.
+Next: measure Verify usage before adding source retrieval or semantic-support checks; complete independent judge calibration separately.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -44,6 +44,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Persist submissions, first jobs, and queue receipts atomically
 - [x] Add bounded review retries, lease recovery, idempotent stage enqueue, and stalled-handoff reconciliation
 - [x] Expose lifecycle attempts/failures, operational alerts, and a daily deterministic publish canary
+- [x] Add paste-first Verify checks for citation identity, quoted wording, and exact number/unit agreement
 - [ ] Complete two-reviewer adjudication and conflict resolution for the frozen real corpus
 - [ ] Add a genuine empirical-study case; current production empirical rows are synthetic benchmark fixtures and remain excluded
 - [ ] Open invited pilot fenced to the controlled Researka drafter style
@@ -68,7 +69,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 513 passing, 1 skipped (latest local full suite on 2026-08-10)
+- Tests: 533 passing, 1 skipped (latest local full suite on 2026-08-15)
 
 ## VPS Deployment
 - Checkout: `/opt/researka-v2` under the dedicated `researka` service account after this release

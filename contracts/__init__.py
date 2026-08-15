@@ -36,6 +36,7 @@ from .submissions import (
     submission_template_for,
 )
 from .frozen import IntakeRejectReason, INTAKE_REJECT_REASONS, SUBMISSION_CONTRACT
+from .verification import DocumentVerificationRequest, VerificationSource
 
 __all__ = [
     "ArticleType",
@@ -46,6 +47,7 @@ __all__ = [
     "ClaimCard",
     "ContradictionStatus",
     "Decision",
+    "DocumentVerificationRequest",
     "ALPHA_MEMO",
     "EMPIRICAL_STUDY",
     "EVIDENCE_MAP",
@@ -85,4 +87,5 @@ __all__ = [
     "Stage",
     "WorkflowContext",
     "WorkflowOutcome",
+    "VerificationSource",
 ]

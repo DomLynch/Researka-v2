@@ -21,6 +21,7 @@ from contracts import (
     AuditVerdict,
     ClaimCard,
     Decision,
+    DocumentVerificationRequest,
     EventType,
     ObjectType,
     ResearchObject,
@@ -56,6 +57,7 @@ from runtime_core.ops import operational_alerts, submission_lifecycle
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 from runtime_core.publication_sidecars import build_sidecar, sidecar_manifest
 from runtime_core.workflow import release_quarantined_publication
+from runtime_core.verify import build_evidence_manifest, manifest_signature_valid, sign_manifest
 
 _calibration_cache: dict | None = None
 _calibration_path: str | None = None
@@ -504,6 +506,38 @@ def _check_agent_query(request: Request) -> dict[str, str]:
     if not rate_limits.check_and_incr("agent_query_ip", client_key, limit=limit, window=day):
         raise HTTPException(status_code=429, detail="agent_query_rate_limited")
     return {"request_day": day, "client_bucket_hash": client_key}
+
+
+def _check_document_verification(request: Request) -> None:
+    if not _feature_enabled("RESEARKA_VERIFY_ENABLED", "1"):
+        raise HTTPException(status_code=503, detail="document_verification_disabled")
+    day = _registration_window()
+    client_key = _registration_client_key(request)
+    if client_key is not None and not rate_limits.check_and_incr(
+        "verify_ip",
+        client_key,
+        limit=_bounded_env_int("RESEARKA_VERIFY_PER_IP_PER_DAY", 20, floor=1, ceiling=10_000),
+        window=day,
+    ):
+        raise HTTPException(status_code=429, detail="verification_rate_limited")
+    if not rate_limits.check_and_incr(
+        "verify_global",
+        "documents",
+        limit=_bounded_env_int("RESEARKA_VERIFY_GLOBAL_PER_DAY", 2_000, floor=1, ceiling=1_000_000),
+        window=day,
+    ):
+        raise HTTPException(status_code=429, detail="verification_rate_limited")
+
+
+def _verification_secret() -> str:
+    path = os.environ.get("RESEARKA_VERIFY_SIGNING_SECRET_PATH", "")
+    try:
+        secret = Path(path).read_text().strip() if path else os.environ.get("RESEARKA_VERIFY_SIGNING_SECRET", "")
+    except OSError:
+        secret = ""
+    if len(secret.encode()) < 32:
+        raise HTTPException(status_code=503, detail="verification_signing_unavailable")
+    return secret
 
 
 def _query_caps(depth: str) -> dict:
@@ -1630,6 +1664,48 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             if candidate in hashes:
                 return {"matched": True, "publication_id": publication.id, "title": publication.title, "hash": candidate}
         return {"matched": False, "hash": candidate}
+
+    @app.post("/verify/documents")
+    def verify_document(payload: DocumentVerificationRequest, request: Request) -> dict:
+        secret = _verification_secret()
+        _check_document_verification(request)
+        receipt = ResearchObject(object_type=ObjectType.VERIFICATION, title="Evidence Manifest")
+        manifest = build_evidence_manifest(
+            payload.text,
+            [source.model_dump(exclude_none=True) for source in payload.sources],
+            receipt_id=receipt.id,
+            verifier_release=f"verify-v1:{_SERVICE_GIT_SHA[:12]}",
+            max_sources=_bounded_env_int("RESEARKA_VERIFY_MAX_SOURCES", 25, floor=1, ceiling=40),
+            max_literal_checks=_bounded_env_int(
+                "RESEARKA_VERIFY_MAX_LITERAL_CHECKS", 100, floor=1, ceiling=500
+            ),
+        )
+        signature = sign_manifest(manifest, secret)
+        app.state.repository.create_object(
+            receipt.model_copy(update={"metadata": {"manifest": manifest, "signature": signature}})
+        )
+        return {
+            "manifest": manifest,
+            "signature": signature,
+            "signature_valid": True,
+            "receipt_url": f"https://researka.org/verify?receipt={receipt.id}",
+        }
+
+    @app.get("/verify/receipts/{receipt_id}")
+    def get_verification_receipt(receipt_id: str) -> dict:
+        receipt = app.state.repository.get_object(receipt_id)
+        if receipt is None or receipt.object_type != ObjectType.VERIFICATION:
+            raise HTTPException(status_code=404, detail="verification_receipt_not_found")
+        manifest = receipt.metadata.get("manifest")
+        signature = str(receipt.metadata.get("signature") or "")
+        if not isinstance(manifest, dict) or not signature:
+            raise HTTPException(status_code=404, detail="verification_receipt_not_found")
+        return {
+            "manifest": manifest,
+            "signature": signature,
+            "signature_valid": manifest_signature_valid(manifest, signature, _verification_secret()),
+            "receipt_url": f"https://researka.org/verify?receipt={receipt.id}",
+        }
 
     @app.get("/evidence-index/latest")
     def evidence_index_latest() -> dict:

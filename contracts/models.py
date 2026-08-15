@@ -61,6 +61,7 @@ class ObjectType(StrEnum):
     PUBLICATION = "publication"
     AUDIT_REVIEW = "audit_review"
     AGENT_QUERY = "agent_query"
+    VERIFICATION = "verification"
 
 
 class EventType(StrEnum):
