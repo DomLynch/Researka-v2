@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from contracts import Decision, EventType, ObjectType, ResearchObject, RuntimeEvent, RuntimeJob, Stage
+import runtime_core.ops as ops
 from runtime_core.ops import operational_alerts, reconcile_stalled_submissions, submission_lifecycle
 from runtime_core.repos import InMemoryRuntimeRepository
 
@@ -219,6 +222,43 @@ def test_reconciler_does_not_republish_completed_deduped_job() -> None:
     assert repo.queued_jobs() == []
 
 
+def test_reconciler_isolates_one_corrupt_publication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = InMemoryRuntimeRepository()
+    now = datetime.now(timezone.utc)
+    corrupt = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Corrupt lineage",
+            metadata={"publication_state": "PUBLISH_BLOCKED_EXTERNAL"},
+            created_at=now - timedelta(minutes=10),
+        )
+    )
+    healthy = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Recoverable delivery",
+            metadata={"publication_state": "PUBLISH_BLOCKED_EXTERNAL"},
+            created_at=now - timedelta(minutes=10),
+        )
+    )
+
+    def recover(_repo, publication, *, max_recoveries):  # noqa: ANN001
+        assert max_recoveries == 3
+        if publication.id == corrupt.id:
+            raise ValueError("publication_lineage_invalid")
+        return _repo.enqueue_job(
+            RuntimeJob(target_object_id=publication.id, stage=Stage.OSF_DEPOSIT)
+        )
+
+    monkeypatch.setattr(ops, "recover_publication_delivery", recover)
+
+    repaired = reconcile_stalled_submissions(repo, now=now)
+
+    assert [job.target_object_id for job in repaired] == [healthy.id]
+
+
 def test_operational_alerts_cover_queue_failures_and_publication_stall() -> None:
     repo = InMemoryRuntimeRepository()
     now = datetime.now(timezone.utc)
@@ -310,6 +350,29 @@ def test_operational_alerts_ignore_rejected_and_completed_submissions() -> None:
     )
 
     assert operational_alerts(repo, now=now) == []
+
+
+def test_operational_alerts_expose_stalled_publication_delivery() -> None:
+    repo = InMemoryRuntimeRepository()
+    now = datetime.now(timezone.utc)
+    repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Visible delivery failure",
+            metadata={"publication_state": "PUBLISH_BLOCKED_EXTERNAL"},
+            created_at=now - timedelta(days=2),
+        )
+    )
+
+    alerts = operational_alerts(repo, now=now)
+
+    assert alerts == [
+        {
+            "code": "publication_delivery_stall",
+            "count": 1,
+            "since": (now - timedelta(days=2)).isoformat(),
+        }
+    ]
 
 
 def test_submission_lifecycle_reports_attempt_timestamps() -> None:

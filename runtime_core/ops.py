@@ -7,6 +7,7 @@ from contracts import Decision, EventType, ObjectType, RuntimeEvent, RuntimeJob,
 
 from .failure_classifier import classify_failure_reason
 from .repos import RuntimeRepository
+from .workflow import recover_publication_delivery
 
 
 def classify_failure(reason: str):
@@ -58,6 +59,7 @@ def reconcile_stalled_submissions(
     *,
     now: datetime | None = None,
     stale_after_seconds: float = 120.0,
+    max_publication_recoveries: int = 3,
 ) -> list[RuntimeJob]:
     now = now or datetime.now(timezone.utc)
     events = repo.list_events()
@@ -113,6 +115,26 @@ def reconcile_stalled_submissions(
             else:
                 stage, payload = Stage.INTAKE, {"reconciled": True}
         repaired.append(repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=stage, payload=payload)))
+    for publication in repo.list_objects(ObjectType.PUBLICATION, summaries_only=True):
+        if publication.id in active_targets:
+            continue
+        state = publication.metadata.get("publication_state")
+        if state not in {"ACCEPTED_QUARANTINED", "PUBLISH_BLOCKED_EXTERNAL"}:
+            continue
+        target_events = sorted(
+            events_by_target.get(publication.id, []), key=lambda event: event.ts
+        )
+        last_activity = target_events[-1].ts if target_events else publication.created_at
+        if (now - last_activity).total_seconds() < stale_after_seconds:
+            continue
+        try:
+            recovered = recover_publication_delivery(
+                repo, publication, max_recoveries=max_publication_recoveries
+            )
+        except (RuntimeError, ValueError):
+            continue
+        if recovered is not None:
+            repaired.append(recovered)
     return repaired
 
 
@@ -146,9 +168,10 @@ def operational_alerts(
         alerts.append({"code": "repeated_terminal_failures", "count": len(terminal_failures)})
 
     decisions = repo.list_objects(ObjectType.DECISION, summaries_only=True)
+    publications = repo.list_objects(ObjectType.PUBLICATION, summaries_only=True)
     published_targets = {
         item.parent_object_id
-        for item in repo.list_objects(ObjectType.PUBLICATION, summaries_only=True)
+        for item in publications
     } | {
         event.target_object_id
         for event in events
@@ -166,4 +189,20 @@ def operational_alerts(
     if stalled_accepts:
         oldest = min(stalled_accepts, key=lambda item: item.created_at)
         alerts.append({"code": "publication_stall", "count": len(stalled_accepts), "since": oldest.created_at.isoformat()})
+    stalled_deliveries = [
+        item
+        for item in publications
+        if item.metadata.get("publication_state")
+        in {"ACCEPTED_QUARANTINED", "PUBLISH_BLOCKED_EXTERNAL"}
+        and (now - item.created_at).total_seconds() >= publication_stall_seconds
+    ]
+    if stalled_deliveries:
+        oldest = min(stalled_deliveries, key=lambda item: item.created_at)
+        alerts.append(
+            {
+                "code": "publication_delivery_stall",
+                "count": len(stalled_deliveries),
+                "since": oldest.created_at.isoformat(),
+            }
+        )
     return alerts

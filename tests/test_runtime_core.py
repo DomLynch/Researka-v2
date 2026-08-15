@@ -1,5 +1,6 @@
 import json
 import urllib.error
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -17,6 +18,7 @@ from runtime_core.judge_release import (
 )
 from runtime_core.gates import run_publish_gates
 from runtime_core.failure_classifier import classify_failure_reason
+from runtime_core.ops import reconcile_stalled_submissions
 from runtime_core.prompts import REVIEWER_PROMPT_VERSION
 from runtime_core.providers import (
     DeterministicProvider,
@@ -45,10 +47,12 @@ from contracts import (
     ArticleType,
     Decision,
     FailureClass,
+    EventType,
     ObjectType,
     ProviderErrorClass,
     ProviderUsage,
     ResearchObject,
+    RuntimeEvent,
     RuntimeJob,
     Stage,
     SubmissionPayload,
@@ -366,6 +370,23 @@ def _workflow_submission(repo: InMemoryRuntimeRepository) -> ResearchObject:
     )
 
 
+def _authenticated_workflow_submission(
+    repo: InMemoryRuntimeRepository, agent_id: str = "agent-demo"
+) -> ResearchObject:
+    submission = _workflow_submission(repo)
+    updated = repo.update_object_metadata(
+        submission.id,
+        {
+            **submission.metadata,
+            "author_agent_id": agent_id,
+            "authenticated_agent_id": agent_id,
+            "identity_source": "api_key",
+        },
+    )
+    assert updated is not None
+    return updated
+
+
 def test_review_and_editorial_replay_do_not_duplicate_records() -> None:
     repo = InMemoryRuntimeRepository()
     submission = _workflow_submission(repo)
@@ -629,6 +650,131 @@ def test_blocked_publication_resumes_at_first_incomplete_delivery_stage(
 
     assert result["resumed_stage"] == expected_stage.value
     assert [job.stage for job in repo.queued_jobs()] == [expected_stage]
+
+
+def test_authenticated_active_agent_does_not_need_auto_list_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("RESEARKA_AUTO_LIST_AGENT_IDS", raising=False)
+    monkeypatch.delenv("RESEARKA_DISABLED_AGENT_IDS", raising=False)
+    repo = InMemoryRuntimeRepository()
+    repo.create_api_key("agent-demo")
+    submission = _authenticated_workflow_submission(repo)
+
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
+
+    publication = repo.get_object(result["publication_id"])
+    assert publication is not None
+    assert publication.metadata["requested_public_visibility"] == "listed"
+    assert publication.metadata["publication_state"] == "PUBLISHING"
+    assert [job.stage for job in repo.queued_jobs()] == [Stage.OSF_DEPOSIT]
+
+
+def test_disabled_authenticated_agent_remains_quarantined(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESEARKA_DISABLED_AGENT_IDS", "agent-demo")
+    repo = InMemoryRuntimeRepository()
+    repo.create_api_key("agent-demo")
+    submission = _authenticated_workflow_submission(repo)
+
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
+
+    publication = repo.get_object(result["publication_id"])
+    assert publication is not None
+    assert publication.metadata["publication_state"] == "ACCEPTED_QUARANTINED"
+    assert repo.queued_jobs() == []
+
+
+def test_reconciler_releases_accepted_quarantine_after_agent_activation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("RESEARKA_AUTO_LIST_AGENT_IDS", raising=False)
+    repo = InMemoryRuntimeRepository()
+    submission = _authenticated_workflow_submission(repo)
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
+    publication = repo.get_object(result["publication_id"])
+    assert publication is not None
+    assert publication.metadata["publication_state"] == "ACCEPTED_QUARANTINED"
+    repo.create_api_key("agent-demo")
+    monkeypatch.setattr(workflow, "_verified_billing_waiver", lambda *_args: True)
+    assert workflow.recover_publication_delivery(repo, publication) is None
+    monkeypatch.setattr(workflow, "_verified_billing_waiver", lambda *_args: False)
+
+    repaired = reconcile_stalled_submissions(
+        repo, now=publication.created_at + timedelta(minutes=3)
+    )
+
+    assert [job.stage for job in repaired] == [Stage.OSF_DEPOSIT]
+    recovered = repo.get_object(publication.id)
+    assert recovered is not None
+    assert recovered.metadata["publication_state"] == "PUBLISHING"
+    assert recovered.metadata["requested_public_visibility"] == "listed"
+
+
+def test_reconciler_retries_external_delivery_once_without_duplicate_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("RESEARKA_DISABLED_AGENT_IDS", raising=False)
+    repo = InMemoryRuntimeRepository()
+    repo.create_api_key("agent-demo")
+    submission = _authenticated_workflow_submission(repo)
+    result = WorkflowEngine()._run_publish(accepted_publish_job(repo, submission), repo)
+    publication = repo.get_object(result["publication_id"])
+    assert publication is not None
+    failed_job = repo.claim_next_job(target_object_id=publication.id)
+    assert failed_job is not None and failed_job.stage is Stage.OSF_DEPOSIT
+    failure_time = datetime.now(timezone.utc)
+    repo.fail_job(
+        failed_job.id,
+        reason="system_unavailable:osf:timeout",
+        lease_token=failed_job.lease_token,
+        event=RuntimeEvent(
+            event_type=EventType.JOB_FAILED,
+            target_object_id=publication.id,
+            job_id=failed_job.id,
+            payload={"stage": Stage.OSF_DEPOSIT.value, "terminal": True},
+            ts=failure_time,
+        ),
+    )
+    repo.update_object_metadata(
+        publication.id,
+        {**publication.metadata, "publication_state": "PUBLISH_BLOCKED_EXTERNAL"},
+    )
+
+    repaired = reconcile_stalled_submissions(
+        repo, now=failure_time + timedelta(minutes=3)
+    )
+    duplicate = reconcile_stalled_submissions(
+        repo, now=failure_time + timedelta(minutes=6)
+    )
+
+    assert [job.stage for job in repaired] == [Stage.OSF_DEPOSIT]
+    assert duplicate == []
+    recovered = repo.get_object(publication.id)
+    assert recovered is not None
+    assert recovered.metadata["delivery_recovery_count"] == 1
+
+
+def test_publication_recovery_is_bounded_and_never_retries_integrity_blocks() -> None:
+    repo = InMemoryRuntimeRepository()
+    exhausted = ResearchObject(
+        object_type=ObjectType.PUBLICATION,
+        title="Exhausted external delivery",
+        metadata={
+            "publication_state": "PUBLISH_BLOCKED_EXTERNAL",
+            "delivery_recovery_count": 3,
+        },
+    )
+    integrity_blocked = ResearchObject(
+        object_type=ObjectType.PUBLICATION,
+        title="Integrity blocked",
+        metadata={"publication_state": "PUBLISH_BLOCKED_INTEGRITY"},
+    )
+
+    assert workflow.recover_publication_delivery(repo, exhausted) is None
+    assert workflow.recover_publication_delivery(repo, integrity_blocked) is None
+    assert repo.queued_jobs() == []
 
 
 def test_integrity_blocked_publication_cannot_resume_delivery() -> None:

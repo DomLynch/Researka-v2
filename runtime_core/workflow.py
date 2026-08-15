@@ -407,14 +407,33 @@ def _evidence_score_ceiling(
 
 
 def _publication_visibility(
-    repository: RuntimeRepository, author_agent_id: object
-) -> str:  # noqa: ARG001
-    """Only explicitly audited agents may bypass provisional quarantine."""
-    agent = str(author_agent_id or "").strip()
+    repository: RuntimeRepository, submission: ResearchObject
+) -> str:
+    """Release authenticated active agents; retain the legacy audit override."""
+    agent = str(submission.metadata.get("author_agent_id") or "").strip().lower()
     if not agent:
         return "provisional"
+    disabled_agents = {
+        item.strip().lower()
+        for item in os.getenv("RESEARKA_DISABLED_AGENT_IDS", "").split(",")
+        if item.strip()
+    }
+    if agent in disabled_agents:
+        return "provisional"
+    authenticated_agent = str(
+        submission.metadata.get("authenticated_agent_id") or ""
+    ).strip().lower()
+    if (
+        submission.metadata.get("identity_source") == "api_key"
+        and authenticated_agent == agent
+        and any(
+            not key.revoked and key.agent_id.strip().lower() == agent
+            for key in repository.list_api_keys()
+        )
+    ):
+        return "listed"
     audited_agents = {
-        item.strip()
+        item.strip().lower()
         for item in os.getenv("RESEARKA_AUTO_LIST_AGENT_IDS", "").split(",")
         if item.strip()
     }
@@ -827,6 +846,51 @@ def release_quarantined_publication(
     if updated is None:
         raise RuntimeError("publication_release_update_failed")
     return _resume_publication_delivery(repository, updated)
+
+
+def recover_publication_delivery(
+    repository: RuntimeRepository,
+    publication: ResearchObject,
+    *,
+    max_recoveries: int = 3,
+) -> RuntimeJob | None:
+    """Safely resume an accepted publication that lost policy or delivery progress."""
+    state = publication.metadata.get("publication_state")
+    if state == "ACCEPTED_QUARANTINED":
+        submission, review, _ = _publication_lineage(repository, publication)
+        if (
+            _verified_billing_waiver(review, submission.id)
+            or _publication_visibility(repository, submission) != "listed"
+        ):
+            return None
+        result = release_quarantined_publication(repository, publication)
+    elif state == "PUBLISH_BLOCKED_EXTERNAL":
+        try:
+            recoveries = max(
+                0, int(publication.metadata.get("delivery_recovery_count") or 0)
+            )
+        except (TypeError, ValueError):
+            return None
+        if recoveries >= max_recoveries:
+            return None
+        _publication_lineage(repository, publication)
+        updated = repository.update_object_metadata(
+            publication.id,
+            _merge_publication_metadata(
+                publication.metadata,
+                {
+                    "delivery_recovery_count": recoveries + 1,
+                    "delivery_recovered_at": datetime.now(timezone.utc).isoformat(),
+                },
+            ),
+        )
+        if updated is None:
+            raise RuntimeError("publication_recovery_update_failed")
+        result = _resume_publication_delivery(repository, updated)
+    else:
+        return None
+    next_job_id = str(result.get("next_job_id") or "")
+    return repository.get_job(next_job_id) if next_job_id else None
 
 
 def _integrity_payload_from_submission(submission: ResearchObject) -> dict[str, Any]:
@@ -2198,9 +2262,7 @@ class WorkflowEngine:
         )
         if _integrity_publish_block(recommendation, refreshed):
             raise ValueError(f"publish_blocked_by_integrity:{recommendation}")
-        requested_visibility = _publication_visibility(
-            repository, submission.metadata.get("author_agent_id")
-        )
+        requested_visibility = _publication_visibility(repository, submission)
         if billing_waiver_verified:
             requested_visibility = "provisional"
         publishing = requested_visibility == "listed"
