@@ -3,7 +3,7 @@ from __future__ import annotations
 from alembic import op  # type: ignore[attr-defined]
 
 
-revision = "0012_add_verification_object_type"
+revision = "0012_verify_object_type"
 down_revision = "0011_runtime_invariants"
 branch_labels = None
 depends_on = None

@@ -27,8 +27,10 @@ def test_database_constraint_covers_all_object_types() -> None:
         / "alembic/versions/0012_add_verification_object_type.py"
     ).read_text()
     allowed = set(re.findall(r"'([a-z_]+)'", migration))
+    revision = re.search(r'^revision = "([^"]+)"', migration, re.MULTILINE)
 
     assert {value.value for value in ObjectType} <= allowed
+    assert revision is not None and len(revision.group(1)) <= 32
 
 
 def test_manifest_separates_pass_fail_and_unchecked(monkeypatch) -> None:
