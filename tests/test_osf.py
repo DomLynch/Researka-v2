@@ -47,8 +47,9 @@ class FakeOSFClient:
         self.uploaded = 0
         self.events: list[str] = []
 
-    def list_child_nodes(self, node_id: str) -> list[dict[str, Any]]:
+    def list_child_nodes(self, node_id: str, *, tag: str | None = None) -> list[dict[str, Any]]:
         assert node_id == "root-node"
+        assert tag == "researka-publication:pub-1"
         return [self.existing_node] if self.existing_node else []
 
     def create_child_node(self, node_id: str, *, title: str, description: str, tags: list[str]) -> dict[str, Any]:
@@ -154,8 +155,8 @@ def test_list_child_nodes_follows_osf_pagination(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(client, "_url_json", next_page)
     monkeypatch.setattr("runtime_core.osf._sleep_before_retry", lambda _attempt: None)
 
-    assert [node["id"] for node in client.list_child_nodes("root-node")] == ["node-1", "node-2"]
-    assert requests == [("GET", "/nodes/root-node/children/?page[size]=100")]
+    assert [node["id"] for node in client.list_child_nodes("root-node", tag="publication:pub-1")] == ["node-1", "node-2"]
+    assert requests == [("GET", "/nodes/root-node/children/?page%5Bsize%5D=100&filter%5Btags%5D=publication%3Apub-1")]
     assert followed == [next_url, next_url]
 
 

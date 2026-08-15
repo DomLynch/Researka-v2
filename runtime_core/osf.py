@@ -334,8 +334,11 @@ class OSFClient:
                 _sleep_before_retry(attempt)
         raise RuntimeError("osf_page_retry_exhausted")
 
-    def list_child_nodes(self, node_id: str) -> list[dict[str, Any]]:
-        response = self._request("GET", f"/nodes/{node_id}/children/?page[size]=100")
+    def list_child_nodes(self, node_id: str, *, tag: str | None = None) -> list[dict[str, Any]]:
+        query: dict[str, str | int] = {"page[size]": 100}
+        if tag:
+            query["filter[tags]"] = tag
+        response = self._request("GET", f"/nodes/{node_id}/children/?{parse.urlencode(query)}")
         nodes: list[dict[str, Any]] = []
         seen: set[str] = set()
         while response:
@@ -530,7 +533,7 @@ def _doi_from_identifier(identifier: dict[str, Any]) -> str | None:
 
 def _find_publication_node(client: OSFClient, root_project_id: str, publication_id: str) -> dict[str, Any] | None:
     expected_tag = _publication_tag(publication_id)
-    for node in client.list_child_nodes(root_project_id):
+    for node in client.list_child_nodes(root_project_id, tag=expected_tag):
         attributes = node.get("attributes", {})
         tags = attributes.get("tags", []) if isinstance(attributes, dict) else []
         if expected_tag in tags:
