@@ -811,6 +811,24 @@ def _resume_publication_delivery(
     }
 
 
+def release_quarantined_publication(
+    repository: RuntimeRepository, publication: ResearchObject
+) -> dict:
+    """Revalidate an accepted quarantine before starting normal delivery."""
+    if publication.metadata.get("publication_state") != "ACCEPTED_QUARANTINED":
+        raise ValueError("publication_not_quarantined")
+    _publication_lineage(repository, publication)
+    updated = repository.update_object_metadata(
+        publication.id,
+        _merge_publication_metadata(
+            publication.metadata, {"requested_public_visibility": "listed"}
+        ),
+    )
+    if updated is None:
+        raise RuntimeError("publication_release_update_failed")
+    return _resume_publication_delivery(repository, updated)
+
+
 def _integrity_payload_from_submission(submission: ResearchObject) -> dict[str, Any]:
     return {
         "submission_id": submission.id,

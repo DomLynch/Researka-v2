@@ -704,7 +704,7 @@ def test_submission_decision_reports_only_terminal_review_failure(client: TestCl
     assert payload["pipeline"]["attempts"][-1]["terminal"] is True
 
 
-def test_can_list_publications_after_processing(client: TestClient) -> None:
+def test_quarantined_release_stays_hidden_until_delivery(client: TestClient) -> None:
     submission = client.post(
         "/submissions",
         json={
@@ -740,23 +740,19 @@ def test_can_list_publications_after_processing(client: TestClient) -> None:
         headers={"x-api-key": "test-admin-key"},
     )
     assert promoted.status_code == 200
-    publications = client.get("/publications")
-    assert publications.status_code == 200
-    publication = publications.json()["publications"][0]
-    detail = client.get(f"/publications/{publication['id']}")
-    assert detail.status_code == 200
-    assert detail.json()["parent_object_id"] == submission["id"]
-    assert detail.json()["sidecars"][0]["name"].endswith(".json") or detail.json()["sidecars"][0]["name"].endswith(".csv")
-
-    sidecar = client.get(f"/publications/{publication['id']}/sidecars/evidence_table.csv")
-    assert sidecar.status_code == 200
-    assert sidecar.headers["content-type"].startswith("text/csv")
-    assert sidecar.text.splitlines()[0] == "study,population,intervention_or_exposure,comparator,endpoint,effect,risk_of_bias,directness"
-
-    graph = client.get(f"/publications/{publication['id']}/sidecars/claim_graph.json")
-    assert graph.status_code == 200
-    assert graph.json()["publication_id"] == publication["id"]
-    assert graph.json()["screening"]["flow"] == ["identified", "screened", "excluded_with_reasons", "included"]
+    updated = _repository(client).get_object(created[0].id)
+    assert updated.metadata["requested_public_visibility"] == "listed"
+    assert updated.metadata["public_visibility"] == "provisional"
+    assert updated.metadata["publication_state"] == "PUBLISHING"
+    assert client.get("/publications").json()["publications"] == []
+    repeated = client.post(
+        f"/ops/publications/{created[0].id}/visibility",
+        json={"visibility": "listed"},
+        headers={"x-api-key": "test-admin-key"},
+    )
+    assert repeated.status_code == 409
+    queue = client.get("/jobs/queue", headers=_worker_headers()).json()["queued"]
+    assert [job["stage"] for job in queue] == [Stage.OSF_DEPOSIT.value]
 
 
 def test_publications_list_hides_superseded_records(client: TestClient) -> None:

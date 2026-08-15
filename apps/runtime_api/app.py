@@ -55,6 +55,7 @@ from runtime_core.osf import (
 from runtime_core.ops import operational_alerts, submission_lifecycle
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 from runtime_core.publication_sidecars import build_sidecar, sidecar_manifest
+from runtime_core.workflow import release_quarantined_publication
 
 _calibration_cache: dict | None = None
 _calibration_path: str | None = None
@@ -1909,6 +1910,24 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         publication = app.state.repository.get_object(publication_id)
         if publication is None or publication.object_type != ObjectType.PUBLICATION:
             raise HTTPException(status_code=404, detail="publication_not_found")
+        publication_state = publication.metadata.get("publication_state")
+        if visibility == "listed" and publication_state != "PUBLISHED":
+            if publication_state != "ACCEPTED_QUARANTINED":
+                raise HTTPException(
+                    status_code=409, detail="publication_delivery_incomplete"
+                )
+            try:
+                result = release_quarantined_publication(
+                    app.state.repository, publication
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            return {
+                "id": publication_id,
+                "public_visibility": "provisional",
+                "publication_state": "PUBLISHING",
+                **result,
+            }
         updated = app.state.repository.update_object_metadata(
             publication_id, {**publication.metadata, "public_visibility": visibility}
         )

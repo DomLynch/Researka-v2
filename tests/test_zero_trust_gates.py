@@ -957,7 +957,7 @@ def test_legacy_auto_trust_setting_cannot_list_everyone(monkeypatch: pytest.Monk
     assert publication.metadata["public_visibility"] == "provisional"
 
 
-def test_provisional_hidden_from_public_list_and_admin_promotes(client) -> None:
+def test_unbound_provisional_cannot_be_promoted(client) -> None:
     repo = client.app.state.repository
     publication = repo.create_object(
         ResearchObject(
@@ -978,10 +978,10 @@ def test_provisional_hidden_from_public_list_and_admin_promotes(client) -> None:
         json={"visibility": "listed"},
         headers={"x-api-key": "test-admin-key"},
     )
-    assert promoted.status_code == 200
+    assert promoted.status_code == 409
 
     listed_ids = [row["id"] for row in client.get("/publications").json()["publications"]]
-    assert publication.id in listed_ids
+    assert publication.id not in listed_ids
 
 
 def test_bundle_cited_as_is_first_class_and_reviewers_crosswalk() -> None:
