@@ -324,8 +324,18 @@ class OSFClient:
             raise RuntimeError("osf_file_response_not_object")
         return parsed
 
+    def _url_json_with_retry(self, url: str) -> dict[str, Any]:
+        for attempt in range(len(OSF_RETRY_DELAYS_SECONDS) + 1):
+            try:
+                return self._url_json(url)
+            except (RuntimeError, OSError) as exc:
+                if attempt == len(OSF_RETRY_DELAYS_SECONDS) or not _is_transient_osf_error(exc, method="GET", path=url):
+                    raise
+                _sleep_before_retry(attempt)
+        raise RuntimeError("osf_page_retry_exhausted")
+
     def list_child_nodes(self, node_id: str) -> list[dict[str, Any]]:
-        response = self._request("GET", f"/nodes/{node_id}/children/")
+        response = self._request("GET", f"/nodes/{node_id}/children/?page[size]=100")
         nodes: list[dict[str, Any]] = []
         seen: set[str] = set()
         while response:
@@ -335,7 +345,7 @@ class OSFClient:
             if not isinstance(next_url, str) or not next_url or next_url in seen:
                 break
             seen.add(next_url)
-            response = self._url_json(next_url)
+            response = self._url_json_with_retry(next_url)
         return nodes
 
     def current_user(self) -> dict[str, Any] | None:
@@ -467,12 +477,28 @@ class OSFClient:
         for attempt in range(len(OSF_RETRY_DELAYS_SECONDS) + 1):
             providers = self._request("GET", f"/nodes/{node_id}/files/") or {}
             provider = next(
-                (item for item in providers.get("data", []) if isinstance(item, dict) and item.get("id") == "osfstorage"),
+                (
+                    item
+                    for item in providers.get("data", [])
+                    if isinstance(item, dict)
+                    and (
+                        item.get("id") == "osfstorage"
+                        or (
+                            isinstance(item.get("attributes"), dict)
+                            and item["attributes"].get("provider") == "osfstorage"
+                        )
+                    )
+                ),
                 None,
             )
             links = provider.get("links", {}) if isinstance(provider, dict) else {}
+            relationships = provider.get("relationships", {}) if isinstance(provider, dict) else {}
+            files = relationships.get("files", {}) if isinstance(relationships, dict) else {}
+            file_links = files.get("links", {}) if isinstance(files, dict) else {}
+            related = file_links.get("related", {}) if isinstance(file_links, dict) else {}
             upload_root = links.get("upload") if isinstance(links, dict) else None
             files_url = links.get("files") if isinstance(links, dict) else None
+            files_url = files_url or (related.get("href") if isinstance(related, dict) else None)
             if isinstance(upload_root, str) and isinstance(files_url, str):
                 return upload_root, files_url
             if attempt < len(OSF_RETRY_DELAYS_SECONDS):
@@ -520,6 +546,12 @@ def _is_transient_osf_error(exc: Exception, *, method: str, path: str) -> bool:
         return True
     if message.startswith(f"osf_request_failed:{method}:{path}:"):
         return any(marker in message for marker in OSF_TRANSIENT_ERROR_MARKERS)
+    if message.startswith(f"osf_file_request_failed:{method}:"):
+        return any(marker in message for marker in OSF_TRANSIENT_ERROR_MARKERS)
+    if message.startswith(f"osf_file_timeout:{method}:"):
+        return True
+    if message.startswith("osf_file_unreachable:"):
+        return True
     return message.startswith(f"osf_unreachable:{path}:")
 
 

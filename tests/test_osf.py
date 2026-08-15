@@ -136,19 +136,27 @@ def _storage_client(monkeypatch: pytest.MonkeyPatch, *, stored: bytes) -> tuple[
 def test_list_child_nodes_follows_osf_pagination(monkeypatch: pytest.MonkeyPatch) -> None:
     client = OSFClient(OSFConfig("https://api.osf.io/v2", "test-token", "root-node"))
     next_url = "https://api.osf.io/v2/nodes/root-node/children/?page=2"
-    monkeypatch.setattr(client, "_request", lambda *_args, **_kwargs: {
-        "data": [{"id": "node-1"}], "links": {"next": next_url},
-    })
+    requests: list[tuple[object, ...]] = []
+
+    def first_page(*args: object, **_kwargs: object) -> dict[str, Any]:
+        requests.append(args)
+        return {"data": [{"id": "node-1"}], "links": {"next": next_url}}
+
+    monkeypatch.setattr(client, "_request", first_page)
     followed: list[str] = []
 
     def next_page(url: str) -> dict[str, Any]:
         followed.append(url)
+        if len(followed) == 1:
+            raise RuntimeError("osf_file_request_failed:GET:502:try later")
         return {"data": [{"id": "node-2"}], "links": {"next": None}}
 
     monkeypatch.setattr(client, "_url_json", next_page)
+    monkeypatch.setattr("runtime_core.osf._sleep_before_retry", lambda _attempt: None)
 
     assert [node["id"] for node in client.list_child_nodes("root-node")] == ["node-1", "node-2"]
-    assert followed == [next_url]
+    assert requests == [("GET", "/nodes/root-node/children/?page[size]=100")]
+    assert followed == [next_url, next_url]
 
 
 def test_upload_package_waits_for_osf_storage(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -160,9 +168,12 @@ def test_upload_package_waits_for_osf_storage(monkeypatch: pytest.MonkeyPatch) -
         provider_calls += 1
         if provider_calls == 1:
             return {"data": []}
-        return {"data": [{"id": "osfstorage", "links": {
-            "upload": "https://files.osf.io/upload/", "files": "https://files.osf.io/list/",
-        }}]}
+        return {"data": [{
+            "id": "node-1:osfstorage",
+            "attributes": {"provider": "osfstorage"},
+            "links": {"upload": "https://files.osf.io/upload/"},
+            "relationships": {"files": {"links": {"related": {"href": "https://api.osf.io/v2/files/"}}}},
+        }]}
 
     monkeypatch.setattr(client, "_request", providers)
     monkeypatch.setattr(client, "_url_json", lambda _url: {"data": []})
