@@ -326,8 +326,17 @@ class OSFClient:
 
     def list_child_nodes(self, node_id: str) -> list[dict[str, Any]]:
         response = self._request("GET", f"/nodes/{node_id}/children/")
-        data = response.get("data", []) if response else []
-        return [item for item in data if isinstance(item, dict)]
+        nodes: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        while response:
+            nodes.extend(item for item in response.get("data", []) if isinstance(item, dict))
+            links = response.get("links", {})
+            next_url = links.get("next") if isinstance(links, dict) else None
+            if not isinstance(next_url, str) or not next_url or next_url in seen:
+                break
+            seen.add(next_url)
+            response = self._url_json(next_url)
+        return nodes
 
     def current_user(self) -> dict[str, Any] | None:
         response = self._request("GET", "/users/me/")
@@ -406,20 +415,7 @@ class OSFClient:
         *,
         release_id: str,
     ) -> list[dict[str, Any]]:
-        providers = self._request("GET", f"/nodes/{node_id}/files/") or {}
-        provider = next(
-            (
-                item
-                for item in providers.get("data", [])
-                if isinstance(item, dict) and item.get("id") == "osfstorage"
-            ),
-            None,
-        )
-        links = provider.get("links", {}) if isinstance(provider, dict) else {}
-        upload_root = links.get("upload") if isinstance(links, dict) else None
-        files_url = links.get("files") if isinstance(links, dict) else None
-        if not isinstance(upload_root, str) or not isinstance(files_url, str):
-            raise RuntimeError("osf_storage_links_missing")
+        upload_root, files_url = self._storage_links(node_id)
         existing = self._url_json(files_url).get("data", [])
         by_name = {
             str(item.get("attributes", {}).get("name")): item
@@ -466,6 +462,22 @@ class OSFClient:
                 "size": len(raw),
             })
         return receipts
+
+    def _storage_links(self, node_id: str) -> tuple[str, str]:
+        for attempt in range(len(OSF_RETRY_DELAYS_SECONDS) + 1):
+            providers = self._request("GET", f"/nodes/{node_id}/files/") or {}
+            provider = next(
+                (item for item in providers.get("data", []) if isinstance(item, dict) and item.get("id") == "osfstorage"),
+                None,
+            )
+            links = provider.get("links", {}) if isinstance(provider, dict) else {}
+            upload_root = links.get("upload") if isinstance(links, dict) else None
+            files_url = links.get("files") if isinstance(links, dict) else None
+            if isinstance(upload_root, str) and isinstance(files_url, str):
+                return upload_root, files_url
+            if attempt < len(OSF_RETRY_DELAYS_SECONDS):
+                _sleep_before_retry(attempt)
+        raise RuntimeError("osf_storage_links_missing")
 
 
 def _publication_tag(publication_id: str) -> str:

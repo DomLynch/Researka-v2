@@ -133,6 +133,56 @@ def _storage_client(monkeypatch: pytest.MonkeyPatch, *, stored: bytes) -> tuple[
     return client, methods
 
 
+def test_list_child_nodes_follows_osf_pagination(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = OSFClient(OSFConfig("https://api.osf.io/v2", "test-token", "root-node"))
+    next_url = "https://api.osf.io/v2/nodes/root-node/children/?page=2"
+    monkeypatch.setattr(client, "_request", lambda *_args, **_kwargs: {
+        "data": [{"id": "node-1"}], "links": {"next": next_url},
+    })
+    followed: list[str] = []
+
+    def next_page(url: str) -> dict[str, Any]:
+        followed.append(url)
+        return {"data": [{"id": "node-2"}], "links": {"next": None}}
+
+    monkeypatch.setattr(client, "_url_json", next_page)
+
+    assert [node["id"] for node in client.list_child_nodes("root-node")] == ["node-1", "node-2"]
+    assert followed == [next_url]
+
+
+def test_upload_package_waits_for_osf_storage(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = OSFClient(OSFConfig("https://api.osf.io/v2", "test-token", "root-node"))
+    provider_calls = 0
+
+    def providers(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        nonlocal provider_calls
+        provider_calls += 1
+        if provider_calls == 1:
+            return {"data": []}
+        return {"data": [{"id": "osfstorage", "links": {
+            "upload": "https://files.osf.io/upload/", "files": "https://files.osf.io/list/",
+        }}]}
+
+    monkeypatch.setattr(client, "_request", providers)
+    monkeypatch.setattr(client, "_url_json", lambda _url: {"data": []})
+    monkeypatch.setattr("runtime_core.osf._sleep_before_retry", lambda _attempt: None)
+
+    def url_bytes(method: str, _url: str, *, body: bytes | None = None) -> bytes:
+        if method == "PUT":
+            assert body == b"Body\n"
+            return json.dumps({"data": {"links": {"download": "https://files.osf.io/download/body"}}}).encode()
+        assert method == "GET" and body is None
+        return b"Body\n"
+
+    monkeypatch.setattr(client, "_url_bytes", url_bytes)
+
+    receipts = client.upload_package("node-1", {"manuscript.md": "Body\n"}, release_id="a" * 64)
+
+    assert provider_calls == 2
+    assert receipts[0]["logical_name"] == "manuscript.md"
+
+
 def test_osf_package_release_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     client, methods = _storage_client(monkeypatch, stored=b"Body\n")
 
