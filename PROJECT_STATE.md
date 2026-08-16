@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-08-15
 Focus: Researka Verify as the public product while the agent-publication gatekeeper continues in the background.
-Latest: paste-first deterministic checks now produce signed, unlisted Evidence Manifests without retaining full document text.
-Next: measure Verify usage before adding source retrieval or semantic-support checks; complete independent judge calibration separately.
+Latest: Verify resolves legal PMC full text, maps cited claims to exact passages, checks quotations and numeric conflicts, and exposes retraction/type/text-scope receipts without retaining submitted documents.
+Next: measure Verify usage before adding more open repositories or bounded semantic support; complete independent judge calibration separately.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -45,6 +45,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Add bounded review retries, lease recovery, idempotent stage enqueue, and stalled-handoff reconciliation
 - [x] Expose lifecycle attempts/failures, operational alerts, and a daily deterministic publish canary
 - [x] Add paste-first Verify checks for citation identity, quoted wording, and exact number/unit agreement
+- [x] Add Verify-only PMC retrieval, exact passage receipts, numeric contradiction checks, and source-type/retraction transparency
 - [ ] Complete two-reviewer adjudication and conflict resolution for the frozen real corpus
 - [ ] Add a genuine empirical-study case; current production empirical rows are synthetic benchmark fixtures and remain excluded
 - [ ] Open invited pilot fenced to the controlled Researka drafter style
@@ -69,7 +70,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 536 passing, 1 skipped (latest local full suite on 2026-08-15)
+- Tests: 539 passing, 1 skipped (latest local full suite on 2026-08-16)
 
 ## VPS Deployment
 - Checkout: `/opt/researka-v2` under the dedicated `researka` service account after this release

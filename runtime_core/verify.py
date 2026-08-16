@@ -10,7 +10,7 @@ from typing import Any
 from runtime_core.doi_resolver import resolve_dois, source_identity, verify_source_metadata
 from runtime_core.evidence_quality import quantity_tokens, support_for_claim
 
-VERIFY_SCHEMA_VERSION = 1
+VERIFY_SCHEMA_VERSION = 2
 _DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
 _PMID_RE = re.compile(r"(?:\bPMID\s*:?\s*|pubmed\.ncbi\.nlm\.nih\.gov/)(\d{4,10})", re.IGNORECASE)
 _REFERENCE_HEADING_RE = re.compile(r"(?im)^\s*#{0,4}\s*(?:references|bibliography|works cited)\s*$")
@@ -119,7 +119,7 @@ def _claim_checks(
                 continue
             if quotes:
                 source.setdefault("verification_quotes", []).extend(quotes)
-            if quantities:
+            if len(sentence) >= 40:
                 source.setdefault("verification_claims", []).append(sentence[:500])
     remaining = max_checks
     omitted = 0
@@ -172,6 +172,11 @@ def build_evidence_manifest(
     missing_dois = set(doi_result.get("missing", []))
     resolved_dois = set(doi_result.get("checked", [])) - missing_dois if doi_result.get("available") else set()
     metadata_checked = set(metadata.get("checked", [])) | set(metadata.get("identifier_checked", []))
+    source_profiles = {
+        str(row.get("identity") or ""): row
+        for row in metadata.get("source_profiles", [])
+        if isinstance(row, dict)
+    }
     failed_identities = (
         set(metadata.get("retracted", []))
         | set(metadata.get("title_mismatches", []))
@@ -182,14 +187,72 @@ def build_evidence_manifest(
         doi = str(source.get("doi") or "")
         failed = doi in missing_dois or identity in failed_identities
         checked = doi in resolved_dois or identity in metadata_checked or failed
+        profile = source_profiles.get(identity, {})
+        source_types = profile.get("publication_types", [])
         detail = (
-            "Source identifier failed registration, retraction, or supplied-title checks."
+            "Source is marked as retracted by an authoritative registry."
+            if identity in set(metadata.get("retracted", []))
+            else "Source identifier or supplied title did not match an authoritative registry."
             if failed
             else "Source identifier resolved in an authoritative registry."
             if checked
             else "The source registry was unavailable or returned no authoritative record."
         )
-        findings.append({"kind": "citation", "status": "fail" if failed else "pass" if checked else "not_checked", "source": identity, "detail": detail})
+        findings.append({
+            "kind": "citation",
+            "status": "fail" if failed else "pass" if checked else "not_checked",
+            "source": identity,
+            "detail": detail,
+            "source_type": source_types[0] if source_types else None,
+            "text_scope": profile.get("text_scope"),
+        })
+    returned_claims = {
+        (str(row.get("identity") or ""), str(row.get("text") or ""))
+        for row in metadata.get("claim_checks", [])
+    }
+    for row in metadata.get("claim_checks", []):
+        outcome = str(row.get("outcome") or "not_checked")
+        status = (
+            "pass"
+            if outcome == "supported"
+            else "fail"
+            if outcome in {"contradicted", "unsupported"} and row.get("claimed_quantities")
+            else "not_checked"
+        )
+        findings.append({
+            "kind": "claim",
+            "status": status,
+            "source": row.get("identity"),
+            "text": str(row.get("text") or "")[:500],
+            "passage": str(row.get("passage") or "")[:700] or None,
+            "outcome": outcome,
+            "detail": (
+                "The cited source contains the same quantities in a context-matched passage."
+                if outcome == "supported"
+                else "The closest context-matched source passage reports different quantities."
+                if outcome == "contradicted"
+                else "No passage with the claimed quantities was found in the retrieved source text."
+                if outcome == "unsupported"
+                else "A related passage was found, but deterministic matching cannot prove semantic support."
+                if outcome == "passage_found"
+                else "No deterministic supporting passage was found; semantic support was not assessed."
+            ),
+        })
+    for source in sources:
+        identity = source_identity(source) or "unknown"
+        findings.extend(
+            {
+                "kind": "claim",
+                "status": "not_checked",
+                "source": identity,
+                "text": value,
+                "passage": None,
+                "outcome": "not_checked",
+                "detail": "No authoritative abstract or open full text was available for this check.",
+            }
+            for value in source.get("verification_claims", [])
+            if (identity, value) not in returned_claims
+        )
     for kind, key in (("quotation", "quote_checks"), ("number", "number_checks")):
         returned = {
             (str(row.get("identity") or ""), str(row.get("text") or ""))
@@ -202,6 +265,8 @@ def build_evidence_manifest(
                 "status": "pass" if available and row.get("matched") else "fail" if available else "not_checked",
                 "source": row.get("identity"),
                 "text": str(row.get("text") or "")[:500],
+                "passage": str(row.get("passage") or "")[:700] or None,
+                "outcome": row.get("outcome"),
                 "detail": (
                     "Exact text found in retrieved source text."
                     if kind == "quotation" and row.get("matched")
@@ -234,7 +299,10 @@ def build_evidence_manifest(
         {"kind": "number", "status": "not_checked", "source": None, "text": value, "detail": "Numeric claim could not be mapped to a specific citation."}
         for value in unmapped_numbers
     )
-    checks = {kind: _check_summary(findings, kind) for kind in ("citation", "number", "quotation")}
+    checks = {
+        kind: _check_summary(findings, kind)
+        for kind in ("citation", "claim", "number", "quotation")
+    }
     has_failures = any(row["status"] == "fail" for row in findings)
     has_unknowns = (
         any(row["status"] == "not_checked" for row in findings)
@@ -260,8 +328,9 @@ def build_evidence_manifest(
         "findings": findings,
         "limitations": [
             "This receipt verifies source identity and literal text/number agreement where authoritative text is available.",
-            "It does not judge whether a source semantically supports the document's argument.",
+            "Exact passage and numeric-conflict checks are deterministic; related passages do not prove semantic entailment.",
             "Paywalled or unavailable source text is reported as not checked, never as passed.",
+            "Registry type and retraction checks do not replace study-quality or risk-of-bias appraisal.",
             (
                 f"{checks_omitted} additional literal checks were omitted by the "
                 f"{max_literal_checks}-check receipt cap."

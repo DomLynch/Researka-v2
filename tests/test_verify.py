@@ -39,6 +39,21 @@ def test_manifest_separates_pass_fail_and_unchecked(monkeypatch) -> None:
     })
     monkeypatch.setattr("runtime_core.verify.verify_source_metadata", lambda _, **__: {
         "checked": ["doi:10.1234/example"],
+        "source_profiles": [{
+            "identity": "doi:10.1234/example",
+            "publication_types": ["journal-article"],
+            "retracted": False,
+            "text_scope": "registry_abstract",
+        }],
+        "claim_checks": [{
+            "identity": "doi:10.1234/example",
+            "text": "The intervention reduced risk by 47% [1].",
+            "authority_available": True,
+            "outcome": "contradicted",
+            "passage": "The intervention reduced risk by 12%.",
+            "claimed_quantities": [["47", "%"]],
+            "passage_quantities": [["12", "%"]],
+        }],
         "quote_checks": [{
             "identity": "doi:10.1234/example", "text": "The trial enrolled 120 adults with confirmed disease",
             "authority_available": True, "matched": True,
@@ -56,7 +71,14 @@ def test_manifest_separates_pass_fail_and_unchecked(monkeypatch) -> None:
     assert manifest["overall_status"] == "issues_found"
     assert manifest["checks"]["citation"] == {"found": 1, "checked": 1, "verified": 1, "failed": 0, "not_checked": 0}
     assert manifest["checks"]["quotation"]["verified"] == 1
+    assert manifest["checks"]["claim"]["failed"] == 1
     assert manifest["checks"]["number"]["failed"] == 1
+    contradiction = next(row for row in manifest["findings"] if row["kind"] == "claim")
+    assert contradiction["outcome"] == "contradicted"
+    assert contradiction["passage"] == "The intervention reduced risk by 12%."
+    citation = next(row for row in manifest["findings"] if row["kind"] == "citation")
+    assert citation["source_type"] == "journal-article"
+    assert citation["text_scope"] == "registry_abstract"
     assert "text" not in manifest["document"]
 
 
@@ -126,8 +148,180 @@ def test_source_text_checks_require_exact_quote_and_number(monkeypatch) -> None:
 
     assert result is not None
     assert result["title_mismatches"] == []
+    assert result["source_profiles"][0]["text_scope"] == "registry_abstract"
     assert result["quote_checks"][0]["matched"] is True
     assert result["number_checks"][0]["matched"] is False
+    assert result["claim_checks"][0]["outcome"] == "contradicted"
+    assert "reduced risk by 12%" in result["claim_checks"][0]["passage"]
+
+
+def test_pmc_lookup_returns_exact_passage_for_supported_claim(monkeypatch) -> None:
+    requested_urls: list[str] = []
+
+    class Response:
+        def __init__(
+            self,
+            *,
+            payload: dict[str, Any] | None = None,
+            text: str = "",
+            status_code: int = 200,
+        ) -> None:
+            self._payload = payload or {}
+            self.text = text
+            self.status_code = status_code
+
+        def json(self) -> dict[str, Any]:
+            return self._payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class Client:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> "Client":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> Response:
+            requested_urls.append(url)
+            if "idconv" in url:
+                return Response(payload={"records": [{
+                    "doi": "10.1234/example", "pmid": "12345678", "pmcid": "PMC1234567",
+                }]})
+            if "efetch" in url:
+                return Response(text="""<pmc-articleset><article><front><article-meta>
+                    <article-id pub-id-type="pmcid">PMC1234567</article-id>
+                    <article-id pub-id-type="pmid">12345678</article-id>
+                    <article-id pub-id-type="doi">10.1234/example</article-id>
+                    </article-meta></front><body><p>The intervention reduced risk by 12% in 120 adults. The database indexed 260 000 records.</p></body>
+                    </article></pmc-articleset>""")
+            if "esummary" in url:
+                return Response(payload={"result": {"12345678": {
+                    "title": "Registered intervention trial",
+                    "articleids": [{"idtype": "doi", "value": "10.1234/example"}],
+                }}})
+            if "openalex" in url:
+                return Response(status_code=404)
+            return Response(payload={"message": {
+                "title": ["Registered intervention trial"], "type": "journal-article",
+            }})
+
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", Client)
+
+    result = verify_source_metadata([{
+        "doi": "10.1234/example",
+        "pmid": "12345678",
+        "verification_claims": [
+            "The intervention reduced risk by 12% in 120 adults [1].",
+            "The database indexed 260,000 records [1].",
+        ],
+    }])
+
+    assert result is not None
+    assert any("idconv" in url and "idtype=doi" in url for url in requested_urls)
+    assert any("idconv" in url and "idtype=pmid" in url for url in requested_urls)
+    assert any("efetch" in url for url in requested_urls)
+    assert result["source_profiles"][0]["text_scope"] == "pmc_full_text"
+    assert result["source_profiles"][0]["publication_types"] == ["journal-article"]
+    assert result["claim_checks"][0]["outcome"] == "supported"
+    assert "reduced risk by 12% in 120 adults" in result["claim_checks"][0]["passage"]
+    assert result["claim_checks"][1]["outcome"] == "supported"
+    assert "260 000 records" in result["claim_checks"][1]["passage"]
+    assert result["number_checks"][0]["matched"] is True
+    assert "reduced risk by 12%" in result["number_checks"][0]["passage"]
+
+
+def test_pmc_lookup_flags_context_matched_numeric_contradiction(monkeypatch) -> None:
+    class Response:
+        status_code = 200
+
+        def __init__(self, url: str) -> None:
+            self.url = url
+            self.text = (
+                "<article><front><article-meta>"
+                '<article-id pub-id-type="pmcid">PMC1234567</article-id>'
+                '<article-id pub-id-type="doi">10.1234/example</article-id>'
+                "</article-meta></front><body><p>The intervention reduced risk by 12%.</p></body>"
+                "<back><ref><article-title>The intervention reduced risk by 47%.</article-title>"
+                "</ref></back></article>"
+                if "efetch" in url else ""
+            )
+
+        def json(self) -> dict[str, Any]:
+            if "idconv" in self.url:
+                return {"records": [{"doi": "10.1234/example", "pmcid": "PMC1234567"}]}
+            return {"message": {"title": ["Registered intervention trial"], "type": "journal-article"}}
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class Client:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> "Client":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> Response:
+            return Response(url)
+
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", Client)
+
+    result = verify_source_metadata([{
+        "doi": "10.1234/example",
+        "verification_claims": ["The intervention reduced risk by 47% [1]."],
+    }])
+
+    assert result is not None
+    assert result["claim_checks"][0]["outcome"] == "contradicted"
+    assert result["claim_checks"][0]["claimed_quantities"] == [["47", "%"]]
+    assert result["claim_checks"][0]["passage_quantities"] == [["12", "%"]]
+    assert "reduced risk by 12%" in result["claim_checks"][0]["passage"]
+
+
+def test_agent_metadata_path_does_not_trigger_automatic_pmc_fetch(monkeypatch) -> None:
+    class Response:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {"message": {"title": ["Registered intervention trial"]}}
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class Client:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> "Client":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> Response:
+            return Response()
+
+    def fail_if_called(*args: object) -> dict[str, str]:
+        raise AssertionError("automatic PMC lookup leaked into the agent path")
+
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", Client)
+    monkeypatch.setattr("runtime_core.doi_resolver._pmc_id_map", fail_if_called)
+
+    result = verify_source_metadata([{"doi": "10.1234/example"}])
+
+    assert result is not None
+    assert result["checked"] == ["doi:10.1234/example"]
 
 
 def test_document_api_stores_only_signed_manifest(monkeypatch, tmp_path) -> None:

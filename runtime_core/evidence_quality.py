@@ -18,7 +18,7 @@ PMID_PATTERN = re.compile(r"\bPMID\s*:?\s*\d+\b", re.IGNORECASE)
 BRACKETED_CITATION_PATTERN = re.compile(r"\[((?:\d+[\s,;-]*)+)\]")
 PMID_VALUE_PATTERN = re.compile(r"\bPMID\s*:?\s*(\d+)\b", re.IGNORECASE)
 QUANTITY_PATTERN = re.compile(
-    r"(?<![\w./])(?P<number>[+-]?(?:\d+(?:,\d{3})*(?:\.\d+)?|\.\d+))(?:\s*-\s*|\s*)"
+    r"(?<![\w./])(?P<number>[+-]?(?:(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?|\.\d+))(?:\s*-\s*|\s*)"
     r"(?P<unit>(?:%|percent(?:age)?(?:\s+points?)?|pp|mmol|mol|mmhg|bpm|hz|"
     r"mg|kg|ug|µg|μg|ng|ml|km|cm|mm|g|l|m|seconds?|minutes?|hours?|days?|weeks?|months?|years?)"
     r"(?:/[A-Za-zµμ]+)?)?(?![A-Za-z])",
@@ -206,7 +206,7 @@ def _quantity_tokens(text: str, sources: list[dict[str, Any]] | None = None) -> 
                 cleaned = re.sub(re.escape(value), " ", cleaned, flags=re.IGNORECASE)
     tokens: set[tuple[str, str]] = set()
     for match in QUANTITY_PATTERN.finditer(cleaned):
-        raw_number = match.group("number").replace(",", "")
+        raw_number = re.sub(r"[,\s]", "", match.group("number"))
         raw_unit = (match.group("unit") or "").strip().lower()
         if not raw_unit and BUNDLE_COUNT_PATTERN.match(cleaned[match.end() :]):
             continue

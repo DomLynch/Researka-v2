@@ -40,6 +40,11 @@ def validate_resolver_urls() -> None:
     for label, env_name, default in (
         ("pubmed", "RESEARKA_PUBMED_URL", "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"),
         ("pmc", "RESEARKA_PMC_URL", "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"),
+        (
+            "pmc_id_converter",
+            "RESEARKA_PMC_ID_CONVERTER_URL",
+            "https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/",
+        ),
         ("crossref", "RESEARKA_CROSSREF_URL", "https://api.crossref.org/works"),
         ("openalex", "RESEARKA_OPENALEX_URL", "https://api.openalex.org/works"),
     ):
@@ -166,6 +171,44 @@ def _openalex_abstract(payload: dict[str, Any]) -> str:
     return " ".join(word for _, word in sorted(positioned))
 
 
+def _pmc_id_map(client: httpx.Client, sources: list[dict[str, Any]]) -> dict[str, str]:
+    base = validated_service_url(
+        os.getenv(
+            "RESEARKA_PMC_ID_CONVERTER_URL",
+            "https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/",
+        ),
+        label="pmc_id_converter",
+    )
+    resolved: dict[str, str] = {}
+    for field, id_type in (("doi", "doi"), ("pmid", "pmid")):
+        identities: dict[str, str] = {}
+        for source in sources:
+            identity_row = _source_identity(source)
+            identifier = str(source.get(field) or "").strip().lower()
+            if identity_row and identifier:
+                identities[identifier] = identity_row[0]
+        identifiers = sorted(identities)
+        for start in range(0, len(identifiers), 200):
+            query = {
+                "ids": ",".join(identifiers[start : start + 200]),
+                "idtype": id_type,
+                "format": "json",
+                "tool": "researka",
+            }
+            if email := os.getenv("RESEARKA_NCBI_EMAIL", os.getenv("RESEARKA_CROSSREF_MAILTO", "")):
+                query["email"] = email
+            payload = _registry_payload(client, f"{base}?{urllib.parse.urlencode(query)}") or {}
+            for record in payload.get("records", []):
+                if not isinstance(record, dict):
+                    continue
+                identifier = str(record.get(field) or "").strip().lower()
+                pmcid = str(record.get("pmcid") or "").strip().upper()
+                if source_key := identities.get(identifier):
+                    if re.fullmatch(r"PMC\d+", pmcid):
+                        resolved[source_key] = pmcid
+    return resolved
+
+
 def _pmc_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> dict[str, str]:
     requested: dict[str, tuple[str, dict[str, Any]]] = {}
     for source in sources:
@@ -173,6 +216,19 @@ def _pmc_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> dict
         source_identity_tuple = _source_identity(source)
         if match and source_identity_tuple and str(source.get("evidence_origin") or "").strip().lower() == "full_text":
             requested[match.group().upper()] = (source_identity_tuple[0], source)
+    by_identity: dict[str, dict[str, Any]] = {}
+    for source in sources:
+        identity_row = _source_identity(source)
+        if identity_row:
+            by_identity[identity_row[0]] = source
+    verify_sources = [
+        source
+        for source in sources
+        if source.get("verification_claims") or source.get("verification_quotes")
+    ]
+    if verify_sources:
+        for source_key, pmcid in _pmc_id_map(client, verify_sources).items():
+            requested.setdefault(pmcid, (source_key, by_identity[source_key]))
     if not requested:
         return {}
     base = validated_service_url(
@@ -182,7 +238,15 @@ def _pmc_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> dict
     verified: dict[str, str] = {}
     pmc_ids = sorted(requested)
     for start in range(0, len(pmc_ids), 15):
-        url = f"{base}?{urllib.parse.urlencode({'db': 'pmc', 'id': ','.join(pmc_ids[start:start + 15]), 'retmode': 'xml', 'tool': 'researka'})}"
+        query = {
+            "db": "pmc",
+            "id": ",".join(pmc_ids[start : start + 15]),
+            "retmode": "xml",
+            "tool": "researka",
+        }
+        if email := os.getenv("RESEARKA_NCBI_EMAIL", os.getenv("RESEARKA_CROSSREF_MAILTO", "")):
+            query["email"] = email
+        url = f"{base}?{urllib.parse.urlencode(query)}"
         try:
             response = client.get(url)
             response.raise_for_status()
@@ -202,8 +266,75 @@ def _pmc_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> dict
             doi, pmid = (str(source.get(key) or "").strip().lower() for key in ("doi", "pmid"))
             if not (doi and ids.get("doi") == doi or not doi and pmid and ids.get("pmid") == pmid):
                 continue
-            verified[source_key] = ET.tostring(article, encoding="unicode")
+            verified[source_key] = " ".join(
+                " ".join(node.itertext())
+                for node in article
+                if node.tag.rsplit("}", 1)[-1] in {"front", "body"}
+            )
     return verified
+
+
+def _plain_text(value: object) -> str:
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", str(value or ""))).split())
+
+
+def _passages(authority_texts: list[str]) -> list[str]:
+    return [
+        passage.strip()
+        for authority in authority_texts
+        for passage in re.split(r"\n+|(?<=[.!?])\s+", _plain_text(authority))
+        if 20 <= len(passage.strip()) <= 1_500
+    ]
+
+
+def _literal_passage(authority_texts: list[str], value: str) -> str:
+    needle = " ".join(value.split())
+    for authority in authority_texts:
+        text = _plain_text(authority)
+        start = text.casefold().find(needle.casefold())
+        if start >= 0:
+            return text[max(0, start - 120) : min(len(text), start + len(needle) + 120)]
+    return ""
+
+
+def _claim_evidence(authority_texts: list[str], claim: str) -> dict[str, Any]:
+    claim_quantities = quantity_tokens(claim)
+    claim_terms = _tokens(claim)
+    ranked: list[tuple[float, str, set[tuple[str, str]]]] = []
+    for passage in _passages(authority_texts):
+        passage_terms = _tokens(passage)
+        overlap = len(claim_terms & passage_terms)
+        score = overlap / max(1, min(len(claim_terms), len(passage_terms)))
+        required_overlap = 1 if len(claim_terms) <= 2 else 2
+        ranked.append((score if overlap >= required_overlap else 0.0, passage, quantity_tokens(passage)))
+    ranked.sort(key=lambda row: (row[0], len(row[1])), reverse=True)
+    exact = next(
+        (
+            row
+            for row in ranked
+            if row[0] >= 0.5 and claim_quantities and claim_quantities <= row[2]
+        ),
+        None,
+    )
+    if exact:
+        outcome, passage, passage_quantities = "supported", exact[1], exact[2]
+    elif ranked and ranked[0][0] >= 0.5:
+        _, passage, passage_quantities = ranked[0]
+        outcome = (
+            "contradicted"
+            if claim_quantities and passage_quantities and claim_quantities.isdisjoint(passage_quantities)
+            else "unsupported"
+            if claim_quantities
+            else "passage_found"
+        )
+    else:
+        outcome, passage, passage_quantities = "unsupported" if claim_quantities else "unresolved", "", set()
+    return {
+        "outcome": outcome,
+        "passage": passage[:700],
+        "claimed_quantities": [list(value) for value in sorted(claim_quantities)],
+        "passage_quantities": [list(value) for value in sorted(passage_quantities)],
+    }
 
 
 def _crossref_retracted(payload: dict[str, Any]) -> bool:
@@ -382,6 +513,7 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
         source, (identity, doi, openalex_id) = item
         titles: list[str] = []
         abstracts: list[str] = []
+        publication_types: set[str] = set()
         retracted = False
         authority_count = 0
         if doi:
@@ -397,6 +529,8 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
                     titles.extend(str(value) for value in raw_titles if value)
                 if message.get("abstract"):
                     abstracts.append(str(message["abstract"]))
+                if message.get("type"):
+                    publication_types.add(str(message["type"]).strip().lower())
                 retracted = retracted or _crossref_retracted(message)
         if openalex_id and (not authority_count or not abstracts):
             payload = _registry_payload(client, f"{openalex_base}/{openalex_id}")
@@ -406,6 +540,8 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
                     titles.append(str(payload.get("title") or payload.get("display_name")))
                 if abstract := _openalex_abstract(payload):
                     abstracts.append(abstract)
+                if payload.get("type"):
+                    publication_types.add(str(payload["type"]).strip().lower())
                 retracted = retracted or bool(payload.get("is_retracted"))
         evidence = [
             str(source.get(key) or "").strip()
@@ -420,10 +556,9 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
         verification_claims = [
             str(value).strip()[:500]
             for value in source.get("verification_claims", [])
-            if str(value).strip() and quantity_tokens(str(value))
+            if str(value).strip()
         ]
-        full_text_origin = str(source.get("evidence_origin") or "").strip().lower() == "full_text"
-        full_text = full_texts.get(identity, "") if full_text_origin else ""
+        full_text = full_texts.get(identity, "")
         authority_texts = [full_text] if full_text else abstracts
         evidence_text_available = bool(evidence and authority_texts)
         evidence_text_verified = evidence_text_available and any(
@@ -444,20 +579,38 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
                 "matched": bool(authority_texts) and _normalized_text(value) in " ".join(
                     _normalized_text(authority) for authority in authority_texts
                 ),
+                "passage": _literal_passage(authority_texts, value),
             }
             for value in verification_quotes
         ]
-        authority_quantities = {
-            token for authority in authority_texts for token in quantity_tokens(authority)
-        }
+        claim_checks = []
+        for value in verification_claims:
+            evidence_check = _claim_evidence(authority_texts, value) if authority_texts else {
+                "outcome": "not_checked",
+                "passage": "",
+                "claimed_quantities": [list(token) for token in sorted(quantity_tokens(value))],
+                "passage_quantities": [],
+            }
+            claim_checks.append({
+                "identity": identity,
+                "text": value,
+                "authority_available": bool(authority_texts),
+                **evidence_check,
+            })
+        claims_by_text = {row["text"]: row for row in claim_checks}
         number_checks = [
             {
                 "identity": identity,
                 "text": value,
                 "authority_available": bool(authority_texts),
-                "matched": bool(authority_texts) and quantity_tokens(value) <= authority_quantities,
+                "matched": claims_by_text[value]["outcome"] == "supported",
+                "outcome": claims_by_text[value]["outcome"],
+                "passage": claims_by_text[value]["passage"],
+                "claimed_quantities": claims_by_text[value]["claimed_quantities"],
+                "passage_quantities": claims_by_text[value]["passage_quantities"],
             }
             for value in verification_claims
+            if quantity_tokens(value)
         ]
         return {
             "identity": identity,
@@ -471,8 +624,17 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
             "evidence_text_submitted": bool(evidence),
             "evidence_text_available": evidence_text_available,
             "evidence_text_verified": evidence_text_verified,
+            "source_profile": {
+                "identity": identity,
+                "publication_types": sorted(publication_types),
+                "retracted": retracted,
+                "text_scope": (
+                    "pmc_full_text" if full_text else "registry_abstract" if abstracts else "unavailable"
+                ),
+            },
             "quote_checks": quote_checks,
             "number_checks": number_checks,
+            "claim_checks": claim_checks,
         }
 
     try:
@@ -547,8 +709,10 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
         "identifier_unverified": identifier_unverified,
         "identifier_mismatches": identifier_mismatches,
         "canonical_duplicate_indices": canonical_duplicate_indices,
+        "source_profiles": [row["source_profile"] for row in results if row.get("source_profile")],
         "quote_checks": [check for row in results for check in row.get("quote_checks", [])],
         "number_checks": [check for row in results for check in row.get("number_checks", [])],
+        "claim_checks": [check for row in results for check in row.get("claim_checks", [])],
     }
 
 
