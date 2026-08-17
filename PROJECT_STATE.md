@@ -3,8 +3,8 @@
 ## Current Sprint
 Week of: 2026-08-15
 Focus: Researka Verify as the public product while the agent-publication gatekeeper continues in the background.
-Latest: Verify resolves legal PMC full text, maps cited claims to exact passages, checks quotations and numeric conflicts, and exposes retraction/type/text-scope receipts without retaining submitted documents.
-Next: measure Verify usage before adding more open repositories or bounded semantic support; complete independent judge calibration separately.
+Latest: Verify resolves legal PMC and arXiv HTML, maps cited claims to exact passages, checks quotations and numeric conflicts, and exposes retraction/type/text-scope receipts without retaining submitted documents.
+Next: measure Verify usage before adding more repositories or bounded semantic support; complete independent judge calibration separately.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -46,6 +46,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - [x] Expose lifecycle attempts/failures, operational alerts, and a daily deterministic publish canary
 - [x] Add paste-first Verify checks for citation identity, quoted wording, and exact number/unit agreement
 - [x] Add Verify-only PMC retrieval, exact passage receipts, numeric contradiction checks, and source-type/retraction transparency
+- [x] Add Verify-only arXiv HTML retrieval for AI, economics, mathematics, and physics preprints
 - [ ] Complete two-reviewer adjudication and conflict resolution for the frozen real corpus
 - [ ] Add a genuine empirical-study case; current production empirical rows are synthetic benchmark fixtures and remain excluded
 - [ ] Open invited pilot fenced to the controlled Researka drafter style

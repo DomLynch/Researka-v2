@@ -7,12 +7,17 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from runtime_core.doi_resolver import resolve_dois, source_identity, verify_source_metadata
+from runtime_core.doi_resolver import normalize_arxiv_id, resolve_dois, source_identity, verify_source_metadata
 from runtime_core.evidence_quality import quantity_tokens, support_for_claim
 
 VERIFY_SCHEMA_VERSION = 2
 _DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
 _PMID_RE = re.compile(r"(?:\bPMID\s*:?\s*|pubmed\.ncbi\.nlm\.nih\.gov/)(\d{4,10})", re.IGNORECASE)
+_ARXIV_RE = re.compile(
+    r"(?:\barXiv\s*:\s*|arxiv\.org/(?:abs|html|pdf)/)"
+    r"((?:\d{4}\.\d{4,5}|[A-Za-z-]+(?:\.[A-Za-z-]+)?/\d{7})(?:v\d+)?)",
+    re.IGNORECASE,
+)
 _REFERENCE_HEADING_RE = re.compile(r"(?im)^\s*#{0,4}\s*(?:references|bibliography|works cited)\s*$")
 _QUOTE_RE = re.compile(r"[\"“]([^\"”\n]{20,500})[\"”]")
 
@@ -38,6 +43,9 @@ def _identifier_rows(text: str) -> list[dict[str, Any]]:
             (match.start(), "doi", _clean_doi(match.group(0))) for match in _DOI_RE.finditer(section)
         ] + [
             (match.start(), "pmid", match.group(1)) for match in _PMID_RE.finditer(section)
+        ] + [
+            (match.start(), "arxiv_id", normalize_arxiv_id(match.group(1)))
+            for match in _ARXIV_RE.finditer(section)
         ]
         for _, kind, value in sorted(matches):
             identity = f"{kind}:{value}"
@@ -45,18 +53,17 @@ def _identifier_rows(text: str) -> list[dict[str, Any]]:
                 continue
             seen.add(identity)
             row: dict[str, Any] = {kind: value}
-            if kind == "doi":
-                for line in reference_text.splitlines():
-                    if value not in line.lower():
-                        continue
-                    year = re.search(r"\b(?:19|20)\d{2}\b", line)
-                    surname = re.match(r"\s*(?:\[?\d+\]?\.?\s*)?([A-Z][A-Za-z'’-]{2,})", line)
-                    if year and surname:
-                        row["_citation_aliases"] = [
-                            f"{surname.group(1)} {year.group(0)}",
-                            f"{surname.group(1)} et al {year.group(0)}",
-                        ]
-                    break
+            for line in reference_text.splitlines():
+                if value not in line.lower():
+                    continue
+                year = re.search(r"\b(?:19|20)\d{2}\b", line)
+                surname = re.match(r"\s*(?:\[?\d+\]?\.?\s*)?([A-Z][A-Za-z'’-]{2,})", line)
+                if year and surname:
+                    row["_citation_aliases"] = [
+                        f"{surname.group(1)} {year.group(0)}",
+                        f"{surname.group(1)} et al {year.group(0)}",
+                    ]
+                break
             rows.append(row)
     return rows
 
@@ -194,7 +201,7 @@ def build_evidence_manifest(
             if identity in set(metadata.get("retracted", []))
             else "Source identifier or supplied title did not match an authoritative registry."
             if failed
-            else "Source identifier resolved in an authoritative registry."
+            else "Source identifier resolved in an authoritative registry or repository."
             if checked
             else "The source registry was unavailable or returned no authoritative record."
         )

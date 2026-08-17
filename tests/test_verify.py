@@ -4,10 +4,12 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from apps.runtime_api.app import create_app
-from contracts import ObjectType
+from contracts import ObjectType, VerificationSource
 from runtime_core.doi_resolver import verify_source_metadata
 from runtime_core.repos import InMemoryRuntimeRepository
 from runtime_core.verify import build_evidence_manifest, manifest_signature_valid, sign_manifest
@@ -19,6 +21,12 @@ The intervention reduced risk by 47% [1]. The authors wrote "The trial enrolled 
 ## References
 1. Smith J. (2024). Trial report. https://doi.org/10.1234/example
 """
+
+
+def test_verification_source_validates_arxiv_identifier() -> None:
+    assert VerificationSource(arxiv_id="2402.08954v2").arxiv_id == "2402.08954v2"
+    with pytest.raises(ValidationError):
+        VerificationSource(arxiv_id="../../internal")
 
 
 def test_database_constraint_covers_all_object_types() -> None:
@@ -286,6 +294,114 @@ def test_pmc_lookup_flags_context_matched_numeric_contradiction(monkeypatch) -> 
     assert result["claim_checks"][0]["claimed_quantities"] == [["47", "%"]]
     assert result["claim_checks"][0]["passage_quantities"] == [["12", "%"]]
     assert "reduced risk by 12%" in result["claim_checks"][0]["passage"]
+
+
+def test_arxiv_lookup_checks_body_and_excludes_bibliography(monkeypatch) -> None:
+    class Response:
+        status_code = 200
+        encoding = "utf-8"
+        url = "https://arxiv.org/html/2402.08954"
+        text = """<html><body><article class="ltx_document">
+            <h1>Verified preprint</h1><p>The intervention reduced risk by 12% in 120 adults.</p>
+            <p>This body is deliberately long enough to be treated as authoritative open text for deterministic checks.</p>
+            <section class="ltx_bibliography"><p>A cited paper reduced risk by 47%.</p></section>
+            </article></body></html>"""
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class Client:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> "Client":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> Response:
+            assert url == "https://arxiv.org/html/2402.08954"
+            return Response()
+
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", Client)
+
+    result = verify_source_metadata([{
+        "arxiv_id": "2402.08954",
+        "verification_claims": [
+            "The intervention reduced risk by 12% in 120 adults [1].",
+            "The intervention reduced risk by 47% [1].",
+        ],
+    }])
+
+    assert result is not None
+    assert result["checked"] == ["arxiv:2402.08954"]
+    assert result["source_profiles"] == [{
+        "identity": "arxiv:2402.08954",
+        "publication_types": ["preprint"],
+        "retracted": False,
+        "text_scope": "arxiv_full_text",
+    }]
+    assert [row["outcome"] for row in result["claim_checks"]] == ["supported", "contradicted"]
+    assert "47%" not in result["claim_checks"][1]["passage"]
+
+
+def test_document_parser_recognizes_arxiv_reference(monkeypatch) -> None:
+    captured: list[dict[str, Any]] = []
+    monkeypatch.setattr("runtime_core.verify.resolve_dois", lambda _, **__: {})
+
+    def metadata(sources: list[dict[str, Any]], **_: object) -> dict[str, Any]:
+        captured.extend(sources)
+        return {}
+
+    monkeypatch.setattr("runtime_core.verify.verify_source_metadata", metadata)
+    document = """# Draft
+The intervention reduced risk by 12% in 120 adults (Frankston et al., 2024).
+
+## References
+1. Frankston et al. (2024). Verified preprint. arXiv:2402.08954
+"""
+
+    build_evidence_manifest(document, [], receipt_id="arxiv-receipt", verifier_release="verify-v1:test")
+
+    assert captured[0]["arxiv_id"] == "2402.08954"
+    assert captured[0]["verification_claims"] == [
+        "The intervention reduced risk by 12% in 120 adults (Frankston et al., 2024)."
+    ]
+
+
+def test_agent_metadata_path_does_not_fetch_arxiv(monkeypatch) -> None:
+    requested_urls: list[str] = []
+
+    class Response:
+        status_code = 404
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class Client:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> "Client":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def get(self, url: str) -> Response:
+            requested_urls.append(url)
+            return Response()
+
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", Client)
+
+    result = verify_source_metadata([{"arxiv_id": "2402.08954"}])
+
+    assert result is not None
+    assert result["unverified"] == ["arxiv:2402.08954"]
+    assert requested_urls == []
 
 
 def test_agent_metadata_path_does_not_trigger_automatic_pmc_fetch(monkeypatch) -> None:

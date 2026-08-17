@@ -153,7 +153,7 @@ Set `RESEARKA_DOI_CHECK_FAIL_CLOSED=0`, `RESEARKA_SOURCE_METADATA_FAIL_CLOSED=0`
 
 ## Researka Verify
 
-`POST /verify/documents` checks DOI/PMID registration and literal quotation and number/unit agreement where authoritative source text is available. It stores no full document text; the response links to a signed, unlisted Evidence Manifest at `GET /verify/receipts/{id}`. Configure `RESEARKA_VERIFY_SIGNING_SECRET_PATH` to a mode-600 file owned by the runtime service account and containing at least 32 random bytes; requests fail closed when it is absent. Verify reports unavailable evidence as `not_checked` and does not claim semantic source support.
+`POST /verify/documents` checks DOI/PMID/arXiv identity and literal quotation and number/unit agreement against legal PMC or arXiv HTML where available. It stores no full document text; the response links to a signed, unlisted Evidence Manifest at `GET /verify/receipts/{id}`. Configure `RESEARKA_VERIFY_SIGNING_SECRET_PATH` to a mode-600 file owned by the runtime service account and containing at least 32 random bytes; requests fail closed when it is absent. Verify reports unavailable evidence as `not_checked` and does not claim semantic source support.
 
 ## Submission lifecycle reliability
 

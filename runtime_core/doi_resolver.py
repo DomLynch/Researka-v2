@@ -19,6 +19,11 @@ from .urls import validated_service_url
 
 log = logging.getLogger(__name__)
 
+_ARXIV_ID_RE = re.compile(
+    r"(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z-]+)?/\d{7})(?:v\d+)?",
+    re.IGNORECASE,
+)
+
 
 class UnsafeSourceLocator(ValueError):
     pass
@@ -47,6 +52,7 @@ def validate_resolver_urls() -> None:
         ),
         ("crossref", "RESEARKA_CROSSREF_URL", "https://api.crossref.org/works"),
         ("openalex", "RESEARKA_OPENALEX_URL", "https://api.openalex.org/works"),
+        ("arxiv", "RESEARKA_ARXIV_HTML_URL", "https://arxiv.org/html"),
     ):
         validated_service_url(os.getenv(env_name, default), label=label)
     _base_url()
@@ -77,6 +83,13 @@ def _max_sources() -> int:
         return 100
 
 
+def _max_verify_open_texts() -> int:
+    try:
+        return min(_max_sources(), max(1, int(os.getenv("RESEARKA_VERIFY_OPEN_TEXT_MAX", "10"))))
+    except ValueError:
+        return 10
+
+
 def _source_enabled() -> bool:
     return os.getenv("RESEARKA_SOURCE_CHECK_ENABLED", os.getenv("RESEARKA_DOI_CHECK_ENABLED", "1")) == "1"
 
@@ -105,6 +118,23 @@ def _metadata_attempts() -> int:
         return max(1, int(os.getenv("RESEARKA_SOURCE_METADATA_MAX_ATTEMPTS", "3")))
     except ValueError:
         return 3
+
+
+def normalize_arxiv_id(value: object) -> str:
+    candidate = urllib.parse.unquote(str(value or "")).strip().removesuffix(".pdf")
+    return candidate.lower() if _ARXIV_ID_RE.fullmatch(candidate) else ""
+
+
+def _arxiv_id(source: dict[str, Any]) -> str:
+    if value := normalize_arxiv_id(source.get("arxiv_id")):
+        return value
+    parsed = urllib.parse.urlparse(str(source.get("url") or "").strip())
+    path = urllib.parse.unquote(parsed.path).strip("/")
+    if _trusted_host(parsed.hostname or "", "arxiv.org"):
+        prefix, _, value = path.partition("/")
+        if prefix.lower() in {"abs", "html", "pdf"}:
+            return normalize_arxiv_id(value)
+    return ""
 
 
 def _registry_payload(client: httpx.Client, url: str) -> dict[str, Any] | None:
@@ -274,6 +304,70 @@ def _pmc_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> dict
     return verified
 
 
+def _arxiv_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> dict[str, str]:
+    requested = {
+        arxiv_id: identity_row[0]
+        for source in sources
+        if (source.get("verification_claims") or source.get("verification_quotes"))
+        and (arxiv_id := _arxiv_id(source))
+        and (identity_row := _source_identity(source))
+    }
+    if not requested:
+        return {}
+    base = validated_service_url(
+        os.getenv("RESEARKA_ARXIV_HTML_URL", "https://arxiv.org/html"),
+        label="arxiv",
+    )
+    try:
+        max_bytes = min(
+            10_000_000,
+            max(100_000, int(os.getenv("RESEARKA_VERIFY_SOURCE_MAX_BYTES", "5000000"))),
+        )
+    except ValueError:
+        max_bytes = 5_000_000
+    verified: dict[str, str] = {}
+    for arxiv_id, source_key in list(requested.items())[:_max_verify_open_texts()]:
+        url = f"{base}/{urllib.parse.quote(arxiv_id, safe='/')}"
+        for attempt in range(1, _metadata_attempts() + 1):
+            try:
+                response = client.get(url)
+                if response.status_code == 404:
+                    break
+                if response.status_code == 429 or response.status_code >= 500:
+                    if attempt < _metadata_attempts():
+                        time.sleep(0.5 * attempt)
+                        continue
+                response.raise_for_status()
+                final_host = urllib.parse.urlparse(str(getattr(response, "url", url))).hostname or ""
+                content = response.text.encode(response.encoding or "utf-8", errors="replace")
+                if not _trusted_host(final_host, "arxiv.org") or len(content) > max_bytes:
+                    break
+                article = re.search(r"<article\b.*?</article>", response.text, re.IGNORECASE | re.DOTALL)
+                if not article:
+                    break
+                body = article.group(0)
+                body = re.split(
+                    r"<section\b[^>]*class=[\"'][^\"']*\bltx_bibliography\b",
+                    body,
+                    maxsplit=1,
+                    flags=re.IGNORECASE,
+                )[0]
+                body = re.sub(
+                    r"<(?:script|style|nav|footer)\b.*?</(?:script|style|nav|footer)>",
+                    " ",
+                    body,
+                    flags=re.IGNORECASE | re.DOTALL,
+                )
+                if len(text := _plain_text(body)) >= 100:
+                    verified[source_key] = text
+                break
+            except (httpx.HTTPError, OSError, UnicodeError, ValueError):
+                if attempt == _metadata_attempts():
+                    break
+                time.sleep(0.5 * attempt)
+    return verified
+
+
 def _plain_text(value: object) -> str:
     return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", str(value or ""))).split())
 
@@ -360,6 +454,8 @@ def _source_identity(source: dict[str, Any]) -> tuple[str, str | None, str | Non
     if openalex := str(source.get("openalex_id") or "").strip():
         work_id = openalex.rstrip("/").rsplit("/", 1)[-1]
         return f"openalex:{work_id.lower()}", None, urllib.parse.quote(work_id, safe="")
+    if arxiv_id := _arxiv_id(source):
+        return f"arxiv:{arxiv_id}", None, None
     url = str(source.get("url") or "").strip()
     parsed = urllib.parse.urlparse(url)
     host = parsed.hostname or ""
@@ -389,6 +485,8 @@ def _source_aliases(source: dict[str, Any]) -> set[str]:
             aliases.add(f"{prefix}:{value}")
     if value := str(source.get("openalex_id") or "").strip().lower():
         aliases.add(f"openalex:{value.rstrip('/').rsplit('/', 1)[-1]}")
+    if value := _arxiv_id(source):
+        aliases.add(f"arxiv:{value}")
     if identity := _source_identity(source):
         aliases.add(identity[0])
     return aliases
@@ -559,6 +657,8 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
             if str(value).strip()
         ]
         full_text = full_texts.get(identity, "")
+        if identity in arxiv_full_texts:
+            publication_types.add("preprint")
         authority_texts = [full_text] if full_text else abstracts
         evidence_text_available = bool(evidence and authority_texts)
         evidence_text_verified = evidence_text_available and any(
@@ -614,7 +714,7 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
         ]
         return {
             "identity": identity,
-            "checked": authority_count > 0,
+            "checked": authority_count > 0 or bool(full_text),
             "retracted": retracted,
             "title_mismatch": bool(str(source.get("title") or "").strip()) and bool(titles) and not any(
                 _text_matches(source.get("title"), title, floor=0.6) for title in titles
@@ -629,7 +729,7 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
                 "publication_types": sorted(publication_types),
                 "retracted": retracted,
                 "text_scope": (
-                    "pmc_full_text" if full_text else "registry_abstract" if abstracts else "unavailable"
+                    full_text_scopes.get(identity, "registry_abstract" if abstracts else "unavailable")
                 ),
             },
             "quote_checks": quote_checks,
@@ -642,8 +742,16 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
             timeout=_timeout_s(),
             follow_redirects=True,
             headers={"User-Agent": "Researka/1.0 (https://researka.org)"},
+            event_hooks={"request": [_require_public_source]},
         ) as client:
-            full_texts = _pmc_full_texts(client, [source for source, _ in candidates])
+            candidate_sources = [source for source, _ in candidates]
+            pmc_full_texts = _pmc_full_texts(client, candidate_sources)
+            arxiv_full_texts = _arxiv_full_texts(client, candidate_sources)
+            full_texts = {**arxiv_full_texts, **pmc_full_texts}
+            full_text_scopes = {
+                **{identity: "arxiv_full_text" for identity in arxiv_full_texts},
+                **{identity: "pmc_full_text" for identity in pmc_full_texts},
+            }
             if parallel and len(candidates) > 1:
                 with ThreadPoolExecutor(max_workers=min(8, len(candidates))) as pool:
                     results = list(pool.map(lambda item: check(client, item), candidates))
