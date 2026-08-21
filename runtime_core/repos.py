@@ -1174,7 +1174,7 @@ class PostgresRuntimeRepository:
                 SELECT * FROM runtime_jobs
                 WHERE target_object_id = %s AND stage = %s
                   AND status IN ('queued', 'leased', 'completed')
-                  AND (%s = '' OR payload->>'operation_id' = %s)
+                  AND (%s = '' OR (payload::jsonb)->>'operation_id' = %s)
                 ORDER BY created_at ASC
                 LIMIT 1
                 """,

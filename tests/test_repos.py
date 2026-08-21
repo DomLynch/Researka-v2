@@ -73,6 +73,46 @@ def test_postgres_connect_has_bounded_timeout(monkeypatch) -> None:
     ]
 
 
+def test_postgres_operation_lookup_casts_text_payload_to_jsonb(monkeypatch) -> None:
+    calls: list[tuple[str, tuple[object, ...]]] = []
+
+    class _Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def execute(self, query: str, params: tuple[object, ...]) -> None:
+            calls.append((query, params))
+
+        def fetchone(self) -> None:
+            return None
+
+    class _Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def cursor(self) -> _Cursor:
+            return _Cursor()
+
+    repo = PostgresRuntimeRepository.__new__(PostgresRuntimeRepository)
+    monkeypatch.setattr(repo, "_connect", lambda: _Connection())
+    job = RuntimeJob(
+        target_object_id="obj-reprocess",
+        stage=Stage.INTAKE,
+        payload={"operation_id": "attempt-2"},
+    )
+
+    assert repo._existing_job_for_stage(job) is None
+    query, params = calls[0]
+    assert "(payload::jsonb)->>'operation_id'" in query
+    assert params == (job.target_object_id, Stage.INTAKE.value, "attempt-2", "attempt-2")
+
+
 def test_postgres_object_row_accepts_decoded_json_metadata() -> None:
     repo = PostgresRuntimeRepository.__new__(PostgresRuntimeRepository)
 
