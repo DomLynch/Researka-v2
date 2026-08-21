@@ -1865,7 +1865,12 @@ class WorkflowEngine:
                 target_object_id=submission.id,
                 stage=Stage.REVIEW,
                 payload={
-                    "domain_slug": submission.metadata.get("domain_slug", "general")
+                    "domain_slug": submission.metadata.get("domain_slug", "general"),
+                    **(
+                        {"operation_id": job.payload["operation_id"]}
+                        if job.payload.get("operation_id")
+                        else {}
+                    ),
                 },
             )
         )
@@ -1968,6 +1973,7 @@ class WorkflowEngine:
                 payload={
                     "review_id": review.id,
                     "domain_slug": submission.metadata.get("domain_slug", "general"),
+                    "operation_id": operation_id,
                 },
             ),
         )
@@ -2138,6 +2144,7 @@ class WorkflowEngine:
                     {
                         "decision_id": decision_object.id,
                         "canonical_package_hash": package_hash,
+                        "operation_id": operation_id,
                     }
                 )
         if len(outcome.next_jobs) > 1:

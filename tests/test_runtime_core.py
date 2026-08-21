@@ -3922,6 +3922,37 @@ def test_calibration_accept_rubric_fields_stored() -> None:
     assert decision.metadata["decision"] == Decision.ACCEPT.value
 
 
+def test_reprocess_operation_propagates_through_review_and_editorial() -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _calibration_submission(repo, recommendation="accept")
+    engine = WorkflowEngine(provider=_rubric_accept_provider())
+    operation_id = "reprocess-verifier-upgrade"
+
+    intake_job = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id=submission.id,
+            stage=Stage.INTAKE,
+            payload={"operation_id": operation_id},
+        )
+    )
+    engine.handle_job(intake_job, repo)
+    repo.complete_job(intake_job.id)
+    review_job = repo.claim_next_job()
+    assert review_job is not None
+    assert review_job.payload["operation_id"] == operation_id
+
+    engine.handle_job(review_job, repo)
+    repo.complete_job(review_job.id)
+    editorial_job = repo.claim_next_job()
+    assert editorial_job is not None
+    assert editorial_job.payload["operation_id"] == operation_id
+
+    engine.handle_job(editorial_job, repo)
+    publish_job = repo.queued_jobs()[0]
+    assert publish_job.stage is Stage.PUBLISH
+    assert publish_job.payload["operation_id"] == operation_id
+
+
 def test_single_provider_accept_cannot_bypass_panel_quorum() -> None:
     class SingleProvider:
         provider = "single-reviewer"

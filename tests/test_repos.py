@@ -260,6 +260,36 @@ def test_inmemory_enqueue_is_idempotent_until_stage_fails() -> None:
     assert len(repo.jobs) == 2
 
 
+def test_inmemory_new_operation_can_reprocess_completed_stage() -> None:
+    repo = InMemoryRuntimeRepository()
+    first = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id="obj-reprocess",
+            stage=Stage.INTAKE,
+            payload={"operation_id": "attempt-1"},
+        )
+    )
+    repo.complete_job(first.id)
+
+    same = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id="obj-reprocess",
+            stage=Stage.INTAKE,
+            payload={"operation_id": "attempt-1"},
+        )
+    )
+    second = repo.enqueue_job(
+        RuntimeJob(
+            target_object_id="obj-reprocess",
+            stage=Stage.INTAKE,
+            payload={"operation_id": "attempt-2"},
+        )
+    )
+
+    assert same.id == first.id
+    assert second.id != first.id
+
+
 def test_existing_publication_does_not_bypass_publish_authorization() -> None:
     repo = InMemoryRuntimeRepository()
     submission = repo.create_object(

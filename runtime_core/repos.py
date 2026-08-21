@@ -339,13 +339,19 @@ class InMemoryRuntimeRepository:
         return self.objects.get(publication_id)
 
     def enqueue_job(self, job: RuntimeJob) -> RuntimeJob:
+        operation_id = str(job.payload.get("operation_id") or "")
         for existing_id in self.jobs_by_target[job.target_object_id]:
             existing = self.jobs[existing_id]
-            if existing.stage == job.stage and existing.status in {
-                JobStatus.QUEUED,
-                JobStatus.LEASED,
-                JobStatus.COMPLETED,
-            }:
+            same_operation = (
+                not operation_id
+                or existing.payload.get("operation_id") == operation_id
+            )
+            if (
+                existing.stage == job.stage
+                and existing.status
+                in {JobStatus.QUEUED, JobStatus.LEASED, JobStatus.COMPLETED}
+                and same_operation
+            ):
                 return existing
         self.jobs[job.id] = job
         self.jobs_by_target[job.target_object_id].append(job.id)
@@ -1161,16 +1167,18 @@ class PostgresRuntimeRepository:
         return job
 
     def _existing_job_for_stage(self, job: RuntimeJob) -> RuntimeJob | None:
+        operation_id = str(job.payload.get("operation_id") or "")
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT * FROM runtime_jobs
                 WHERE target_object_id = %s AND stage = %s
                   AND status IN ('queued', 'leased', 'completed')
+                  AND (%s = '' OR payload->>'operation_id' = %s)
                 ORDER BY created_at ASC
                 LIMIT 1
                 """,
-                (job.target_object_id, job.stage.value),
+                (job.target_object_id, job.stage.value, operation_id, operation_id),
             )
             return self._job_from_row(cur.fetchone())
 
