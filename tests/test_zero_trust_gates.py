@@ -299,6 +299,7 @@ class _MetadataResponse:
 
 def _metadata_client(
     message: dict[str, Any], pubmed: dict[str, Any] | None = None, pmc: str = "",
+    clinical_trial: dict[str, Any] | None = None,
 ) -> type:
     class MetadataClient:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -311,6 +312,8 @@ def _metadata_client(
             return None
 
         def get(self, url: str) -> _MetadataResponse:
+            if "clinicaltrials.gov" in url and clinical_trial is not None:
+                return _MetadataResponse(clinical_trial)
             if "crossref" in url:
                 return _MetadataResponse({"message": message})
             if "db=pmc" in url:
@@ -320,6 +323,45 @@ def _metadata_client(
             return _MetadataResponse({}, status_code=404)
 
     return MetadataClient
+
+
+def test_source_metadata_verifies_clinicaltrials_registry_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    title = "Pragmatic trial of metformin in prostate cancer patients"
+    summary = "A bounded randomized pragmatic metformin trial."
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client({}, clinical_trial={
+            "protocolSection": {
+                "identificationModule": {"nctId": "NCT05515978", "briefTitle": title},
+                "descriptionModule": {"briefSummary": summary},
+            },
+        }),
+    )
+
+    result = verify_source_metadata([{
+        "title": title,
+        "registry_id": "NCT05515978",
+        "evidence_span": summary,
+    }])
+
+    assert result is not None
+    assert result["available"] is True
+    assert result["recommendation"] == "pass"
+    assert result["checked"] == ["registry:nct05515978"]
+    assert result["evidence_text_verified"] == ["registry:nct05515978"]
+
+
+def test_source_metadata_holds_missing_clinicaltrials_registry_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", _metadata_client({}))
+
+    result = verify_source_metadata([{"title": "Missing trial", "registry_id": "NCT00000000"}])
+
+    assert result is not None
+    assert result["available"] is False
+    assert result["recommendation"] == Decision.REVISE.value
+    assert result["unverified"] == ["registry:nct00000000"]
 
 
 def test_intake_rejects_fabricated_doi(monkeypatch: pytest.MonkeyPatch) -> None:

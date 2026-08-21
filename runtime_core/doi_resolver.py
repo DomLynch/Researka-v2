@@ -52,6 +52,7 @@ def validate_resolver_urls() -> None:
         ),
         ("crossref", "RESEARKA_CROSSREF_URL", "https://api.crossref.org/works"),
         ("openalex", "RESEARKA_OPENALEX_URL", "https://api.openalex.org/works"),
+        ("clinicaltrials", "RESEARKA_CLINICALTRIALS_URL", "https://clinicaltrials.gov/api/v2/studies"),
         ("arxiv", "RESEARKA_ARXIV_HTML_URL", "https://arxiv.org/html"),
     ):
         validated_service_url(os.getenv(env_name, default), label=label)
@@ -606,6 +607,10 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
         os.getenv("RESEARKA_OPENALEX_URL", "https://api.openalex.org/works"),
         label="openalex",
     )
+    clinicaltrials_base = validated_service_url(
+        os.getenv("RESEARKA_CLINICALTRIALS_URL", "https://clinicaltrials.gov/api/v2/studies"),
+        label="clinicaltrials",
+    )
 
     def check(client: httpx.Client, item: tuple[dict[str, Any], tuple[str, str | None, str | None]]) -> dict[str, Any]:
         source, (identity, doi, openalex_id) = item
@@ -641,6 +646,27 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
                 if payload.get("type"):
                     publication_types.add(str(payload["type"]).strip().lower())
                 retracted = retracted or bool(payload.get("is_retracted"))
+        registry_id = str(source.get("registry_id") or "").strip().upper()
+        if re.fullmatch(r"NCT\d{8}", registry_id):
+            payload = _registry_payload(
+                client,
+                f"{clinicaltrials_base}/{urllib.parse.quote(registry_id, safe='')}",
+            ) or {}
+            protocol = payload.get("protocolSection")
+            protocol = protocol if isinstance(protocol, dict) else {}
+            identification = protocol.get("identificationModule")
+            identification = identification if isinstance(identification, dict) else {}
+            if str(identification.get("nctId") or "").upper() == registry_id:
+                authority_count += 1
+                titles.extend(
+                    str(identification[key])
+                    for key in ("briefTitle", "officialTitle")
+                    if identification.get(key)
+                )
+                description = protocol.get("descriptionModule")
+                if isinstance(description, dict) and description.get("briefSummary"):
+                    abstracts.append(str(description["briefSummary"]))
+                publication_types.add("clinical_trial")
         evidence = [
             str(source.get(key) or "").strip()
             for key in ("quote", "evidence_span", "excerpt")
