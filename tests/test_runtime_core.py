@@ -146,6 +146,21 @@ def test_claim_support_rejects_citation_with_unrelated_receipt() -> None:
     )
 
 
+def test_claim_support_accepts_exact_statistic_despite_different_prose() -> None:
+    source = {
+        "cited_as": "Feng 2024",
+        "excerpt": "There was no significant difference in the metformin group (p = 0.208).",
+    }
+    claim = (
+        "Feng 2024 [bundle:1] reported a representative non-significant statistic "
+        "P = 0.208; direction was unclear."
+    )
+
+    assert support_for_claim(claim, [source])
+    source["excerpt"] = "The same endpoint was reported with p = 0.310."
+    assert support_for_claim(claim, [source]) == []
+
+
 def test_claim_support_requires_numeric_and_unit_agreement_when_requested() -> None:
     source = {
         "title": "Trial",

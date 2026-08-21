@@ -174,6 +174,7 @@ def contradiction_status_for_text(text: str, profile: dict[str, Any]) -> Contrad
 
 
 def _evidence_aligns(claim: str, source: dict[str, Any]) -> bool:
+    claim_quantities = _quantity_tokens(claim)
     claim_words = {
         word for word in re.findall(r"[a-z0-9]+", claim.lower())
         if len(word) >= 5 and word not in GENERIC_EVIDENCE_WORDS
@@ -183,6 +184,8 @@ def _evidence_aligns(claim: str, source: dict[str, Any]) -> bool:
         if len(evidence) < 20:
             continue
         if evidence in claim.lower() or claim.lower() in evidence:
+            return True
+        if claim_quantities and claim_quantities <= _quantity_tokens(evidence):
             return True
         evidence_words = {
             word for word in re.findall(r"[a-z0-9]+", evidence)
