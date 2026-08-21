@@ -2522,7 +2522,7 @@ def test_editorial_requires_recommendation_metadata() -> None:
         )
 
 
-def test_reviewer_panel_escalates_on_disagreement() -> None:
+def test_reviewer_panel_returns_actionable_revise_on_three_way_disagreement() -> None:
     class FakeProvider:
         def __init__(self, provider: str, model: str, recommendation: str) -> None:
             self.provider = provider
@@ -2558,9 +2558,35 @@ def test_reviewer_panel_escalates_on_disagreement() -> None:
             response_format="json_object",
         )
     )
-    assert result.ok is False
-    assert result.error is not None
-    assert "panel_decision_quorum_unavailable" in result.error.message
+    assert result.ok is True
+    assert result.response is not None
+    assert '"recommendation": "revise"' in result.response.text
+    assert result.response.metadata["route"] == "disagreement_conservative_revise"
+
+
+def test_same_provider_accepts_cannot_override_independent_revise() -> None:
+    request = ProviderRequest(
+        system_prompt="system", user_prompt="user", prompt_version="reviewer-v1"
+    )
+    result = ReviewerPanel(
+        primary=_ReviewPayloadProvider(
+            "mimo-v2.5-pro", _review_payload("revise"), provider="mimo"
+        ),
+        sparring=_ReviewPayloadProvider(
+            "google/gemma-4-31b-it", _review_payload("accept"), provider="openrouter"
+        ),
+        fallback=_ReviewPayloadProvider(
+            "mistralai/mistral-small-2603",
+            _review_payload("accept"),
+            provider="openrouter",
+        ),
+    ).complete(request)
+
+    assert result.ok is True
+    assert result.response is not None
+    assert '"recommendation": "revise"' in result.response.text
+    assert result.response.metadata["accept_quorum_count"] == 1
+    assert result.response.metadata["ops_flag"] == "reviewer_disagreement_conservative_revise"
 
 
 def test_reviewer_panel_falls_back_from_false_missing_manuscript_rejection() -> None:
@@ -2688,9 +2714,9 @@ def test_reviewer_panel_cannot_create_accept_without_two_accept_votes() -> None:
         fallback=Provider("fallback", "accept"),
     ).complete(request)
 
-    assert result.ok is False
-    assert result.error is not None
-    assert "panel_accept_quorum_unavailable" in result.error.message
+    assert result.ok is True
+    assert result.response is not None
+    assert '"recommendation": "revise"' in result.response.text
 
     duplicate_model = ReviewerPanel(
         primary=Provider("same-model", "accept"),

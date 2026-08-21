@@ -92,12 +92,15 @@ class ReviewerPanel:
             fallback_rec = self._recommendation_from(fallback)
             decision_quorum = self._decision_quorum_count(fallback_rec, primary, sparring, fallback)
             if decision_quorum < 2:
-                reason = (
-                    "panel_accept_quorum_unavailable"
-                    if fallback_rec == "accept"
-                    else "panel_decision_quorum_unavailable"
+                return self._conservative_disagreement_response(
+                    primary=primary,
+                    primary_rec=primary_rec,
+                    sparring=sparring,
+                    sparring_rec=sparring_rec,
+                    fallback=fallback,
+                    fallback_attempts=fallback_attempts,
+                    slot_flags=slot_flags,
                 )
-                return self._combined_error(reason, primary, sparring, fallback)
             return self._panel_response(
                 winner=fallback,
                 route="fallback_tiebreak",
@@ -302,6 +305,31 @@ class ReviewerPanel:
         fallback_attempts: int,
         slot_flags: dict[str, object],
     ) -> ProviderResult:
+        votes = [(primary, primary_rec), (sparring, sparring_rec)]
+        if fallback.ok:
+            votes.append((fallback, self._recommendation_from(fallback)))
+        winner = next((result for result, vote in votes if vote == "revise"), None)
+        if winner is not None:
+            return self._panel_response(
+                winner=winner,
+                route="disagreement_conservative_revise",
+                used=[primary, sparring, fallback],
+                metadata={
+                    "primary_recommendation": primary_rec,
+                    "sparring_recommendation": sparring_rec,
+                    "fallback_recommendation": (
+                        self._recommendation_from(fallback) if fallback.ok else None
+                    ),
+                    "accept_quorum_count": self._accept_quorum_count(
+                        primary, sparring, fallback
+                    ),
+                    "consensus": False,
+                    "escalated_to_fallback": True,
+                    "fallback_tiebreak_attempts": fallback_attempts,
+                    "ops_flag": "reviewer_disagreement_conservative_revise",
+                    **slot_flags,
+                },
+            )
         return self._combined_error(
             "panel_disagreement_unresolved",
             primary,
