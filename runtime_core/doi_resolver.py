@@ -52,6 +52,11 @@ def validate_resolver_urls() -> None:
         ),
         ("crossref", "RESEARKA_CROSSREF_URL", "https://api.crossref.org/works"),
         ("openalex", "RESEARKA_OPENALEX_URL", "https://api.openalex.org/works"),
+        (
+            "europe_pmc",
+            "RESEARKA_EUROPE_PMC_URL",
+            "https://www.ebi.ac.uk/europepmc/webservices/rest/search",
+        ),
         ("clinicaltrials", "RESEARKA_CLINICALTRIALS_URL", "https://clinicaltrials.gov/api/v2/studies"),
         ("arxiv", "RESEARKA_ARXIV_HTML_URL", "https://arxiv.org/html"),
     ):
@@ -607,6 +612,13 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
         os.getenv("RESEARKA_OPENALEX_URL", "https://api.openalex.org/works"),
         label="openalex",
     )
+    europe_pmc_base = validated_service_url(
+        os.getenv(
+            "RESEARKA_EUROPE_PMC_URL",
+            "https://www.ebi.ac.uk/europepmc/webservices/rest/search",
+        ),
+        label="europe_pmc",
+    )
     clinicaltrials_base = validated_service_url(
         os.getenv("RESEARKA_CLINICALTRIALS_URL", "https://clinicaltrials.gov/api/v2/studies"),
         label="clinicaltrials",
@@ -646,6 +658,20 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
                 if payload.get("type"):
                     publication_types.add(str(payload["type"]).strip().lower())
                 retracted = retracted or bool(payload.get("is_retracted"))
+        if doi and not abstracts:
+            query = urllib.parse.urlencode({
+                "query": f'DOI:"{doi}"', "resultType": "core", "format": "json", "pageSize": "1",
+            })
+            payload = _registry_payload(client, f"{europe_pmc_base}?{query}") or {}
+            result_list = payload.get("resultList")
+            rows = result_list.get("result", []) if isinstance(result_list, dict) else []
+            record = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else {}
+            if str(record.get("doi") or "").strip().lower() == doi:
+                authority_count += 1
+                if record.get("title"):
+                    titles.append(str(record["title"]))
+                if record.get("abstractText"):
+                    abstracts.append(str(record["abstractText"]))
         registry_id = str(source.get("registry_id") or "").strip().upper()
         if re.fullmatch(r"NCT\d{8}", registry_id):
             payload = _registry_payload(

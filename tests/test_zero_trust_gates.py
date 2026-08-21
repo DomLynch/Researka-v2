@@ -299,7 +299,7 @@ class _MetadataResponse:
 
 def _metadata_client(
     message: dict[str, Any], pubmed: dict[str, Any] | None = None, pmc: str = "",
-    clinical_trial: dict[str, Any] | None = None,
+    clinical_trial: dict[str, Any] | None = None, europe_pmc: dict[str, Any] | None = None,
 ) -> type:
     class MetadataClient:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -312,6 +312,8 @@ def _metadata_client(
             return None
 
         def get(self, url: str) -> _MetadataResponse:
+            if "europepmc" in url and europe_pmc is not None:
+                return _MetadataResponse(europe_pmc)
             if "clinicaltrials.gov" in url and clinical_trial is not None:
                 return _MetadataResponse(clinical_trial)
             if "crossref" in url:
@@ -824,6 +826,79 @@ def test_source_without_authoritative_text_is_explicitly_unverified(monkeypatch:
     assert result["evidence_text_verified"] == []
     assert result["evidence_text_unverified"] == ["doi:10.1000/no-authoritative-text"]
     assert result["evidence_authority_unavailable"] == ["doi:10.1000/no-authoritative-text"]
+
+
+def test_source_metadata_uses_exact_doi_europe_pmc_abstract(monkeypatch: pytest.MonkeyPatch) -> None:
+    exact = "Metformin reduced the pain score by 12% in the pooled analysis."
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client(
+            {"title": ["Metformin for knee osteoarthritis"]},
+            europe_pmc={"resultList": {"result": [{
+                "doi": "10.1000/metformin",
+                "title": "Metformin for knee osteoarthritis",
+                "abstractText": exact,
+            }]}},
+        ),
+    )
+
+    result = verify_source_metadata([{
+        "title": "Metformin for knee osteoarthritis",
+        "doi": "10.1000/metformin",
+        "evidence_span": exact,
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == "pass"
+    assert result["evidence_text_verified"] == ["doi:10.1000/metformin"]
+    assert result["source_profiles"][0]["text_scope"] == "registry_abstract"
+
+
+def test_source_metadata_rejects_wrong_doi_europe_pmc_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client(
+            {"title": ["Metformin for knee osteoarthritis"]},
+            europe_pmc={"resultList": {"result": [{
+                "doi": "10.1000/different",
+                "abstractText": "Authoritative text from a different paper.",
+            }]}},
+        ),
+    )
+
+    result = verify_source_metadata([{
+        "title": "Metformin for knee osteoarthritis",
+        "doi": "10.1000/metformin",
+        "evidence_span": "A submitted claim must not verify against the wrong DOI.",
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == Decision.REVISE.value
+    assert result["evidence_authority_unavailable"] == ["doi:10.1000/metformin"]
+
+
+def test_source_metadata_handles_malformed_europe_pmc_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client(
+            {"title": ["Metformin for knee osteoarthritis"]},
+            europe_pmc={"resultList": []},
+        ),
+    )
+
+    result = verify_source_metadata([{
+        "title": "Metformin for knee osteoarthritis",
+        "doi": "10.1000/metformin",
+        "evidence_span": "Unverified source text remains unavailable.",
+    }])
+
+    assert result is not None
+    assert result["recommendation"] == Decision.REVISE.value
+    assert result["unverified"] == []
+    assert result["evidence_authority_unavailable"] == ["doi:10.1000/metformin"]
 
 
 def test_intake_proceeds_when_later_evidence_receipt_matches(monkeypatch: pytest.MonkeyPatch) -> None:
