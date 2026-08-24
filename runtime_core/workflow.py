@@ -1793,7 +1793,7 @@ class WorkflowEngine:
                         {
                             "name": "source_uniqueness",
                             "passed": False,
-                            "reason": "DOI/PMID registry aliases identify duplicate sources at indices: "
+                            "reason": "canonical source aliases identify duplicate sources at indices: "
                             + ", ".join(
                                 str(index)
                                 for index in source_verification[

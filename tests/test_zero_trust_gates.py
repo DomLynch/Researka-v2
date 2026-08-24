@@ -637,6 +637,30 @@ def test_source_metadata_detects_doi_pmid_alias_duplicate(monkeypatch: pytest.Mo
     assert result["canonical_duplicate_indices"] == [1]
 
 
+def test_source_metadata_reports_url_alias_as_duplicate_not_outage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    title = "Efficacy and safety of liraglutide and semaglutide on weight loss"
+    monkeypatch.setattr(
+        "runtime_core.doi_resolver.httpx.Client",
+        _metadata_client({"title": [title], "abstract": "Registered review abstract."}),
+    )
+
+    sources = [
+        {"title": title, "doi": "10.2147/clep.s391819"},
+        {"title": title, "url": "https://publisher.example/fulltext"},
+    ]
+    result = verify_source_metadata(sources)
+
+    assert result is not None
+    assert result["recommendation"] == Decision.REVISE.value
+    assert result["available"] is True
+    assert result["unverified"] == []
+    assert result["canonical_duplicate_indices"] == [1]
+    assert "url" not in sources[0]
+
+
 def test_intake_revises_canonical_source_alias_duplicates(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "runtime_core.workflow.verify_source_metadata",

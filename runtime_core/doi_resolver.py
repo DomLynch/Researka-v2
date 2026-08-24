@@ -498,6 +498,39 @@ def _source_aliases(source: dict[str, Any]) -> set[str]:
     return aliases
 
 
+def _verification_candidates(
+    sources: list[dict[str, Any]],
+) -> tuple[list[tuple[dict[str, Any], tuple[str, str | None, str | None]]], list[int]]:
+    candidates: list[tuple[dict[str, Any], tuple[str, str | None, str | None]]] = []
+    by_title: dict[str, tuple[int, int]] = {}
+    duplicates: list[int] = []
+    for index, source in enumerate(sources):
+        source = dict(source)
+        identity = _source_identity(source)
+        if not identity:
+            continue
+        title = _normalized_text(source.get("title"))
+        previous = by_title.get(title) if title else None
+        if previous is not None:
+            position, previous_index = previous
+            previous_source, previous_identity = candidates[position]
+            if previous_identity[0].startswith("url:") or identity[0].startswith("url:"):
+                if previous_identity[0].startswith("url:") and not identity[0].startswith("url:"):
+                    source = {**previous_source, **{key: value for key, value in source.items() if value}}
+                    candidates[position] = (source, identity)
+                    by_title[title] = (position, index)
+                    duplicates.append(previous_index)
+                else:
+                    for key, value in source.items():
+                        if value and not previous_source.get(key):
+                            previous_source[key] = value
+                    duplicates.append(index)
+                continue
+        by_title[title] = (len(candidates), index)
+        candidates.append((source, identity))
+    return candidates, duplicates
+
+
 def _trusted_host(host: str, expected: str) -> bool:
     normalized = host.strip().lower().rstrip(".")
     return normalized == expected or normalized.endswith(f".{expected}")
@@ -591,7 +624,7 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
     """Verify registered source identity, evidence text, and retraction state."""
     if not _metadata_enabled():
         return None
-    candidates = [(source, identity) for source in sources if (identity := _source_identity(source))]
+    candidates, title_duplicate_indices = _verification_candidates(sources)
     if not candidates:
         return None
     if len(candidates) > _max_sources():
@@ -809,10 +842,7 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
                     results = list(pool.map(lambda item: check(client, item), candidates))
             else:
                 results = [check(client, item) for item in candidates]
-            identifier_results = _pubmed_identifier_checks(
-                client,
-                [source for source, _ in candidates],
-            )
+            identifier_results = _pubmed_identifier_checks(client, sources)
     except Exception as exc:
         log.warning("source_metadata_unavailable", extra={"error": str(exc)})
         results = [{"identity": identity[0], "checked": False} for _, identity in candidates]
@@ -849,7 +879,10 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
         for row in identifier_results
         if not row.get("checked") and not row.get("mismatch")
     })
-    canonical_duplicate_indices = _canonical_duplicate_indices(sources, identifier_results)
+    canonical_duplicate_indices = sorted({
+        *title_duplicate_indices,
+        *_canonical_duplicate_indices(sources, identifier_results),
+    })
     blocked = retracted or title_mismatches or identifier_mismatches
     uncertain = evidence_mismatches or evidence_authority_unavailable or unverified or identifier_unverified or canonical_duplicate_indices
     recommendation = "reject" if blocked else _metadata_unavailable_recommendation() if uncertain else "pass"
