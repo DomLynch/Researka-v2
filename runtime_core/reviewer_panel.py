@@ -446,6 +446,8 @@ class ReviewerPanel:
             "usage": result.response.usage.model_dump(mode="json"),
             "reasoning_effort": result.response.metadata.get("reasoning_effort"),
             "billing": result.response.metadata.get("billing"),
+            "cost_source": result.response.metadata.get("cost_source"),
+            "generation_id": result.response.metadata.get("generation_id"),
             "fallback_used": bool(result.response.metadata.get("fallback_used")),
             "fallback_reason": result.response.metadata.get("fallback_reason"),
             "fallback_cause": result.response.metadata.get("fallback_cause"),

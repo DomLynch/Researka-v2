@@ -4,7 +4,7 @@ import pytest
 
 from contracts import ProviderErrorClass
 from runtime_core.judge_release import build_judge_release
-from runtime_core.providers import ProviderError, ProviderRequest, ProviderResult
+from runtime_core.providers import OpenRouterProvider, ProviderError, ProviderRequest, ProviderResult
 from runtime_core.review_contract import MODEL_QUORUM_POLICY
 from runtime_core.reviewer_panel import ReviewerPanel, reviewer_from_env
 from tests.test_runtime_core import _ReviewPayloadProvider, _review_payload
@@ -45,6 +45,23 @@ def test_two_valid_gpt_votes_do_not_call_openrouter():
     assert subject.fallback.calls == 0
     assert result.response.metadata["accept_quorum_count"] == 2
     assert result.response.metadata["accept_quorum_providers"] == ["codex"]
+
+
+@pytest.mark.parametrize("cost", [0.0132, 0, None, "0.01", -1, float("nan"), float("inf"), True, 10**400])
+def test_backup_cost_comes_from_provider_receipt(cost):
+    subject = panel()
+    raw = {"id": "test-generation", "model": "z-ai/glm-5.3-flash",
+           "choices": [{"message": {"content": json.dumps(_review_payload("revise"))}}],
+           "usage": {"prompt_tokens": 74206, "completion_tokens": 10459, "cost": cost}}
+    result = OpenRouterProvider(model="z-ai/glm-5.3-flash")._result_from_raw(raw)
+    receipt = subject._reviewer_receipt(result)
+    assert receipt["billing"] == "openrouter_credits"
+    assert receipt["generation_id"] == "test-generation"
+    if type(cost) in (float, int) and cost in (0.0132, 0):
+        assert receipt["usage"]["cost_usd"] == cost
+        assert receipt["cost_source"] == "provider_reported"
+    else:
+        assert receipt["cost_source"] == "unreported"
 
 
 @pytest.mark.parametrize("failure", [ProviderErrorClass.BILLING, ProviderErrorClass.TIMEOUT, ProviderErrorClass.BAD_REQUEST])

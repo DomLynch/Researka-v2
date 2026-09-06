@@ -12,6 +12,8 @@ This is model diversity, not independence between providers.
 The review response permits up to 200,000 input and 12,000 output tokens.
 Returned usage is validated after execution; these checks are not a billing
 cap. The input allowance includes manuscript, evidence bundle, and instructions.
+OpenRouter receipts retain its reported charge and generation ID. Missing or
+invalid cost data is marked `unreported`, not evidence of a free request.
 
 ## Deploy
 

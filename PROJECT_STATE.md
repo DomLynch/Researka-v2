@@ -71,7 +71,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 720 passing, 1 skipped (local full suite on 2026-09-06)
+- Tests: 729 passing, 1 skipped (local full suite on 2026-09-06)
 
 ## VPS Deployment
 - Checkout: `/opt/researka-v2` under the dedicated `researka` service account after this release

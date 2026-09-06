@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
 import time
@@ -383,6 +384,24 @@ class OpenRouterProvider(OpenAICompatibleProvider):
             api_key=api_key or os.environ.get("OPENROUTER_API_KEY", ""),
             base_url=base_url,
         )
+
+    def _result_from_raw(self, raw_payload: dict[str, Any]) -> ProviderResult:
+        result = super()._result_from_raw(raw_payload)
+        assert result.response is not None
+        usage = raw_payload.get("usage")
+        cost = usage.get("cost") if isinstance(usage, dict) else None
+        reported = False
+        try:
+            if isinstance(cost, (int, float)) and not isinstance(cost, bool) and math.isfinite(cost) and cost >= 0:
+                result.response.usage.cost_usd = float(cost)
+                reported = True
+        except OverflowError:
+            pass
+        result.response.metadata.update(
+            billing="openrouter_credits", cost_source="provider_reported" if reported else "unreported",
+            generation_id=raw_payload.get("id"),
+        )
+        return result
 
 
 class FallbackProvider:
