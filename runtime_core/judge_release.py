@@ -226,7 +226,7 @@ def build_judge_release(
             quorum_policy="two_models_v1",
             provider_diversity_required=False,
             fallback_on_disagreement=False,
-            max_input_tokens=120000,
+            max_input_tokens=200000,
             max_output_tokens=12000,
             reviewer_timeout_sec=600,
             reviewer_settings=response_metadata.get("reviewer_settings", {}),

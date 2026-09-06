@@ -121,6 +121,13 @@ def test_startup_notice_alone_does_not_prove_a_review(fake_cli):
     assert not CodexProvider().complete(_request()).ok
 
 
+def test_large_existing_manuscript_fits_review_budget(fake_cli):
+    fake_cli(_events(usage={"input_tokens": 137611, "output_tokens": 3475, "reasoning_output_tokens": 2057}))
+    assert CodexProvider().complete(_request(max_input_tokens=200000, max_output_tokens=12000)).ok
+    result = CodexProvider().complete(_request(max_input_tokens=120000, max_output_tokens=12000))
+    assert result.error.message == "codex_invalid_response:usage_budget_exceeded"
+
+
 def test_real_subprocess_argv_environment_and_receipt(fake_cli, monkeypatch, tmp_path):
     for key in ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "MIMO_API_KEY", "DATABASE_URL", "SECRET_CANARY", "BASH_ENV"):
         monkeypatch.setenv(key, "must-not-reach-child")

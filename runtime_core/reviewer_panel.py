@@ -154,7 +154,7 @@ class ReviewerPanel:
         )
 
     def _model_quorum_complete(self, request: ProviderRequest) -> ProviderResult:
-        request = request.model_copy(update={"max_input_tokens": 120000, "max_output_tokens": 12000})
+        request = request.model_copy(update={"max_input_tokens": 200000, "max_output_tokens": 12000})
         primary = self._validated_result(self.primary.complete(request), request=request)
         sparring = self._validated_result(self.sparring.complete(request), request=request)
         used = [primary, sparring]

@@ -6,6 +6,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import selectors
 import shutil
 import signal
@@ -220,8 +221,10 @@ class CodexProvider:
             return self._parse(stdout.decode("utf-8"), request)
         except subprocess.TimeoutExpired:
             return _error(ProviderErrorClass.TIMEOUT, "codex_timeout")
-        except (ValueError, RecursionError):
-            return _error(ProviderErrorClass.BAD_REQUEST, "codex_invalid_response")
+        except (ValueError, RecursionError) as exc:
+            reason = str(exc)
+            reason = reason if re.fullmatch(r"[a-z_]{1,64}", reason) else type(exc).__name__
+            return _error(ProviderErrorClass.BAD_REQUEST, f"codex_invalid_response:{reason}")
         except OSError:
             return _error(ProviderErrorClass.PROVIDER_UNAVAILABLE, "codex_transport_unavailable")
 

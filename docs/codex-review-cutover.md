@@ -9,6 +9,10 @@ cannot be replaced by a single GLM vote. Acceptance still needs two distinct
 valid agreeing models and an authenticated, manuscript-bound review receipt.
 This is model diversity, not independence between providers.
 
+The review response permits up to 200,000 input and 12,000 output tokens.
+Returned usage is validated after execution; these checks are not a billing
+cap. The input allowance includes manuscript, evidence bundle, and instructions.
+
 ## Deploy
 
 1. Run the full tests, mypy, Ruff, and `make quality`; audit the diff twice.

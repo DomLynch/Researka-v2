@@ -101,6 +101,7 @@ def test_release_binds_policy_and_reasoning_settings():
     assert first["settings"]["quorum_policy"] == MODEL_QUORUM_POLICY
     assert first["settings"]["fallback_on_disagreement"] is False
     assert first["settings"]["max_output_tokens"] == 12000
+    assert first["settings"]["max_input_tokens"] == 200000
     metadata["reviewer_settings"]["primary"]["reasoning_effort"] = "low"
     assert build_judge_release(**args, response_metadata=metadata)["id"] != first["id"]
 
