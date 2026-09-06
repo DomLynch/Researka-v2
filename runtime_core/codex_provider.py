@@ -132,6 +132,30 @@ def _write_prompt(fd: int, prompt: bytes, offset: int) -> int:
         return len(prompt)
 
 
+def _review_events(stdout: str) -> tuple[list[dict[str, Any]], int]:
+    events: list[dict[str, Any]] = []
+    before_turn = False
+    diagnostics = 0
+    disabled_tool_notice = (
+        "Code Mode is unavailable because code-mode host is disabled. Code mode will fail closed; "
+        "enable `features.code_mode_host` and install `codex-code-mode-host`."
+    )
+    for line in stdout.splitlines():
+        event = _json_object(line)
+        kind, item = event.get("type"), event.get("item")
+        if kind == "thread.started":
+            before_turn = True
+        elif kind == "turn.started":
+            before_turn = False
+        elif before_turn and kind == "item.completed" and isinstance(item, dict) and item.get("type") == "error" and item.get("message") == disabled_tool_notice:
+            # A pinned CLI emits this when tools are deliberately disabled.
+            # Unknown errors and every in-turn error still fail validation.
+            diagnostics += 1
+            continue
+        events.append(event)
+    return events, diagnostics
+
+
 class CodexProvider:
     provider = "codex"
 
@@ -221,8 +245,8 @@ class CodexProvider:
         usage: dict[str, Any] = {}
         finished_items: set[str] = set()
         pending_items: set[str] = set()
-        for line in stdout.splitlines():
-            event = _json_object(line)
+        events, diagnostics = _review_events(stdout)
+        for event in events:
             kind = event.get("type")
             if kind in ("error", "turn.failed"):
                 return _execution_error(json.dumps(event))
@@ -248,7 +272,8 @@ class CodexProvider:
             text=finals[0], provider=self.provider, model=self.model,
             usage=ProviderUsage(input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"], cost_usd=0.0),
             metadata={"reasoning_effort": self.reasoning_effort, "transport": "codex_cli",
-                      "billing": "codex_subscription", "api_spend_usd": 0.0},
+                      "billing": "codex_subscription", "api_spend_usd": 0.0,
+                      "startup_diagnostic_count": diagnostics},
         ))
 
     @staticmethod

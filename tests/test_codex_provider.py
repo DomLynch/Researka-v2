@@ -89,6 +89,38 @@ def _request(**overrides):
     return ProviderRequest(system_prompt="SYSTEM CANARY", user_prompt="USER CANARY", prompt_version="offline", **overrides)
 
 
+@pytest.mark.parametrize("position,kind,message,accepted", [
+    (1, "item.completed", "known", True),
+    (1, "item.completed", "unknown configuration error", False),
+    (2, "item.completed", "known", False),
+    (1, "error", "known", False),
+])
+def test_pinned_cli_startup_notice_is_not_a_failed_model_turn(fake_cli, position, kind, message, accepted):
+    if message == "known":
+        message = (
+            "Code Mode is unavailable because code-mode host is disabled. Code mode will fail closed; "
+            "enable `features.code_mode_host` and install `codex-code-mode-host`."
+        )
+    events = _events()
+    events.insert(position, {"type": kind, "item": {"id": "startup", "type": "error", "message": message}})
+    fake_cli(events)
+    result = CodexProvider().complete(_request())
+    assert result.ok is accepted
+    if accepted:
+        assert result.response.metadata["startup_diagnostic_count"] == 1
+
+
+def test_startup_notice_alone_does_not_prove_a_review(fake_cli):
+    fake_cli([
+        {"type": "thread.started", "thread_id": "offline-thread"},
+        {"type": "item.completed", "item": {"id": "startup", "type": "error", "message": (
+            "Code Mode is unavailable because code-mode host is disabled. Code mode will fail closed; "
+            "enable `features.code_mode_host` and install `codex-code-mode-host`."
+        )}},
+    ])
+    assert not CodexProvider().complete(_request()).ok
+
+
 def test_real_subprocess_argv_environment_and_receipt(fake_cli, monkeypatch, tmp_path):
     for key in ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "MIMO_API_KEY", "DATABASE_URL", "SECRET_CANARY", "BASH_ENV"):
         monkeypatch.setenv(key, "must-not-reach-child")
@@ -110,7 +142,8 @@ def test_real_subprocess_argv_environment_and_receipt(fake_cli, monkeypatch, tmp
     assert result.response.model == "gpt-5.6-sol"
     assert result.response.usage.model_dump() == {"input_tokens": 12, "output_tokens": 8, "cost_usd": 0.0}
     assert result.response.metadata == {"reasoning_effort": "high", "transport": "codex_cli",
-                                        "billing": "codex_subscription", "api_spend_usd": 0.0}
+                                        "billing": "codex_subscription", "api_spend_usd": 0.0,
+                                        "startup_diagnostic_count": 0}
     receipt = json.loads((tmp_path / "receipt.json").read_text())
     # macOS CoreFoundation adds this inside the Python fixture after exec.
     assert set(receipt["env"]) - {"__CF_USER_TEXT_ENCODING"} <= whitelist
