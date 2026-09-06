@@ -16,7 +16,7 @@ from contracts import ArticleType, Decision, ObjectType, ResearchObject
 from .compiler import canonical_package_hash
 from .doi_resolver import source_identity
 from .judge_release import judge_release_manifest_valid
-from .review_contract import accept_quorum_satisfied
+from .review_contract import accept_quorum_satisfied, review_attestation_secret
 from .urls import validated_service_url
 
 
@@ -652,7 +652,12 @@ def build_publication_package(repository: Any, publication: ResearchObject) -> d
         or publication.metadata.get("judge_release_id")
         != review.metadata.get("judge_release_id")
         or not judge_release_manifest_valid(review.metadata.get("judge_release"))
-        or not accept_quorum_satisfied(review.metadata)
+        or not accept_quorum_satisfied(
+            review.metadata,
+            submission_id=submission.id,
+            reviewed_package_hash=expected_hash,
+            secret=review_attestation_secret(),
+        )
     ):
         raise RuntimeError("osf_scientific_package_lineage_invalid")
     sources = source_bundle if isinstance(source_bundle, list) else []

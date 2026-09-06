@@ -102,6 +102,7 @@ class WorkerApp:
                 }
             failure_ts = datetime.now(timezone.utc)
             failure_class = classify_failure(str(exc))
+            failure_reason = str(exc)
             try:
                 retry_count = max(0, int(job.payload.get("provider_retry_count", 0) or 0))
             except (TypeError, ValueError):
@@ -121,8 +122,8 @@ class WorkerApp:
                     Stage.PUBLICATION_FINALIZE,
                 }
                 and retry_count < retry_limit
+                and not failure_reason.startswith("provider_error:billing:")
             )
-            failure_reason = str(exc)
             self.repository.fail_job(
                 job.id,
                 reason=failure_reason,

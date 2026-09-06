@@ -1,3 +1,4 @@
+import io
 import json
 import urllib.error
 from datetime import datetime, timedelta, timezone
@@ -2389,7 +2390,7 @@ def test_reviewer_panel_from_env_uses_mimo_gemma_mistral(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
-    monkeypatch.delenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", raising=False)
+    monkeypatch.setenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "mimo")
     monkeypatch.delenv("RESEARKA_V2_MIMO_MODEL", raising=False)
     monkeypatch.delenv("RESEARKA_V2_REVIEWER_MODEL", raising=False)
     monkeypatch.delenv("RESEARKA_V2_JUDGE_MODEL", raising=False)
@@ -2436,6 +2437,7 @@ def test_reviewer_panel_from_env_can_disable_per_slot_fallback(
     behaviour: bare primary and Gemma in the primary/sparring slots, no wrapping.
     Useful for measuring raw provider failure rates without the safety net."""
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
+    monkeypatch.setenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "mimo")
     monkeypatch.setenv("RESEARKA_V2_REVIEWER_FALLBACK_ENABLED", "0")
 
     provider = reviewer_from_env()
@@ -2454,6 +2456,7 @@ def test_reviewer_panel_from_env_parses_billing_skip_strictly(
     expected: bool,
 ) -> None:
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
+    monkeypatch.setenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "mimo")
     monkeypatch.setenv("RESEARKA_V2_SKIP_SPARRING_ON_BILLING_ERROR", value)
     if expected:
         monkeypatch.setenv("RESEARKA_V2_REVIEW_ATTESTATION_SECRET", "test-secret")
@@ -4015,6 +4018,50 @@ def test_single_provider_accept_cannot_bypass_panel_quorum() -> None:
     )
     with pytest.raises(ValueError, match="accept_quorum_missing"):
         WorkflowEngine(provider=SingleProvider())._review_submission(submission)
+
+
+@pytest.mark.parametrize("quota_message", ["quota exhausted", "insufficient_quota"])
+def test_primary_quota_exhaustion_stops_review_without_paid_fallback_or_retries(
+    monkeypatch: pytest.MonkeyPatch, quota_message: str,
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr("runtime_core.providers.time.sleep", lambda _: None)
+
+    def exhausted(req, **kwargs):
+        calls.append(req.full_url)
+        raise urllib.error.HTTPError(
+            req.full_url, 429, "Too Many Requests", {},
+            io.BytesIO(json.dumps({"error": {"message": quota_message}}).encode()),
+        )
+
+    monkeypatch.setattr("runtime_core.providers.urllib.request.urlopen", exhausted)
+    backup = OpenRouterProvider(api_key="test", model="mistralai/mistral-small-2603")
+    panel = ReviewerPanel(
+        primary=FallbackProvider(primary=MimoProvider(api_key="test"), fallback=backup),
+        sparring=OpenRouterProvider(api_key="test", model="google/gemma-4-31b-it"),
+        fallback=backup,
+        allow_sparring_billing_skip=True,
+    )
+    repo = InMemoryRuntimeRepository()
+    submission = _calibration_submission(repo, recommendation="accept")
+    job = repo.enqueue_job(RuntimeJob(target_object_id=submission.id, stage=Stage.REVIEW))
+    worker = WorkerApp(repo, engine=WorkflowEngine(provider=panel))
+
+    result = worker.run_once()
+
+    assert result["failed"] == 1
+    assert result["retried"] == 0
+    assert len(calls) == 1
+    assert "xiaomimimo.com" in calls[0]
+    failed = repo.get_job(job.id)
+    assert failed is not None
+    assert failed.payload["failure_reason"].startswith("provider_error:billing:mimo:")
+    assert quota_message in failed.payload["failure_reason"]
+    assert not repo.list_objects(ObjectType.REVIEW)
+    assert not repo.list_objects(ObjectType.PUBLICATION)
+    assert worker.run_once()["claimed"] == 0
+    failure = next(e for e in reversed(repo.list_events()) if e.event_type == EventType.JOB_FAILED)
+    assert failure.payload["terminal"] is True
 
 
 def test_secondary_billing_failure_skips_without_backlogging_accept(

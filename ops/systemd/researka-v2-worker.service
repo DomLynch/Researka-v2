@@ -19,7 +19,8 @@ Environment=RESEARKA_V2_ENV=production
 ExecStart=/opt/researka-v2/.venv/bin/python -m apps.worker.loop
 Restart=always
 RestartSec=5
-TimeoutStopSec=20
+TimeoutStopSec=1800
+KillMode=mixed
 UMask=0077
 StateDirectory=researka-v2
 StateDirectoryMode=0700

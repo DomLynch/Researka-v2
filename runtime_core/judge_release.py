@@ -221,6 +221,16 @@ def build_judge_release(
     observed_models = sorted({str(item).strip() for item in observed if str(item).strip()}) if isinstance(observed, list) else []
     configured_models = sorted({item.strip() for item in model.split("|") if item.strip()})
     settings = dict(JUDGE_SETTINGS)
+    if response_metadata.get("quorum_policy") == "two_models_v1":
+        settings.update(
+            quorum_policy="two_models_v1",
+            provider_diversity_required=False,
+            fallback_on_disagreement=False,
+            max_input_tokens=120000,
+            max_output_tokens=12000,
+            reviewer_timeout_sec=600,
+            reviewer_settings=response_metadata.get("reviewer_settings", {}),
+        )
     if response_metadata.get("accept_quorum_waiver_verified") is True:
         settings.update(
             accept_quorum_min=1,

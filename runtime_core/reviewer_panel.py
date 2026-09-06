@@ -27,6 +27,8 @@ from .review_contract import (
     billing_waiver_receipt_valid,
     review_grounding_failure,
     review_attestation_secret,
+    MODEL_QUORUM_POLICY,
+    MODEL_QUORUM_PROVIDERS,
 )
 
 
@@ -41,15 +43,21 @@ class ReviewerPanel:
         sparring: LanguageModelProvider,
         fallback: LanguageModelProvider,
         allow_sparring_billing_skip: bool = False,
+        quorum_policy: str = "provider_diversity_v1",
     ) -> None:
         self.primary = primary
         self.sparring = sparring
         self.fallback = fallback
         self.allow_sparring_billing_skip = allow_sparring_billing_skip
+        self.quorum_policy = quorum_policy
         self.model = f"{getattr(primary, 'model', 'primary')}|{getattr(sparring, 'model', 'sparring')}|{getattr(fallback, 'model', 'fallback')}"
 
     def complete(self, request: ProviderRequest) -> ProviderResult:
+        if self.quorum_policy == MODEL_QUORUM_POLICY:
+            return self._model_quorum_complete(request)
         primary = self._validated_slot(self.primary, request=request)
+        if getattr(primary.error, "error_class", None) is ProviderErrorClass.BILLING:
+            return primary
         sparring = self._validated_slot(self.sparring, request=request)
         slot_flags = self._slot_fallback_flags(primary, sparring)
 
@@ -57,29 +65,9 @@ class ReviewerPanel:
             primary_rec = self._recommendation_from(primary)
             sparring_rec = self._recommendation_from(sparring)
             if primary_rec == sparring_rec:
-                decision_quorum = self._decision_quorum_count(primary_rec, primary, sparring)
-                if decision_quorum < 2:
-                    reason = (
-                        "panel_accept_quorum_unavailable"
-                        if primary_rec == "accept"
-                        else "panel_decision_quorum_unavailable"
-                    )
-                    return self._combined_error(reason, primary, sparring)
-                return self._panel_response(
-                    winner=primary,
-                    route="consensus",
-                    used=[primary, sparring],
-                    metadata={
-                        "primary_recommendation": primary_rec,
-                        "sparring_recommendation": sparring_rec,
-                        "accept_quorum_count": self._accept_quorum_count(primary, sparring),
-                        "decision_quorum_count": decision_quorum,
-                        "consensus": True,
-                        **slot_flags,
-                    },
-                )
+                return self._consensus_response(primary, sparring, [primary, sparring])
             fallback, fallback_attempts = self._validated_fallback(request)
-            if not fallback.ok:
+            if not fallback.ok or self._decision_quorum_count(self._recommendation_from(fallback), primary, sparring, fallback) < 2:
                 return self._conservative_disagreement_response(
                     primary=primary,
                     primary_rec=primary_rec,
@@ -91,16 +79,6 @@ class ReviewerPanel:
                 )
             fallback_rec = self._recommendation_from(fallback)
             decision_quorum = self._decision_quorum_count(fallback_rec, primary, sparring, fallback)
-            if decision_quorum < 2:
-                return self._conservative_disagreement_response(
-                    primary=primary,
-                    primary_rec=primary_rec,
-                    sparring=sparring,
-                    sparring_rec=sparring_rec,
-                    fallback=fallback,
-                    fallback_attempts=fallback_attempts,
-                    slot_flags=slot_flags,
-                )
             return self._panel_response(
                 winner=fallback,
                 route="fallback_tiebreak",
@@ -175,6 +153,50 @@ class ReviewerPanel:
             fallback,
         )
 
+    def _model_quorum_complete(self, request: ProviderRequest) -> ProviderResult:
+        request = request.model_copy(update={"max_input_tokens": 120000, "max_output_tokens": 12000})
+        primary = self._validated_result(self.primary.complete(request), request=request)
+        sparring = self._validated_result(self.sparring.complete(request), request=request)
+        used = [primary, sparring]
+        if not primary.ok and not sparring.ok:
+            # One backup model cannot replace two different valid reviewers.
+            return self._combined_error("panel_both_gpt_reviewers_failed", *used)
+        if not primary.ok or not sparring.ok:
+            failed = primary if not primary.ok else sparring
+            backup = self._validated_result(self.fallback.complete(request), request=request)
+            backup = FallbackProvider._tag(backup, fallback_used=True, primary_error=failed.error)
+            used.append(backup)
+            if not backup.ok:
+                return self._combined_error("panel_backup_failed", *used)
+            if not primary.ok:
+                primary = backup
+            else:
+                sparring = backup
+        primary_rec, sparring_rec = self._recommendation_from(primary), self._recommendation_from(sparring)
+        flags = self._slot_fallback_flags(primary, sparring)
+        if primary_rec != sparring_rec:
+            return self._conservative_disagreement_response(
+                primary=primary, primary_rec=primary_rec,
+                sparring=sparring, sparring_rec=sparring_rec,
+                fallback=ProviderResult(ok=False), fallback_attempts=0, slot_flags=flags,
+                used=used,
+            )
+        return self._consensus_response(primary, sparring, used)
+
+    def _consensus_response(self, primary: ProviderResult, sparring: ProviderResult, used: list[ProviderResult]) -> ProviderResult:
+        recommendation = self._recommendation_from(primary)
+        if self._decision_quorum_count(recommendation, primary, sparring) < 2:
+            reason = "panel_accept_quorum_unavailable" if recommendation == "accept" else "panel_decision_quorum_unavailable"
+            return self._combined_error(reason, *used)
+        return self._panel_response(
+            winner=primary, route="failure_backup_consensus" if len(used) == 3 else "consensus",
+            used=used, metadata={
+                "primary_recommendation": recommendation, "sparring_recommendation": recommendation,
+                "accept_quorum_count": self._accept_quorum_count(primary, sparring),
+                "consensus": True, **self._slot_fallback_flags(primary, sparring),
+            },
+        )
+
     def billing_skip_receipt_valid(self, metadata: dict[str, object]) -> bool:
         return self.allow_sparring_billing_skip and billing_waiver_receipt_valid(metadata, provider=self.provider)
 
@@ -245,6 +267,13 @@ class ReviewerPanel:
         return self._decision_quorum_count("accept", *results)
 
     def _decision_quorum_count(self, recommendation: str, *results: ProviderResult) -> int:
+        if self.quorum_policy == MODEL_QUORUM_POLICY:
+            return len({
+                result.response.model for result in results
+                if result.ok and result.response is not None
+                and MODEL_QUORUM_PROVIDERS.get(result.response.model) == result.response.provider
+                and self._recommendation_from(result) == recommendation
+            })
         return min(
             len(self._recommendation_identities(recommendation, *results)),
             len(self._recommendation_providers(recommendation, *results)),
@@ -304,7 +333,9 @@ class ReviewerPanel:
         fallback: ProviderResult,
         fallback_attempts: int,
         slot_flags: dict[str, object],
+        used: list[ProviderResult] | None = None,
     ) -> ProviderResult:
+        results = used if used is not None else [primary, sparring, fallback]
         votes = [(primary, primary_rec), (sparring, sparring_rec)]
         if fallback.ok:
             votes.append((fallback, self._recommendation_from(fallback)))
@@ -313,7 +344,7 @@ class ReviewerPanel:
             return self._panel_response(
                 winner=winner,
                 route="disagreement_conservative_revise",
-                used=[primary, sparring, fallback],
+                used=results,
                 metadata={
                     "primary_recommendation": primary_rec,
                     "sparring_recommendation": sparring_rec,
@@ -324,7 +355,7 @@ class ReviewerPanel:
                         primary, sparring, fallback
                     ),
                     "consensus": False,
-                    "escalated_to_fallback": True,
+                    "escalated_to_fallback": fallback_attempts > 0,
                     "fallback_tiebreak_attempts": fallback_attempts,
                     "ops_flag": "reviewer_disagreement_conservative_revise",
                     **slot_flags,
@@ -332,9 +363,7 @@ class ReviewerPanel:
             )
         return self._combined_error(
             "panel_disagreement_unresolved",
-            primary,
-            sparring,
-            fallback,
+            *results,
         )
 
     def _slot_fallback_flags(self, primary: ProviderResult, sparring: ProviderResult) -> dict[str, object]:
@@ -373,6 +402,11 @@ class ReviewerPanel:
             cost_usd=round(sum(result.response.usage.cost_usd for result in used if result.response), 6),
         )
         route_metadata = {
+            "quorum_policy": self.quorum_policy,
+            "reviewer_settings": {
+                slot: {"model": reviewer.model, "reasoning_effort": getattr(reviewer, "reasoning_effort", None)}
+                for slot, reviewer in (("primary", self.primary), ("sparring", self.sparring), ("fallback", self.fallback))
+            },
             "route": route,
             "winner_provider": winner.response.provider,
             "winner_model": winner.response.model,
@@ -410,6 +444,11 @@ class ReviewerPanel:
             "recommendation": self._recommendation_from(result),
             "response_sha256": hashlib.sha256(result.response.text.encode()).hexdigest(),
             "usage": result.response.usage.model_dump(mode="json"),
+            "reasoning_effort": result.response.metadata.get("reasoning_effort"),
+            "billing": result.response.metadata.get("billing"),
+            "fallback_used": bool(result.response.metadata.get("fallback_used")),
+            "fallback_reason": result.response.metadata.get("fallback_reason"),
+            "fallback_cause": result.response.metadata.get("fallback_cause"),
         }
         try:
             payload = self._payload_from_result(result)
@@ -423,7 +462,11 @@ class ReviewerPanel:
         return ProviderResult(
             ok=False,
             error=ProviderError(
-                error_class=ProviderErrorClass.PROVIDER_UNAVAILABLE,
+                error_class=(
+                    ProviderErrorClass.BILLING
+                    if results and all(getattr(result.error, "error_class", None) is ProviderErrorClass.BILLING for result in results)
+                    else ProviderErrorClass.PROVIDER_UNAVAILABLE
+                ),
                 message=f"{reason}:{' | '.join(self._error_text(result) for result in results)}",
             ),
         )
@@ -431,6 +474,7 @@ class ReviewerPanel:
     def _validated_result(self, result: ProviderResult, *, request: ProviderRequest) -> ProviderResult:
         if not result.ok or result.response is None:
             return result
+        identity = f"{result.response.provider}:{result.response.model}"
         try:
             payload = self._payload_from_result(result)
             result, payload = self._recover_review_markdown(result, payload)
@@ -448,7 +492,7 @@ class ReviewerPanel:
                 ok=False,
                 error=ProviderError(
                     error_class=ProviderErrorClass.BAD_REQUEST,
-                    message=f"invalid_panel_response:{exc}",
+                    message=f"invalid_panel_response:{identity}:{exc}",
                 ),
             )
         return result
@@ -611,6 +655,20 @@ class ReviewerPanel:
         return f"{result.error.error_class.value}:{result.error.message}"
 
 
+def _legacy_primary(primary_provider: str) -> LanguageModelProvider:
+    if primary_provider == "mimo":
+        return MimoProvider(
+            model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2.5-pro"),
+            base_url=os.getenv("RESEARKA_V2_MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
+        )
+    if primary_provider == "minimax":
+        return MiniMaxProvider(
+            model=os.getenv("RESEARKA_V2_MINIMAX_MODEL", "MiniMax-M3"),
+            base_url=os.getenv("RESEARKA_V2_MINIMAX_BASE_URL", "https://api.minimax.io/anthropic"),
+        )
+    raise RuntimeError(f"unknown_primary_reviewer_provider:{primary_provider}")
+
+
 def reviewer_from_env() -> LanguageModelProvider:
     selected = os.getenv("RESEARKA_V2_PROVIDER", "deterministic").strip().lower()
     if selected in {"judge_panel", "panel", "reviewer_panel"}:
@@ -627,19 +685,20 @@ def reviewer_from_env() -> LanguageModelProvider:
         def _make_fallback() -> OpenRouterProvider:
             return OpenRouterProvider(model=fallback_model, base_url=or_base_url)
 
-        primary_provider = os.getenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "mimo").strip().lower()
-        if primary_provider == "mimo":
-            primary_inner: LanguageModelProvider = MimoProvider(
-                model=os.getenv("RESEARKA_V2_MIMO_MODEL", "mimo-v2.5-pro"),
-                base_url=os.getenv("RESEARKA_V2_MIMO_BASE_URL", "https://token-plan-sgp.xiaomimimo.com/v1"),
+        primary_provider = os.getenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "codex").strip().lower()
+        if primary_provider == "codex":
+            from .codex_provider import CodexProvider
+
+            review_attestation_secret(required=True)
+            backup = OpenRouterProvider(model="z-ai/glm-5.3-flash", base_url=or_base_url)
+            backup.max_attempts = backup.max_attempts_on_rate_limit = 1
+            return ReviewerPanel(
+                primary=CodexProvider(model="gpt-5.6-sol", reasoning_effort="high"),
+                sparring=CodexProvider(model="gpt-5.6-terra", reasoning_effort="medium"),
+                fallback=backup,
+                quorum_policy=MODEL_QUORUM_POLICY,
             )
-        elif primary_provider == "minimax":
-            primary_inner = MiniMaxProvider(
-                model=os.getenv("RESEARKA_V2_MINIMAX_MODEL", "MiniMax-M3"),
-                base_url=os.getenv("RESEARKA_V2_MINIMAX_BASE_URL", "https://api.minimax.io/anthropic"),
-            )
-        else:
-            raise RuntimeError(f"unknown_primary_reviewer_provider:{primary_provider}")
+        primary_inner = _legacy_primary(primary_provider)
         if os.getenv("RESEARKA_V2_ENV", "development").strip().lower() == "production":
             primary_key = "MIMO_API_KEY" if primary_provider == "mimo" else "MINIMAX_API_KEY"
             if not os.getenv(primary_key):

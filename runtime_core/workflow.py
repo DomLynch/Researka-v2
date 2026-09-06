@@ -47,6 +47,7 @@ from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
 from .providers import LanguageModelProvider, ProviderRequest
 from .review_contract import (
     CLAIM_SUPPORT_VERDICTS,
+    MODEL_QUORUM_POLICY,
     OVERCLAIM_VERDICTS,
     REVIEW_RUBRIC_KEYS,
     SUBMISSION_DATA_END,
@@ -56,6 +57,8 @@ from .review_contract import (
     accept_quorum_satisfied,
     billing_waiver_attestation,
     billing_waiver_attestation_valid,
+    model_quorum_attestation,
+    model_quorum_metadata,
     review_grounding_failure,
     review_attestation_secret,
 )
@@ -724,10 +727,16 @@ def _verified_billing_waiver(review: ResearchObject, submission_id: str) -> bool
     )
 
 
-def _require_accept_quorum(review: ResearchObject, submission_id: str) -> bool:
+def _require_accept_quorum(
+    review: ResearchObject, submission_id: str, reviewed_package_hash: str
+) -> bool:
     waiver_verified = _verified_billing_waiver(review, submission_id)
     if not accept_quorum_satisfied(
-        review.metadata, allow_billing_waiver=waiver_verified
+        review.metadata,
+        allow_billing_waiver=waiver_verified,
+        submission_id=submission_id,
+        reviewed_package_hash=reviewed_package_hash,
+        secret=review_attestation_secret(),
     ):
         raise ValueError("accept_quorum_missing")
     return waiver_verified
@@ -792,7 +801,7 @@ def _publication_lineage(
         or not judge_release_manifest_valid(release)
     ):
         raise ValueError("publication_lineage_invalid")
-    _require_accept_quorum(review, submission.id)
+    _require_accept_quorum(review, submission.id, package_hash)
     return submission, review, decision
 
 
@@ -1176,6 +1185,61 @@ class WorkflowEngine:
             "cost_usd": 0.0,
         }
 
+    def _validated_quorum_metadata(
+        self,
+        metadata: dict,
+        payload: dict,
+        *,
+        provider: str,
+        user_prompt: str,
+        source_verification: dict | None,
+    ) -> dict:
+        policy = getattr(self.provider, "quorum_policy", None)
+        if policy != MODEL_QUORUM_POLICY:
+            if policy not in (None, "provider_diversity_v1") or metadata.get("quorum_policy") not in (None, "provider_diversity_v1"):
+                raise ValueError("provider_error:bad_request:unexpected_quorum_policy")
+            return metadata
+        if metadata.get("quorum_policy") != policy or provider != "reviewer-panel":
+            raise ValueError("provider_error:bad_request:model_quorum_policy_missing")
+        computed = model_quorum_metadata(metadata.get("reviewer_receipts"))
+        successful = [receipt for receipt in computed["reviewer_receipts"] if receipt["ok"]]
+        for receipt in successful:
+            self._validated_review_contract(receipt["response"], recommendation=receipt["recommendation"])
+            failure = review_grounding_failure(
+                receipt["response"], user_prompt=user_prompt, source_verification=source_verification
+            )
+            if failure:
+                raise ValueError(f"provider_error:bad_request:{failure}")
+        if not any(receipt["response"] == payload for receipt in successful):
+            raise ValueError("provider_error:bad_request:model_quorum_winner_missing")
+        return {
+            **metadata,
+            **computed,
+            "accept_quorum_waiver": None,
+            "accept_quorum_waiver_verified": False,
+            "model_quorum_attestation": None,
+        }
+
+    def _attest_model_quorum(
+        self, metadata: dict, submission: ResearchObject, recommendation: str
+    ) -> None:
+        if getattr(self.provider, "quorum_policy", None) != MODEL_QUORUM_POLICY:
+            return
+        metadata.update(
+            provider="reviewer-panel",
+            recommendation=recommendation,
+            reviewed_package_hash=_canonical_submission_hash(submission),
+        )
+        if recommendation == Decision.ACCEPT.value:
+            metadata["model_quorum_attestation"] = model_quorum_attestation(
+                metadata,
+                submission_id=submission.id,
+                reviewed_package_hash=metadata["reviewed_package_hash"],
+                recommendation=recommendation,
+                judge_release_id=str(metadata["judge_release_id"]),
+                secret=review_attestation_secret(required=True) or "",
+            )
+
     def _review_submission(
         self, submission: ResearchObject
     ) -> tuple[str, str, dict[str, object]]:
@@ -1280,12 +1344,19 @@ class WorkflowEngine:
         rubric_scores, rubric_calibration = _evidence_score_ceiling(
             submission, rubric_scores
         )
+        panel_metadata = self._validated_quorum_metadata(
+            result.response.metadata,
+            payload,
+            provider=result.response.provider,
+            user_prompt=user_prompt,
+            source_verification=source_verification,
+        )
         judge_release = build_judge_release(
             system_prompt=self._review_prompt_bundle(),
             provider=result.response.provider,
             model=result.response.model,
             response_metadata={
-                **result.response.metadata,
+                **panel_metadata,
                 "accept_quorum_waiver_verified": billing_waiver_verified,
             },
         )
@@ -1309,7 +1380,7 @@ class WorkflowEngine:
             "tokens_in": result.response.usage.input_tokens,
             "tokens_out": result.response.usage.output_tokens,
             "cost_usd": result.response.usage.cost_usd,
-            **result.response.metadata,
+            **panel_metadata,
             **waiver_metadata,
             "article_type": article_type,
             "rubric_scores": rubric_scores,
@@ -1325,13 +1396,17 @@ class WorkflowEngine:
         }
         if rubric_calibration:
             metadata["rubric_calibration"] = rubric_calibration
+        self._attest_model_quorum(metadata, submission, recommendation)
         if recommendation == "accept":
             if not getattr(
                 self.provider, "enforces_accept_quorum", False
             ) or not accept_quorum_satisfied(
-                result.response.metadata,
+                metadata,
                 provider=result.response.provider,
                 allow_billing_waiver=billing_waiver_verified,
+                submission_id=submission.id,
+                reviewed_package_hash=_canonical_submission_hash(submission),
+                secret=review_attestation_secret(),
             ):
                 raise ValueError("provider_error:bad_request:accept_quorum_missing")
         return recommendation, review_markdown, metadata
@@ -2020,7 +2095,7 @@ class WorkflowEngine:
             raise ValueError(f"invalid_review_recommendation:{recommendation}")
         original_recommendation = recommendation
         if recommendation == Decision.ACCEPT.value:
-            _require_accept_quorum(review, submission.id)
+            _require_accept_quorum(review, submission.id, package_hash)
         alpha_guard_revisions: list[str] = []
         trace_guard_revisions: list[str] = []
         if recommendation == Decision.ACCEPT.value:
@@ -2191,7 +2266,7 @@ class WorkflowEngine:
             or review.metadata.get("reviewed_package_hash") != package_hash
         ):
             raise ValueError("accepted_review_package_mismatch")
-        billing_waiver_verified = _require_accept_quorum(review, submission.id)
+        billing_waiver_verified = _require_accept_quorum(review, submission.id, package_hash)
         judge_release = review.metadata.get("judge_release")
         if (
             not isinstance(judge_release, dict)

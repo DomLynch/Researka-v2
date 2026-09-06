@@ -140,11 +140,11 @@ class OpenAICompatibleProvider:
                     raw = json.loads(response.read().decode("utf-8"))
                 break
             except urllib.error.HTTPError as exc:
-                error_class = self._classify_status(int(getattr(exc, "code", 0) or 0))
                 body = exc.read().decode("utf-8", errors="ignore")
+                error_class = self._classify_http_error(exc.code, body)
                 last_error = ProviderError(
                     error_class=error_class,
-                    message=body or str(exc),
+                    message=f"{self.provider}:{body or str(exc)}",
                     status_code=int(getattr(exc, "code", 0) or 0) or None,
                 )
                 if error_class is ProviderErrorClass.RATE_LIMIT:
@@ -172,6 +172,11 @@ class OpenAICompatibleProvider:
                 continue
 
         return self._result_from_raw(cast(dict[str, Any], raw))
+
+    def _classify_http_error(self, status: int, body: str) -> ProviderErrorClass:
+        if status == 429 and any(marker in body.lower() for marker in ("quota exhausted", "insufficient_quota")):
+            return ProviderErrorClass.BILLING
+        return self._classify_status(status)
 
     def _request_for(self, request: ProviderRequest) -> urllib.request.Request:
         return urllib.request.Request(
@@ -366,7 +371,7 @@ class OpenRouterProvider(OpenAICompatibleProvider):
             value.strip()
             for value in os.environ.get(
                 "RESEARKA_V2_OPENROUTER_ALLOWED_MODELS",
-                "google/gemma-4-31b-it,mistralai/mistral-small-2603",
+                "google/gemma-4-31b-it,mistralai/mistral-small-2603,z-ai/glm-5.3-flash",
             ).split(",")
             if value.strip()
         }
@@ -419,6 +424,7 @@ class FallbackProvider:
         new_metadata = {**result.response.metadata, "fallback_used": fallback_used}
         if fallback_used and primary_error is not None:
             new_metadata["fallback_reason"] = primary_error.error_class.value
+            new_metadata["fallback_cause"] = primary_error.message
         # ProviderResponse is a frozen-ish pydantic model; rebuild it.
         result.response.metadata = new_metadata
         return result

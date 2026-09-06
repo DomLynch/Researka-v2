@@ -7,6 +7,13 @@ import os
 import re
 from pathlib import Path
 
+MODEL_QUORUM_POLICY = "two_models_v1"
+MODEL_QUORUM_PROVIDERS = {
+    "gpt-5.6-sol": "codex",
+    "gpt-5.6-terra": "codex",
+    "z-ai/glm-5.3-flash": "openrouter",
+}
+
 REVIEW_RUBRIC_KEYS = (
     "research_question_quality",
     "synthesis_quality",
@@ -213,7 +220,19 @@ def accept_quorum_satisfied(
     *,
     provider: str | None = None,
     allow_billing_waiver: bool = False,
+    submission_id: str = "",
+    reviewed_package_hash: str = "",
+    secret: str | None = None,
 ) -> bool:
+    if _uses_model_quorum(metadata):
+        return model_quorum_attestation_valid(
+            metadata,
+            submission_id=submission_id,
+            reviewed_package_hash=reviewed_package_hash,
+            recommendation=str(metadata.get("recommendation") or ""),
+            judge_release_id=str(metadata.get("judge_release_id") or ""),
+            secret=secret,
+        )
     models = metadata.get("accept_quorum_models")
     distinct_models = {model.strip() for model in models if isinstance(model, str) and model.strip()} if isinstance(models, list) else set()
     identities = metadata.get("accept_quorum_identities")
@@ -240,7 +259,153 @@ def accept_quorum_satisfied(
     return allow_billing_waiver and billing_waiver_receipt_valid(metadata, provider=provider)
 
 
+def _uses_model_quorum(metadata: dict) -> bool:
+    release = metadata.get("judge_release")
+    settings = release.get("settings", {}) if isinstance(release, dict) else {}
+    return (
+        metadata.get("quorum_policy") not in (None, "provider_diversity_v1")
+        or "model_quorum_attestation" in metadata
+        or isinstance(settings, dict) and settings.get("quorum_policy") not in (None, "provider_diversity_v1")
+    )
+
+
+def _validated_model_receipt(receipt: object) -> dict:
+    if not isinstance(receipt, dict) or type(receipt.get("ok")) is not bool:
+        raise ValueError("invalid_model_quorum_receipt")
+    if not receipt["ok"]:
+        return receipt
+    model = receipt.get("model")
+    if not isinstance(model, str) or model not in MODEL_QUORUM_PROVIDERS or MODEL_QUORUM_PROVIDERS[model] != receipt.get("provider"):
+        raise ValueError("unapproved_model_quorum_identity")
+    payload = receipt.get("response")
+    raw_recommendation = receipt.get("recommendation")
+    recommendation = raw_recommendation.strip().lower() if isinstance(raw_recommendation, str) else ""
+    if (
+        not isinstance(payload, dict)
+        or recommendation not in {"accept", "revise", "reject"}
+        or str(payload.get("recommendation") or "").strip().lower() != recommendation
+        or not isinstance(payload.get("review_markdown"), str)
+        or not payload["review_markdown"].strip()
+        or not isinstance(receipt.get("response_sha256"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", receipt["response_sha256"])
+    ):
+        raise ValueError("invalid_model_quorum_response")
+    if model == "z-ai/glm-5.3-flash" and (
+        receipt.get("fallback_used") is not True
+        or not isinstance(receipt.get("fallback_reason"), str)
+        or not receipt["fallback_reason"].strip()
+    ):
+        raise ValueError("model_quorum_fallback_cause_missing")
+    if recommendation == "accept":
+        _validate_model_accept(payload)
+    return {**receipt, "recommendation": recommendation}
+
+
+def _validate_model_accept(payload: dict) -> None:
+    scores = payload.get("rubric_scores")
+    if not isinstance(scores, dict) or any(type(score) is not int or not 1 <= score <= 5 for score in scores.values()):
+        raise ValueError("invalid_model_quorum_scores")
+    for field in ("major_issues", "minor_issues", "required_revisions"):
+        items = payload.get(field)
+        if not isinstance(items, list) or any(not isinstance(item, str) for item in items):
+            raise ValueError("invalid_model_quorum_issues")
+    failure = accept_contract_failure(
+        scores,
+        major_issues=payload["major_issues"],
+        required_revisions=payload["required_revisions"],
+        claim_support=str(payload.get("claim_support_verdict") or "").strip().lower(),
+        overclaim=str(payload.get("overclaim_verdict") or "").strip().lower(),
+        synthesis_quality=str(payload.get("synthesis_quality_verdict") or "").strip().lower(),
+    )
+    if failure:
+        raise ValueError(failure)
+
+
+def model_quorum_metadata(reviewer_receipts: object) -> dict:
+    """Recompute voting identities from validated receipts, never claimed counts."""
+    if not isinstance(reviewer_receipts, list) or not reviewer_receipts:
+        raise ValueError("model_quorum_receipts_missing")
+    receipts = [_validated_model_receipt(receipt) for receipt in reviewer_receipts]
+    successful = [receipt for receipt in receipts if receipt["ok"]]
+    if len({receipt["model"] for receipt in successful}) != len(successful):
+        raise ValueError("duplicate_model_quorum_identity")
+    accepting = [receipt for receipt in successful if receipt["recommendation"] == "accept"]
+    return {
+        "quorum_policy": MODEL_QUORUM_POLICY,
+        "reviewer_receipts": json.loads(json.dumps(receipts, allow_nan=False)),
+        "accept_quorum_count": len(accepting),
+        "accept_quorum_models": sorted(receipt["model"] for receipt in accepting),
+        "accept_quorum_identities": sorted(f"{receipt['provider']}:{receipt['model']}" for receipt in accepting),
+        "accept_quorum_providers": sorted({receipt["provider"] for receipt in accepting}),
+    }
+
+
+def model_quorum_attestation(
+    metadata: dict,
+    *,
+    submission_id: str,
+    reviewed_package_hash: str,
+    recommendation: str,
+    judge_release_id: str,
+    secret: str,
+) -> str:
+    computed = model_quorum_metadata(metadata.get("reviewer_receipts"))
+    if any(metadata.get(key) != value for key, value in computed.items()):
+        raise ValueError("model_quorum_metadata_mismatch")
+    if recommendation == "accept" and computed["accept_quorum_count"] < 2:
+        raise ValueError("accept_quorum_missing")
+    return _review_attestation(
+        {
+            "quorum_policy": MODEL_QUORUM_POLICY,
+            "submission_id": submission_id,
+            "reviewed_package_hash": reviewed_package_hash,
+            "recommendation": recommendation,
+            "judge_release_id": judge_release_id,
+            "receipt": computed,
+        },
+        secret,
+    )
+
+
+def model_quorum_attestation_valid(
+    metadata: dict,
+    *,
+    submission_id: str,
+    reviewed_package_hash: str,
+    recommendation: str,
+    judge_release_id: str,
+    secret: str | None,
+) -> bool:
+    if (
+        not secret or not submission_id or not judge_release_id
+        or not re.fullmatch(r"sha256:[0-9a-f]{64}", reviewed_package_hash)
+        or metadata.get("provider") != "reviewer-panel"
+        or metadata.get("quorum_policy") != MODEL_QUORUM_POLICY
+        or metadata.get("reviewed_package_hash") != reviewed_package_hash
+        or metadata.get("judge_release_id") != judge_release_id
+        or metadata.get("recommendation") != recommendation or recommendation != "accept"
+        or type(metadata.get("accept_quorum_count")) is not int
+        or metadata["accept_quorum_count"] < 2
+        or metadata.get("accept_quorum_waiver")
+    ):
+        return False
+    try:
+        expected = model_quorum_attestation(
+            metadata,
+            submission_id=submission_id,
+            reviewed_package_hash=reviewed_package_hash,
+            recommendation=recommendation,
+            judge_release_id=judge_release_id,
+            secret=secret,
+        )
+        return hmac.compare_digest(str(metadata.get("model_quorum_attestation") or ""), expected)
+    except (TypeError, ValueError, KeyError):
+        return False
+
+
 def billing_waiver_receipt_valid(metadata: dict, *, provider: str | None = None) -> bool:
+    if _uses_model_quorum(metadata):
+        return False
     models = metadata.get("accept_quorum_models")
     distinct_models = {model.strip() for model in models if isinstance(model, str) and model.strip()} if isinstance(models, list) else set()
     try:
@@ -289,6 +454,10 @@ def billing_waiver_attestation(
         "judge_release_id": judge_release_id,
         "receipt": {key: metadata.get(key) for key in _BILLING_WAIVER_FIELDS},
     }
+    return _review_attestation(payload, secret)
+
+
+def _review_attestation(payload: dict, secret: str) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return f"hmac-sha256:{hmac.new(secret.encode(), encoded, hashlib.sha256).hexdigest()}"
 

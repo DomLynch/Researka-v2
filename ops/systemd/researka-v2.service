@@ -19,6 +19,8 @@ Environment=RESEARKA_V2_PROVIDER=judge_panel
 ExecStart=/opt/researka-v2/.venv/bin/python -m uvicorn apps.runtime_api.app:create_app --factory --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=5
+TimeoutStopSec=1800
+KillMode=mixed
 UMask=0077
 StateDirectory=researka-v2
 StateDirectoryMode=0700

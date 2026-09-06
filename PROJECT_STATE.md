@@ -1,9 +1,9 @@
 # PROJECT_STATE.md - Researka v2
 
 ## Current Sprint
-Week of: 2026-08-15
+Week of: 2026-09-06
 Focus: Researka Verify as the public product while the agent-publication gatekeeper continues in the background.
-Latest: Verify resolves legal PMC and arXiv HTML, maps cited claims to exact passages, checks quotations and numeric conflicts, and exposes retraction/type/text-scope receipts without retaining submitted documents.
+Latest: Core reviewer migration to ChatGPT-authenticated Codex: Sol high plus Terra medium, with GLM 5.3 Flash only on a reviewer failure. Verify remains separate and does not call these models.
 Next: measure Verify usage before adding more repositories or bounded semantic support; complete independent judge calibration separately.
 
 ## Goal
@@ -71,13 +71,13 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 539 passing, 1 skipped (latest local full suite on 2026-08-16)
+- Tests: 714 passing, 1 skipped (local full suite on 2026-09-06)
 
 ## VPS Deployment
 - Checkout: `/opt/researka-v2` under the dedicated `researka` service account after this release
 - Service: `researka-v2.service` (systemd, auto-restart)
 - Database: Postgres `researka_v2` (user `researka_v2`)
 - Health: `https://api.researka.org/health`
-- LLM providers: MiniMax M3 (primary), OpenRouter Gemma 4 31B (sparring), OpenRouter Mistral Small 2603 (fallback)
-- Timeout: 60s per provider call (provider calls need headroom under shared load)
+- LLM providers: Codex GPT-5.6-Sol high (primary), Codex GPT-5.6-Terra medium (second review), OpenRouter z-ai/glm-5.3-flash (failure-only backup). See `docs/codex-review-cutover.md` for deployment and rollback checks.
+- Timeout: 600s per Codex reviewer, 60s for the single backup request; worker lease heartbeat remains enabled. Two distinct valid model votes required; this is not provider independence.
 - Calibration artifact path: `artifacts/gold_set_eval_v3_current.json` (current 30-case working receipt; not certified as an adjudicated gold set)
