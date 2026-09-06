@@ -1,4 +1,7 @@
 .venv/
+.venv-quality/
+.import_linter_cache/
+.quality-reports/
 __pycache__/
 .pytest_cache/
 *.pyc

@@ -1,0 +1,8 @@
+{
+  "pattern": "{apps,runtime_core,contracts}/**/*.py",
+  "format": ["python"],
+  "minLines": 10,
+  "minTokens": 100,
+  "reporters": ["console"],
+  "ignore": ["**/__pycache__/**"]
+}

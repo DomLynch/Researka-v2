@@ -67,6 +67,7 @@ See `specs/v2-session-checklist.md` for the exact session template.
 
 ## Testing Rules
 - Run `python3 -m pytest -q`
+- Both Codex and Claude: run `make quality` before completing code changes. First-time setup: `make quality-setup`. See `quality/README.md`; do not regenerate baselines to hide regressions.
 - New workflow logic = new test
 - New gate = new test
 - New API route = at least one smoke test
