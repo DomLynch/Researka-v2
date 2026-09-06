@@ -12,6 +12,9 @@ This is model diversity, not independence between providers.
 ## Deploy
 
 1. Run the full tests, mypy, Ruff, and `make quality`; audit the diff twice.
+   Install the CLI separately from agent runtimes:
+   `npm install --prefix /opt/researka-codex --ignore-scripts --no-audit --no-fund @openai/codex@0.153.1`.
+   The older system CLI 0.116.0 does not support the isolation flags.
 2. Install `ops/codex-review.env.example` as `/etc/researka/codex-review.env`.
    Install `ops/systemd/researka-v2-codex-review.conf` as `99-codex-review.conf`
    in both API and worker systemd drop-in directories. Keep other drop-ins.
