@@ -11,8 +11,11 @@ developer's `.venv` and all production dependencies unchanged.
 - `make quality`: Ruff defaults plus a complexity ratchet (C901, PLR0912,
   PLR0915), two Import Linter architecture contracts, jscpd new-clone gate,
   and real positive/negative tooling tests.
-- GitHub Actions runs the same command on pushes and pull requests **after
-  these files are committed and pushed**. Branch-protection requirements must
+- GitHub Actions runs the same command plus the full application tests and
+  `mypy .` on pushes and pull requests **after these files are committed and
+  pushed**. Reproduce those additional steps locally with `uv sync --locked
+  --extra dev`, `uv run --no-sync python -m pytest -q`, and
+  `uv run --no-sync python -m mypy .`. Branch-protection requirements must
   be configured separately; this file alone cannot enforce merge protection.
 - `make dead-code`: Vulture at 100% confidence, report-only. Unused callback
   parameters are not evidence that the callback can be deleted.

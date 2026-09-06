@@ -4,6 +4,7 @@ that holds for house and external agents alike."""
 from __future__ import annotations
 
 import json
+import tracemalloc
 from typing import Any
 
 import httpx
@@ -13,6 +14,7 @@ from fastapi.testclient import TestClient
 import runtime_core.workflow as workflow
 from apps.runtime_api.app import create_app
 from contracts import ArticleType, Decision, ObjectType, ProviderUsage, ResearchObject, RuntimeJob, Stage, run_submission_template_checks
+from contracts.submissions import _citation_membership_failures
 from runtime_core.providers import ProviderRequest, ProviderResponse, ProviderResult
 from runtime_core.doi_resolver import UnsafeSourceLocator, _require_public_source, verify_source_metadata
 from runtime_core.repos import InMemoryRuntimeRepository
@@ -139,6 +141,67 @@ def test_citation_membership_accepts_receipts_present_in_bundle() -> None:
     results = run_submission_template_checks(sections=sections, source_bundle=bundle)
     gate = next(result for result in results if result.name == "citation_membership")
     assert gate.passed, gate.reason
+
+
+@pytest.mark.parametrize("doi", [
+    "10.1016/s0140-6736(24)01498-3",
+    "10.1016/s0140-6736(25)01375-3",
+    "10.1234/study(alpha)",
+    "10.1234/(alpha(beta))",
+    "10.1234/study(alpha(beta))",
+    "10.1234/[ghost]",
+    "10.1234/{ghost}",
+    "10.1234/<ghost>",
+])
+@pytest.mark.parametrize("citation", [
+    "{doi}", "({doi}).", '[exact source: https://doi.org/{doi}].',
+    "[Study](https://doi.org/{doi})", '"{doi}"',
+    "({doi}):", "({doi})!", "({doi})?",
+])
+def test_citation_membership_preserves_bracketed_doi_suffix(doi: str, citation: str) -> None:
+    sections = _sections(extra=" See " + citation.format(doi=doi))
+    bundle = _bundle()
+    bundle[0]["doi"] = doi
+    results = run_submission_template_checks(sections=sections, source_bundle=bundle)
+    gate = next(result for result in results if result.name == "citation_membership")
+    assert gate.passed, gate.reason
+
+    bundle[0]["doi"] = "10.1000/unrelated"
+    results = run_submission_template_checks(sections=sections, source_bundle=bundle)
+    gate = next(result for result in results if result.name == "citation_membership")
+    assert not gate.passed
+    assert gate.reason.endswith(f"missing: doi:{doi}")
+
+
+def test_citation_membership_nested_suffix_cannot_match_bundled_prefix() -> None:
+    assert _citation_membership_failures({"Results": "10.1234/(alpha(beta))"}, []) == [
+        "doi:10.1234/(alpha(beta))"
+    ]
+    assert _citation_membership_failures(
+        {"Results": "10.1234/study(alpha(beta))"}, [{"doi": "10.1234/study"}]
+    ) == ["doi:10.1234/study(alpha(beta))"]
+
+
+@pytest.mark.parametrize("prose", [
+    "(10.1000/src1)(10.9999/ghost)",
+    "[10.1000/src1][10.9999/ghost]",
+    "(10.1000/src1).(10.9999/ghost)",
+])
+def test_citation_membership_checks_adjacent_citations(prose: str) -> None:
+    assert _citation_membership_failures({"Results": prose}, [
+        {"doi": "10.1000/src1"}
+    ]) == ["doi:10.9999/ghost"]
+
+
+def test_citation_membership_long_suffix_has_bounded_memory() -> None:
+    doi = "10.1234/" + "a" * 262_144
+    tracemalloc.start()
+    try:
+        assert _citation_membership_failures({"Results": doi}, []) == ["doi:" + doi]
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 32 * len(doi)
 
 
 def test_source_identity_requires_a_stable_locator() -> None:

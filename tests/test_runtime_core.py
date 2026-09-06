@@ -162,6 +162,79 @@ def test_claim_support_accepts_exact_statistic_despite_different_prose() -> None
     assert support_for_claim(claim, [source]) == []
 
 
+@pytest.mark.parametrize("field", ["quote", "evidence_span", "excerpt"])
+@pytest.mark.parametrize("subject, other", [("Semaglutide", "Tirzepatide"), ("Solar generation", "Wind generation")])
+@pytest.mark.parametrize("ending", ["", ". {subject} was not studied", "; {subject} was not studied"])
+def test_claim_support_rejects_wrong_subject_with_matching_numbers(field, subject, other, ending) -> None:
+    claim = f"{subject} reduced the measured outcome by 12% after 26 weeks [1]."
+    source = {field: f"{other} reduced the measured outcome by 12% after 26 weeks{ending.format(subject=subject)}."}
+
+    assert support_for_claim(claim, [source]) == []
+    assert support_for_claim(claim, [source], require_quantitative_agreement=True) == []
+    assert support_for_claim(claim, [source], require_evidence_alignment=False)
+
+
+@pytest.mark.parametrize("passage", [
+    "Semaglutide did not reduce body weight by 12% after 26 weeks.",
+    "Tirzepatide reduced body weight by 12% after 26 weeks. Semaglutide reduced body weight by 5% after 26 weeks.",
+    "Tirzepatide reduced body weight by 12% after 26 weeks, compared with semaglutide at 5%.",
+])
+def test_claim_support_cannot_borrow_results_from_another_statement(passage) -> None:
+    claim = "Semaglutide reduced body weight by 12% after 26 weeks [1]."
+
+    assert support_for_claim(claim, [{"evidence_span": passage}], require_quantitative_agreement=True) == []
+
+
+@pytest.mark.parametrize("passage", [
+    "Semaglutide reduced body weight by 12% after 26 weeks.",
+    "Semaglutide lowered body weight by 12 percent after 26 weeks.",
+    "Tirzepatide was not studied. Semaglutide lowered body weight by 12 percent after 26 weeks.",
+    "Semaglutide reduced body weight by 12% after 26 weeks with no serious adverse events.",
+    "Body weight was reduced by 12% after 26 weeks with semaglutide.",
+    "Semaglutide produced a body weight loss of 12% after 26 weeks.",
+])
+def test_claim_support_preserves_matching_subject_paraphrases(passage) -> None:
+    claim = "Semaglutide reduced body weight by 12% after 26 weeks [1]."
+
+    assert support_for_claim(claim, [{"evidence_span": passage}], require_quantitative_agreement=True)
+
+
+def test_claim_support_ignores_author_attribution_before_subject() -> None:
+    claim = "Feng 2024 [1] reported that semaglutide reduced body weight by 12% after 26 weeks."
+    source = {"cited_as": "Feng 2024", "excerpt": "Semaglutide lowered body weight by 12% after 26 weeks."}
+
+    assert support_for_claim(claim, [source], require_quantitative_agreement=True)
+
+
+def test_claim_support_combines_sources_without_dropping_a_subject() -> None:
+    claim = "Semaglutide and tirzepatide reduced body weight by 12% and 15%, respectively [1,2]."
+    sources = [
+        {"excerpt": "Semaglutide reduced body weight by 12%."},
+        {"excerpt": "Tirzepatide reduced body weight by 15%."},
+    ]
+
+    assert len(support_for_claim(claim, sources, require_quantitative_agreement=True)) == 2
+    sources[1]["excerpt"] = "An unrelated treatment reduced body weight by 15%."
+    assert support_for_claim(claim, sources) == []
+    assert support_for_claim(claim, sources, require_quantitative_agreement=True) == []
+
+
+def test_trace_guard_requests_revision_for_wrong_subject_not_missing_citation() -> None:
+    submission = ResearchObject(
+        object_type=ObjectType.SUBMISSION,
+        title="Research Synthesis: Semaglutide outcomes",
+        metadata={
+            "article_type": ArticleType.RESEARCH_SYNTHESIS.value,
+            "abstract": "Semaglutide reduced body weight by 12% after 26 weeks in the measured adult population [1].",
+            "source_bundle": [{"evidence_span": "Tirzepatide reduced body weight by 12% after 26 weeks in the measured adult population. Semaglutide was not studied."}],
+        },
+    )
+
+    revisions = workflow._claim_trace_guard_revisions(submission)
+    assert len(revisions) == 1
+    assert "1/1 claims identify a source; 0/1 also align" in revisions[0]
+
+
 def test_claim_support_requires_numeric_and_unit_agreement_when_requested() -> None:
     source = {
         "title": "Trial",

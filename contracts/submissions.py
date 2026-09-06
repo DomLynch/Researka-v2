@@ -15,7 +15,7 @@ _DOI_PATTERN = re.compile(r"^10\.\d{4,}/\S+$")
 # Prose-citation patterns: identifiers an author cites inside section text.
 # Every one must be a member of the submitted source bundle — citing receipts
 # the bundle does not carry is the canonical fabrication/slip vector.
-_PROSE_DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[^\s\"\'\])}>,;]+", re.IGNORECASE)
+_PROSE_DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/", re.IGNORECASE)
 _PROSE_PMID_PATTERN = re.compile(r"\bPMID[:\s#-]*(\d{4,12})\b", re.IGNORECASE)
 _TABLE_SEPARATOR_PATTERN = re.compile(r"^:?-{3,}:?$")
 _TABLE_HEADER_CELLS = {
@@ -100,6 +100,24 @@ def _clean_doi(value: str) -> str:
     return value.strip().rstrip(".,;").lower()
 
 
+def _prose_doi_end(prose: str, start: int) -> int:
+    # Scan once: nested suffix brackets belong to the DOI, outer closers do not.
+    stack: list[str] = []
+    pairs = {")": "(", "]": "[", "}": "{", ">": "<"}
+    for index in range(start, len(prose)):
+        char = prose[index]
+        if char.isspace() or char in "\"',;":
+            return index
+        if char in "([{<":
+            stack.append(char)
+        elif char in pairs:
+            if not stack:
+                return index
+            if stack[-1] == pairs[char]:
+                stack.pop()
+    return len(prose)
+
+
 def _trusted_host(host: str, expected: str) -> bool:
     normalized = host.strip().lower().rstrip(".")
     return normalized == expected or normalized.endswith(f".{expected}")
@@ -109,7 +127,12 @@ def _citation_membership_failures(sections: dict[str, str], source_bundle: list[
     prose = "\n".join(str(value) for value in sections.values())
     bundle_dois = {_clean_doi(str(entry.get("doi") or "")) for entry in source_bundle}
     bundle_pmids = {str(entry.get("pmid") or entry.get("id") or "").strip() for entry in source_bundle}
-    cited_dois = {_clean_doi(match) for match in _PROSE_DOI_PATTERN.findall(prose)}
+    cited_dois = set()
+    cursor = 0
+    while match := _PROSE_DOI_PATTERN.search(prose, cursor):
+        end = _prose_doi_end(prose, match.end())
+        cited_dois.add(_clean_doi(prose[match.start():end]))
+        cursor = end
     cited_pmids = set(_PROSE_PMID_PATTERN.findall(prose))
     missing = [f"doi:{doi}" for doi in sorted(cited_dois - bundle_dois)]
     missing.extend(f"pmid:{pmid}" for pmid in sorted(cited_pmids - bundle_pmids))

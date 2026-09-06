@@ -30,6 +30,8 @@ GENERIC_EVIDENCE_WORDS = {
     "about", "across", "evidence", "finding", "findings", "reported", "results",
     "review", "source", "study", "studies", "support", "supports", "suggests", "trial",
 }
+EFFECT_PATTERN = r"\b(?:reduc\w*|increas\w*|decreas\w*|lower\w*|improv\w*|rais\w*|inhibit\w*)\b"
+NEGATED_EFFECT_PATTERN = re.compile(r"\b(?:not|never|no)\b(?:\W+\w+){0,3}\W+" + EFFECT_PATTERN, re.IGNORECASE)
 
 
 def claim_candidates(text: str) -> list[str]:
@@ -173,28 +175,72 @@ def contradiction_status_for_text(text: str, profile: dict[str, Any]) -> Contrad
     return ContradictionStatus.NONE
 
 
-def _evidence_aligns(claim: str, source: dict[str, Any]) -> bool:
+def _effect_subjects(claim: str) -> list[set[str]]:
+    # A bounded lexical guard, not semantic entailment or a drug-name dictionary.
+    effect = re.search(EFFECT_PATTERN, claim.lower())
+    prefix = claim[:effect.start()] if effect else ""
+    prefix = re.split(r"\b(?:that|reported|showed|found)\b", prefix.lower())[-1]
+    if re.search(r"\b(?:was|were|is|been|be)\s+(?:not\s+)?$", prefix):
+        return []  # Passive voice has no intervention subject before the verb.
+    subjects = [
+        {
+            word for word in re.findall(r"[a-z]+", part)
+            if len(word) >= 4 and word not in GENERIC_EVIDENCE_WORDS | {"this", "that", "with", "after", "were", "have", "been"}
+        }
+        for part in re.split(r"\band\b", prefix)
+    ]
+    return [subject for subject in subjects if subject]
+
+
+def _subject_in_passage(subject: set[str], evidence: str) -> bool:
+    targets = _effect_subjects(evidence) or [set(re.findall(r"[a-z0-9]+", evidence))]
+    return any(subject <= target for target in targets)
+
+
+def _passage_aligns(claim: str, evidence: str) -> bool:
+    subjects = _effect_subjects(claim)
     claim_quantities = _quantity_tokens(claim)
+    if subjects and (
+        not any(_subject_in_passage(subject, evidence) for subject in subjects)
+        or (claim_quantities and not _quantity_tokens(evidence))
+        or bool(NEGATED_EFFECT_PATTERN.search(claim)) != bool(NEGATED_EFFECT_PATTERN.search(evidence))
+    ):
+        return False
     claim_words = {
         word for word in re.findall(r"[a-z0-9]+", claim.lower())
         if len(word) >= 5 and word not in GENERIC_EVIDENCE_WORDS
     }
-    for value in (source.get("quote"), source.get("evidence_span"), source.get("excerpt")):
-        evidence = " ".join(str(value or "").lower().split())
-        if len(evidence) < 20:
-            continue
-        if evidence in claim.lower() or claim.lower() in evidence:
-            return True
-        if claim_quantities and claim_quantities <= _quantity_tokens(evidence):
-            return True
-        evidence_words = {
-            word for word in re.findall(r"[a-z0-9]+", evidence)
-            if len(word) >= 5 and word not in GENERIC_EVIDENCE_WORDS
-        }
-        required = min(4, max(2, (len(claim_words) + 4) // 5))
-        if len(claim_words & evidence_words) >= required:
-            return True
-    return False
+    if evidence in claim.lower() or claim.lower() in evidence:
+        return True
+    if claim_quantities and claim_quantities <= _quantity_tokens(evidence):
+        return True
+    evidence_words = {
+        word for word in re.findall(r"[a-z0-9]+", evidence)
+        if len(word) >= 5 and word not in GENERIC_EVIDENCE_WORDS
+    }
+    required = min(4, max(2, (len(claim_words) + 4) // 5))
+    return len(claim_words & evidence_words) >= required
+
+
+def _aligned_passages(claim: str, source: dict[str, Any]) -> list[str]:
+    return [
+        passage.strip().lower()
+        for field in ("quote", "evidence_span", "excerpt")
+        for passage in re.split(r"\n+|(?<=[.!?;])\s+", str(source.get(field) or ""))
+        if len(passage.strip()) >= 20 and _passage_aligns(claim, passage.strip().lower())
+    ]
+
+
+def _evidence_aligns(claim: str, source: dict[str, Any]) -> bool:
+    return bool(_aligned_passages(claim, source))
+
+
+def _subjects_covered(claim: str, sources: list[dict[str, Any]]) -> bool:
+    passages = [passage for source in sources for passage in _aligned_passages(claim, source)]
+    return all(
+        any(_subject_in_passage(subject, passage) for passage in passages)
+        for subject in _effect_subjects(claim)
+    )
 
 
 def _quantity_tokens(text: str, sources: list[dict[str, Any]] | None = None) -> set[tuple[str, str]]:
@@ -246,10 +292,7 @@ def _quantities_agree(claim: str, sources: list[dict[str, Any]]) -> bool:
         return True
     evidence_tokens: set[tuple[str, str]] = set()
     for source in sources:
-        evidence = " ".join(
-            str(source.get(field) or "")
-            for field in ("quote", "evidence_span", "excerpt", "effect")
-        )
+        evidence = " ".join(_aligned_passages(claim, source))
         evidence_tokens.update(_quantity_tokens(evidence))
     evidence_tokens.update((number, "") for number, _ in tuple(evidence_tokens))
     return claim_tokens <= evidence_tokens
@@ -307,7 +350,9 @@ def support_for_claim(
         if not require_evidence_alignment or _evidence_aligns(text, sources[index])
     ]
     aligned_sources = [sources[index] for index in aligned_indexes]
-    if require_quantitative_agreement and not _quantities_agree(text, aligned_sources):
+    if (require_evidence_alignment and not _subjects_covered(text, aligned_sources)) or (
+        require_quantitative_agreement and not _quantities_agree(text, aligned_sources)
+    ):
         return []
     support: list[dict[str, Any]] = []
     for index in aligned_indexes:
