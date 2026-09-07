@@ -18,6 +18,8 @@ quorum, evidence thresholds and publication-integrity checks. No model change.
 | Valid disagreement treated as provider failure | One bounded GPT reconsideration round; unresolved result is `review_disagreement`/`ESCALATE`, not automatic author revision or provider retry | `test_bounded_adjudication_uses_two_final_valid_votes_no_paid_backup` |
 | Stranded PUBLISHING invisible | Include in bounded delivery recovery and stall alerts | parametrized `test_reconciler_retries_external_delivery_once_without_duplicate_work`; `test_publishing_state_is_alerted` |
 | Protocol incorrectly counted as a completed study | Explicit protocol/context remains background, outside citation floor and primary-results appraisal | `test_protocol_context_does_not_count_as_primary_results` |
+| Historical revise displayed during reassessment | Current decision response excludes decisions older than the latest intake attempt; history remains intact | API reassessment regression |
+| Unresolved panel disagreement tells author to retry | Return ESCALATE with review fault domain and no automatic retry/resubmission | API disagreement regression |
 
 ## Review passes
 
@@ -29,6 +31,9 @@ quorum, evidence thresholds and publication-integrity checks. No model change.
    terminal-failure classification and bounded delivery retries. Existing tests
    caught an unsafe adjacent-sentence join; it was fixed rather than weakening
    the assertions. Refreshed the existing CodeGraph index after integration.
+   Final review also aligned reviewer table feedback with the authoritative
+   passages used by editorial checks; the request-capture regression confirms
+   a supported row is not sent to the reviewer as an unresolved warning.
 
 Commands: `.venv/bin/python -m pytest -q`, `.venv/bin/python -m mypy .`,
 `make quality`, `git diff --check`.
