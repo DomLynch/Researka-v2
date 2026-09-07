@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import hashlib
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -358,15 +359,42 @@ def table_row_support(row: dict[str, str], sources: list[dict[str, Any]]) -> lis
     )]
 
 
+def _passage_differences(claim: str, passage: str) -> list[str]:
+    differences = []
+    directions, endpoints = _effect_context(claim)
+    other_directions, _ = _effect_context(passage)
+    if directions and other_directions and directions != other_directions:
+        differences.append("direction")
+    if endpoints and not endpoints <= set(re.findall(r"[a-z]+", passage.lower())):
+        differences.append("endpoint")
+    if any(not _subject_in_passage(subject, passage) for subject in _effect_subjects(claim)):
+        differences.append("intervention_or_population")
+    if not _quantity_tokens(claim) <= _quantity_tokens(passage):
+        differences.append("number_or_unit")
+    if bool(NEGATED_EFFECT_PATTERN.search(claim)) != bool(NEGATED_EFFECT_PATTERN.search(passage)):
+        differences.append("negation")
+    return differences
+
+
 def claim_assessment(claim: str, sources: list[dict[str, Any]]) -> dict[str, Any]:
     references = support_for_claim(claim, sources, require_evidence_alignment=False)
     supported = support_for_claim(claim, sources, require_quantitative_agreement=True)
     passages = [passage for source in references for passage in _evidence_passages(source)]
+    comparisons = [{"source_id": source["source_id"], "passage": passage[:2000], "truncated": len(passage) > 2000,
+                    "mismatch_axes": _passage_differences(claim, passage)}
+                   for source in references for field in ("quote", "evidence_span", "excerpt")
+                   if (passage := str(source.get(field) or "").strip())]
+    status = "SUPPORTED" if supported else "NEEDS_SEMANTIC_REVIEW" if passages else "INSUFFICIENT_SOURCE_TEXT"
+    # Conflicting lexical comparisons need context, not a fabricated contradiction verdict.
+    if supported and any(row["mismatch_axes"] for row in comparisons):
+        status = "NEEDS_SEMANTIC_REVIEW"
     return {
+        "claim_id": "claim_" + hashlib.sha256(claim.encode()).hexdigest()[:16],
         "claim": claim,
-        "status": "SUPPORTED" if supported else "NEEDS_SEMANTIC_REVIEW" if passages else "INSUFFICIENT_SOURCE_TEXT",
+        "status": status,
         "sources": [str(source.get("doi") or source.get("pmid") or source.get("cited_as") or "") for source in references],
         "passages_considered": passages[:6],
+        "comparisons": comparisons[:6],
         "required_check": "Check intervention, endpoint, direction, population and number/unit against these source-owned passages; lexical failure alone is not a proven contradiction.",
     }
 

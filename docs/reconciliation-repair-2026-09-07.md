@@ -62,3 +62,62 @@ not five acceptance decisions. Reassess the original IDs through normal review.
   conflicts, and sign off. Then evaluate the exact deployed release and report
   false accepts, false revisions and false rejections. Do not tune thresholds
   to synthetic accept labels or claim independent validation from unit tests.
+
+## Feedback-contract completion
+
+The follow-up closes the code-side feedback gaps without lowering acceptance
+thresholds, changing models, or changing agent code:
+
+- Claim diagnostics carry stable IDs, source IDs, considered passages and
+  mismatch axes. Comparisons preserve the source-owned field's surrounding
+  context; displayed fields are capped at 2,000 characters and marked when
+  truncated. Original authoritative receipts remain in the reviewer input.
+- Lexical differences are not labelled proven contradictions. Mixed passages,
+  compatible bounds and ambiguous effect wording require semantic review.
+  These diagnostics are not an independently validated entailment engine.
+- Mandatory model objections require a material-impact assertion, exact
+  section/quote for incorrect statements, and a bounded correction. Missing
+  sections can be reported as omissions. Short valid fixes remain valid.
+- Quotes preserve scientific operators and numeric boundaries: `p > 0.05`
+  cannot be grounded in `p < 0.05`, nor `48` in `148`.
+- Each previous mandatory issue must be resolved or persist. New issues need
+  an explanation; the same issue cannot also be marked resolved. These fields
+  persist on the review for inspection.
+- Invalid or explicitly nonmaterial feedback uses the existing one-round GPT
+  reconsideration. Unresolved feedback escalates, rather than becoming an
+  author revision or a new paid-model tiebreaker. This checks reviewer output,
+  not a new manuscript eligibility threshold.
+
+Evidence: `tests/test_review_materiality.py` covers normal and malformed
+feedback, concise corrections, revision accounting, real workflow persistence,
+bounded two-model reconsideration with zero backup calls, scientific quote
+operators and context-sensitive diagnostic regressions. Existing
+`tests/test_reconciliation_evidence.py` covers recovery, source reconciliation,
+table feedback, revision context and editorial-stage reporting.
+
+Two independent review passes found and prompted repairs to length-based
+false blockers, resolved-issue overlap, nonmaterial omissions, false lexical
+contradictions and punctuation-losing quotation checks. No complexity or
+duplication baseline was raised to accommodate the implementation.
+
+## Remaining empirical work: not completed by code
+
+The checked freeze receipt contains 120 cases but lacks `empirical_study`
+coverage. It is explicitly `blinded_incomplete_coverage`, not a certified gold
+set. Do not execute a paid benchmark or supply invented adjudicator labels.
+
+The existing `scripts/prepare_blinded_gold_set.py` already provides the path:
+
+1. Add genuine empirical-study candidates and freeze a new complete sample
+   against the chosen current judge release using `sample --judge-release`.
+2. Two independent adjudicators label the blinded packets. Resolve disagreements
+   with documented adjudication, then run `merge --labels LABEL_A LABEL_B`
+   with the frozen manifest and receipt (and `--resolutions` when required).
+3. Evaluate that adjudicated corpus with `scripts/evaluate_gold_set.py` using
+   the exact frozen release. Schedule the run only with an explicit usage budget.
+4. Inspect false-accept, false-revision and false-rejection rates; obtain genuine
+   human sign-off with `prepare_blinded_gold_set.py sign`.
+
+Responsibility: Core owns the existing tooling and release binding; independent
+adjudicators own labels and sign-off. No automated completion claim can replace
+that missing evidence. This does not disable normal production review.

@@ -175,6 +175,62 @@ def _source_integrity_failure(
     return None
 
 
+def _verbatim_quote_in_section(quote: str, section: str) -> bool:
+    quote = " ".join(quote.split())
+    prefix = r"(?<![\w.+,\-−±])" if re.match(r"[+\-−]?(?:\d|\.\d)", quote) else r"(?<!\w)"
+    return bool(re.search(prefix + re.escape(quote) + r"(?!\w|[.,]\d)", " ".join(section.split())))
+
+
+def _material_finding_failure(finding: dict, context: dict) -> str | None:
+    if finding.get("materiality") != "blocking" or finding.get("has_material_impact") is not True or re.match(
+        r"\s*(?:optional\s*[:\-]|non[- ]blocking\s*[:\-])", str(finding.get("issue") or ""), re.I
+    ):
+        return "blocking_finding_requires_material_impact"
+    if any(not isinstance(finding.get(key), str) or not any(char.isalnum() for char in finding[key])
+           for key in ("impact", "correction")):
+        return "material_issue_missing_impact_or_correction"
+    section, quote = finding.get("section"), finding.get("quote")
+    if not isinstance(section, str) or not section.strip():
+        return "material_issue_missing_location"
+    if finding.get("kind") not in {"omission", "incorrect"}:
+        return "material_issue_invalid_kind"
+    if finding.get("kind") == "incorrect" and (
+        not isinstance(quote, str) or not _normalized_words(quote)
+        or not _verbatim_quote_in_section(quote, str(context.get("sections", {}).get(section, "")))
+    ):
+        return "material_issue_quote_not_in_section"
+    previous = context.get("previous_issues", [])
+    if previous:
+        reason = finding.get("change_reason")
+        if reason == "persisting":
+            if finding.get("prior_issue") not in previous:
+                return "material_issue_unknown_prior_issue"
+        elif reason not in {"newly_introduced", "newly_discovered"} or not isinstance(finding.get("why_new"), str) or not any(char.isalnum() for char in finding["why_new"]):
+            return "material_issue_missing_revision_explanation"
+    return None
+
+
+def review_materiality_failure(payload: dict, context: dict) -> str | None:
+    issues = set(payload.get("major_issues", [])) | set(payload.get("required_revisions", []))
+    findings = payload.get("material_findings", [])
+    if not isinstance(findings, list) or any(not isinstance(finding, dict) for finding in findings):
+        return "invalid_material_findings"
+    if {finding.get("issue") for finding in findings} != issues or len(findings) != len(issues):
+        return "blocking_issues_require_exact_material_findings"
+    resolved = payload.get("resolved_prior_issues", [])
+    if not isinstance(resolved, list) or any(issue not in context.get("previous_issues", []) for issue in resolved):
+        return "unknown_resolved_prior_issue"
+    for finding in findings:
+        if finding.get("prior_issue") in resolved or finding.get("issue") in resolved:
+            return "resolved_issue_reopened_in_same_verdict"
+        if failure := _material_finding_failure(finding, context):
+            return failure
+    persisting = {finding.get("prior_issue") for finding in findings if finding.get("change_reason") == "persisting"}
+    if set(context.get("previous_issues", [])) != set(resolved) | persisting:
+        return "previous_material_issues_not_accounted_for"
+    return None
+
+
 def review_grounding_failure(
     payload: dict[str, object],
     *,

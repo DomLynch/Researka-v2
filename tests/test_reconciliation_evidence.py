@@ -34,7 +34,8 @@ def test_claim_reconciliation_discriminates_outcome_direction_units(passage, exp
     sources = [{"doi": "10.1234/test", "evidence_span": passage}]
     assert bool(support_for_claim(claim, sources, require_quantitative_agreement=True)) is expected
     result = claim_assessment(claim, sources)
-    assert result["status"] == ("SUPPORTED" if expected else "NEEDS_SEMANTIC_REVIEW")
+    expected_status = "SUPPORTED" if expected else "NEEDS_SEMANTIC_REVIEW"
+    assert result["status"] == expected_status
     assert result["sources"] == ["10.1234/test"]
 
 
@@ -183,7 +184,9 @@ def test_review_path_requests_independent_claim_and_table_passages_without_mutat
 
     def inspect_request(request):
         assert '"table_evidence_checks": []' in request.user_prompt
+        assert '"claim_evidence_checks": [' in request.user_prompt
         assert "Survival was 100% in both groups." in request.user_prompt
+        assert request.context["materiality"]["sections"]["Abstract"] == "Mortality was 48% [1]."
         raise RuntimeError("review_input_checked")
 
     monkeypatch.setattr(reviewer, "complete", inspect_request)
