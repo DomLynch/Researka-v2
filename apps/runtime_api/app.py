@@ -1176,6 +1176,15 @@ def _publication_failure_feedback(repo: RuntimeRepository, submission_id: str) -
     return None
 
 
+def _current_attempt_decisions(repo: RuntimeRepository, submission_id: str, pipeline: dict) -> list[ResearchObject]:
+    intake_started = max((datetime.fromisoformat(attempt["at"]) for attempt in pipeline["attempts"]
+                          if attempt["stage"] == Stage.INTAKE.value
+                          and attempt["event"] in {EventType.JOB_QUEUED.value, EventType.JOB_LEASED.value}),
+                         default=datetime.min.replace(tzinfo=timezone.utc))
+    return [decision for decision in repo.children_of(submission_id, ObjectType.DECISION)
+            if decision.created_at >= intake_started]
+
+
 def _terminal_submission_failure_feedback(repo: RuntimeRepository, submission_id: str) -> dict | None:
     lifecycle_events = {EventType.JOB_QUEUED, EventType.JOB_LEASED, EventType.JOB_COMPLETED, EventType.JOB_FAILED}
     for event in reversed(repo.list_events()):
@@ -1535,7 +1544,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="submission_not_found")
         _require_submission_access(app.state.repository, request, submission)
         pipeline = submission_lifecycle(app.state.repository, submission_id)
-        decisions = app.state.repository.children_of(submission_id, ObjectType.DECISION)
+        decisions = _current_attempt_decisions(app.state.repository, submission_id, pipeline)
         if not decisions:
             failure = _terminal_submission_failure_feedback(app.state.repository, submission_id)
             if failure:
@@ -1545,8 +1554,8 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                     "evaluation_verdict": None,
                     "disposition": "ESCALATE" if failure["failure_class"] == "review_disagreement" else "DEFERRED_SYSTEM",
                     "reason_code": str(failure["failure_class"] or "SYSTEM_UNAVAILABLE").upper(),
-                    "fault_domain": "system",
-                    "retryable": True,
+                    "fault_domain": "review" if failure["failure_class"] == "review_disagreement" else "system",
+                    "retryable": failure["failure_class"] != "review_disagreement",
                     "resubmission": {"allowed": False, "parent_submission_id": None},
                     "publication_state": "NOT_PUBLISHED",
                     "notes": [],

@@ -704,6 +704,40 @@ def test_submission_decision_reports_only_terminal_review_failure(client: TestCl
     assert payload["pipeline"]["attempts"][-1]["terminal"] is True
 
 
+def test_review_disagreement_is_not_retryable_provider_failure(client: TestClient, monkeypatch) -> None:
+    created = client.post("/submissions", json=_minimal_submission_payload()).json()
+    worker = cast(Any, client.app).state.worker
+    original = worker.engine.handle_job
+    def disagree(job, repository):
+        if job.stage == Stage.REVIEW:
+            raise ValueError("review_disagreement:unresolved after one adjudication")
+        return original(job, repository)
+    monkeypatch.setattr(worker.engine, "handle_job", disagree)
+    client.post("/jobs/run-once", headers=_worker_headers())
+    result = client.post("/jobs/run-once", headers=_worker_headers()).json()
+    response = client.get(f"/submissions/{created['submission']['id']}/decision").json()
+    assert result["retried"] == 0
+    assert response["disposition"] == "ESCALATE"
+    assert response["fault_domain"] == "review"
+    assert response["retryable"] is False
+    assert response["resubmission"]["allowed"] is False
+
+
+def test_reassessment_does_not_report_old_revision_as_current(client: TestClient) -> None:
+    from contracts import RuntimeJob
+    created = client.post("/submissions", json=_minimal_submission_payload()).json()
+    submission_id = created["submission"]["id"]
+    repo = _repository(client)
+    repo.create_object(ResearchObject(object_type=ObjectType.DECISION, parent_object_id=submission_id,
+                                     title="Old revision", metadata={"decision": "revise"}))
+    for job in repo.queued_jobs():
+        repo.complete_job(job.id)
+    job = repo.enqueue_job(RuntimeJob(target_object_id=submission_id, stage=Stage.INTAKE))
+    repo.record_event(RuntimeEvent(event_type=EventType.JOB_QUEUED, target_object_id=submission_id,
+                                   job_id=job.id, payload={"stage": Stage.INTAKE.value}))
+    assert client.get(f"/submissions/{submission_id}/decision").json()["status"] == "pending"
+
+
 def test_quarantined_release_stays_hidden_until_delivery(client: TestClient) -> None:
     submission = client.post(
         "/submissions",
