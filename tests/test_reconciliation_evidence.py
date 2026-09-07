@@ -162,7 +162,7 @@ def test_publishing_state_is_alerted():
     assert any(alert["code"] == "publication_delivery_stall" for alert in operational_alerts(repo))
 
 
-def test_review_path_requests_independent_claim_and_table_passages_without_mutating_bundle():
+def test_review_path_requests_independent_claim_and_table_passages_without_mutating_bundle(monkeypatch):
     sources = [{"doi": "10.1234/test", "cited_as": "Smith 2022", "evidence_span": "Recruitment."}]
     submission = ResearchObject(object_type=ObjectType.SUBMISSION, title="Trial", metadata={
         "abstract": "Mortality was 48% [1].", "source_bundle": sources,
@@ -179,6 +179,16 @@ def test_review_path_requests_independent_claim_and_table_passages_without_mutat
     assert "Mortality" not in reconciled[0]["excerpt"]
     assert not _table_evidence_revisions(submission.metadata["sections"], reconciled)
     assert sources[0]["evidence_span"] == "Recruitment."
+    reviewer = _SequenceReviewer(SOL, [])
+
+    def inspect_request(request):
+        assert '"table_evidence_checks": []' in request.user_prompt
+        assert "Survival was 100% in both groups." in request.user_prompt
+        raise RuntimeError("review_input_checked")
+
+    monkeypatch.setattr(reviewer, "complete", inspect_request)
+    with pytest.raises(RuntimeError, match="review_input_checked"):
+        WorkflowEngine(provider=reviewer)._review_submission(submission)
 
 
 def test_protocol_context_does_not_count_as_primary_results():

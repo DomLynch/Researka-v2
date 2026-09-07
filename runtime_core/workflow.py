@@ -1388,7 +1388,8 @@ class WorkflowEngine:
             "revision_context": revision_context or {},
             "authoritative_claim_checks": (source_verification or {}).get("claim_checks", []),
             "table_evidence_checks": _table_evidence_revisions(
-                submission.metadata.get("sections") or {}, submission.metadata.get("source_bundle") or []
+                submission.metadata.get("sections") or {},
+                _authoritative_bundle(submission, submission.metadata.get("source_bundle") or []),
             ),
         }
         system_prompt += (
