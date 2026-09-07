@@ -110,6 +110,11 @@ def test_workflow_preserves_structured_author_feedback():
     assert recommendation == "revise"
     assert metadata["material_findings"] == payload["material_findings"]
     assert metadata["resolved_prior_issues"] == [previous]
+    assert panel.primary.requests == panel.sparring.requests
+    prompt = panel.primary.requests[0]["system_prompt"]
+    assert "Apply one repairability rule to every section and table" in prompt
+    assert "specific fix or indispensable missing evidence under the repairability rule" in prompt
+    assert "bounded required fix" not in prompt
 
 
 class Reviews:
@@ -117,8 +122,10 @@ class Reviews:
 
     def __init__(self, model, responses):
         self.model, self.responses, self.calls = model, responses, 0
+        self.requests = []
 
     def complete(self, request):
+        self.requests.append(request.model_dump())
         response = self.responses[self.calls]
         self.calls += 1
         return ProviderResult(ok=True, response=ProviderResponse(

@@ -54,6 +54,8 @@ from runtime_core.osf import (
     warn_if_osf_default_owner_missing,
 )
 from runtime_core.ops import operational_alerts, submission_lifecycle
+from runtime_core.prompts import REVIEWER_PROMPT_VERSION, REPAIRABILITY_RULE, REVIEW_DECISION_RULES
+from runtime_core.review_contract import REVIEW_RUBRIC_KEYS
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 from runtime_core.publication_sidecars import build_sidecar, sidecar_manifest
 from runtime_core.workflow import release_quarantined_publication
@@ -103,6 +105,12 @@ def _submission_contract() -> dict:
         }
     return {
         "version": SUBMISSION_POLICY_VERSION,
+        "reviewer_policy": {
+            "version": REVIEWER_PROMPT_VERSION,
+            "rubric_keys": sorted(REVIEW_RUBRIC_KEYS),
+            "repairability_rule": REPAIRABILITY_RULE,
+            "decision_rules": REVIEW_DECISION_RULES,
+        },
         "canonical_input": "sections",
         "body_markdown_authoritative": False,
         "article_types": article_types,

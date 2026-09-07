@@ -2162,9 +2162,9 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
         ArticleType.RAPID_EVIDENCE_SYNTHESIS.value
     )
     assert "rapid evidence synthesis reviewer" in prompt.lower()
-    assert "forced triage call" in prompt
-    assert "Do not use revise as a safe default" in prompt
-    assert "mixed or heterogeneous findings are acceptable" in prompt
+    assert "Apply one repairability rule to every section and table" in prompt
+    assert "preserving the research question and a supported answer" in prompt
+    assert "Issue count, manuscript length, repair effort, and mixed findings do not alone" in prompt
     assert "Judge substance, not house style" in prompt
     assert "House-style revise" in prompt
     assert "Terser-style accept" in prompt
@@ -2177,7 +2177,7 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
         "Do not label accept-quality papers as revise for minor wording polish only"
         in prompt
     )
-    assert "reject = structurally broken" in prompt
+    assert "reject = at least one material finding meets the repairability rule's rejection criteria" in prompt
     empirical_prompt = WorkflowEngine()._review_system_prompt(
         ArticleType.EMPIRICAL_STUDY.value
     )

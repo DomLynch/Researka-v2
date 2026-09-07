@@ -121,3 +121,24 @@ The existing `scripts/prepare_blinded_gold_set.py` already provides the path:
 Responsibility: Core owns the existing tooling and release binding; independent
 adjudicators own labels and sign-off. No automated completion claim can replace
 that missing evidence. This does not disable normal production review.
+
+## Shared reviewer policy: v13 repairability
+
+`GET /contracts/current` exposes `reviewer_policy`: version, the six rubric
+keys, and the exact repairability/decision strings included in Core's prompts.
+Agent owners should compare their writer, reviewer and repair instructions to
+this contract. The submission schema/version and acceptance thresholds are
+unchanged; publication still requires the existing evidence and integrity gates.
+
+Correctable attribution, endpoints, source roles, counts or framing use REVISE
+when existing evidence preserves the research question and supported answer.
+Demonstrated fabrication, invalid data or indispensable new evidence use REJECT.
+Missing access is uncertainty, not proof of fabrication. Appropriate hedging
+does not lower alignment scores, but cannot excuse incorrect evidence claims.
+
+Both review slots and failure-only fallback receive the same original brief.
+One reconsideration compares disputed findings; unresolved disagreement still
+escalates without forced acceptance. Tests in `test_gpt_panel.py`,
+`test_review_materiality.py` and `test_runtime_api.py` verify those request and
+contract boundaries, not empirical agreement of real models. The independent
+review identified and corrected conflicting alpha/evidence-map reject wording.

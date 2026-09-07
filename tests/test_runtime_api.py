@@ -192,6 +192,10 @@ def test_architecture(client: TestClient) -> None:
 
 
 def test_submission_contract_is_generated_from_live_policy(client: TestClient) -> None:
+    from runtime_core.prompts import REVIEWER_PROMPT_VERSION, REPAIRABILITY_RULE, REVIEW_DECISION_RULES
+    from runtime_core.review_contract import REVIEW_RUBRIC_KEYS
+    from runtime_core.workflow import WorkflowEngine
+
     response = client.get("/contracts/current")
 
     assert response.status_code == 200
@@ -202,6 +206,17 @@ def test_submission_contract_is_generated_from_live_policy(client: TestClient) -
     assert contract["article_types"]["research_synthesis"]["minimum_citations"] == 12
     assert "Discussion" in contract["article_types"]["research_synthesis"]["required_sections"]
     assert contract["submission_schema"]["additionalProperties"] is False
+    policy = contract["reviewer_policy"]
+    assert policy == {
+        "version": REVIEWER_PROMPT_VERSION,
+        "rubric_keys": sorted(REVIEW_RUBRIC_KEYS),
+        "repairability_rule": REPAIRABILITY_RULE,
+        "decision_rules": REVIEW_DECISION_RULES,
+    }
+    for article_type in contract["article_types"]:
+        prompt = WorkflowEngine()._review_system_prompt(article_type)
+        assert policy["repairability_rule"] in prompt
+        assert policy["decision_rules"] in prompt
 
 
 def test_submission_contract_examples_are_versioned(client: TestClient) -> None:

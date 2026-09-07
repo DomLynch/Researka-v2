@@ -7,11 +7,11 @@ quality-setup:
 	uv pip install --python $(QUALITY_BIN)/python -r requirements-quality.txt
 	$(JSCPD) --version
 
-quality: complexity architecture duplicates quality-test
+quality: complexity architecture duplicates quality-test dead-code mock-audit
 	$(QUALITY_BIN)/ruff check --config pyproject.toml --no-fix --no-fix-only apps runtime_core contracts quality
 
 complexity:
-	$(QUALITY_BIN)/python quality/check_complexity.py
+	$(QUALITY_BIN)/python quality/check_complexity.py apps runtime_core contracts
 
 architecture:
 	$(QUALITY_BIN)/lint-imports --config quality/imports.ini --no-cache

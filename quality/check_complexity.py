@@ -42,10 +42,11 @@ def regressions(current, baseline):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("paths", nargs="+", help="Production source directories")
     parser.add_argument("--update-baseline", action="store_true")
     args = parser.parse_args()
     run = subprocess.run(
-        [sys.executable, "-m", "ruff", *RUFF_ARGS, "apps", "runtime_core", "contracts"],
+        [sys.executable, "-m", "ruff", *RUFF_ARGS, *args.paths],
         cwd=ROOT, capture_output=True, text=True, timeout=60,
     )
     if run.returncode not in (0, 1):

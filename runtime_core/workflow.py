@@ -47,7 +47,7 @@ from .evidence_quality import (
 from .integrity_client import check_integrity, index_integrity, integrity_base_url
 from .judge_release import build_judge_release, judge_release_manifest_valid
 from .osf import mint_publication_doi_from_repository, osf_publication_metadata_from_env
-from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION
+from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION, REPAIRABILITY_RULE, REVIEW_DECISION_RULES
 from .providers import LanguageModelProvider, ProviderRequest, ProviderResult
 from .review_contract import (
     CLAIM_SUPPORT_VERDICTS,
@@ -1105,7 +1105,7 @@ class WorkflowEngine:
                 "- Flag unsupported clinical, policy, investment, or broad consensus claims.\n\n"
                 "Alpha-memo accept threshold:\n"
                 "- Accept can be based on a small source bundle when the claim is narrow, receipt-backed, and honest about limits.\n"
-                "- Reject when the memo is source-free, hype-framed, or asks readers to treat a lead signal as settled consensus.\n\n"
+                "- Flag absent sources, hype, or a lead signal presented as settled consensus; apply the shared repairability rule. Revise framing or attribution when existing evidence supports a bounded signal; reject when that signal requires new evidence.\n\n"
             )
         elif article_type == ArticleType.RESEARCH_SYNTHESIS.value:
             article_specific = (
@@ -1166,7 +1166,7 @@ class WorkflowEngine:
                 "- Do not penalize for not picking a winner among conflicting findings — that is the map's job.\n\n"
                 "Evidence-map accept threshold:\n"
                 "- Accept when the scope is bounded, the findings are source-attributed, heterogeneity is represented honestly, and nothing is overclaimed into a single conclusion.\n"
-                "- Reject when findings are unsourced, fabricated, or the map quietly editorializes a settled answer the evidence does not support.\n\n"
+                "- Apply the shared repairability rule to unsourced findings or unsupported editorial conclusions: revise when existing evidence can correct attribution or remove overclaim while preserving the map; reject demonstrated fabrication or a map requiring new evidence.\n\n"
             )
         else:
             article_specific = (
@@ -1180,10 +1180,7 @@ class WorkflowEngine:
         return (
             f"{article_specific}"
             "Calibration triage:\n"
-            "- First make a forced triage call: elite-tier accept, competent-but-fixable revise, or fundamentally flawed reject.\n"
-            "- Do not use revise as a safe default for unclear cases. Decide whether the paper is closer to accept or closer to reject.\n"
-            "- Revise when missing evidence or analysis prevents the manuscript from supporting its own bounded conclusion; mixed or heterogeneous findings are acceptable when the article type maps them honestly.\n"
-            "- Reserve revise for papers that are mostly correct and fixable with bounded edits. If the paper needs a scope reset or its claims are materially unsupported, reject instead.\n\n"
+            f"{REPAIRABILITY_RULE}"
             "Style invariance rules:\n"
             "- Judge substance, not house style. Terseness, verbosity, passive voice, or different academic cadence are not defects by themselves.\n"
             "- Do not reward a manuscript for sounding like Researka house style if the evidence is weak.\n"
@@ -1197,7 +1194,7 @@ class WorkflowEngine:
             "- Academic hedging language (may, could, suggests, indicates, could suggest, are consistent with, may indicate) is normal scholarly practice.\n"
             "- Hedging does NOT indicate weak evidence, unsupported claims, or overclaim. It is the opposite of overclaim.\n"
             "- Do not penalize claim_evidence_alignment or overclaim for papers that use hedging language appropriately.\n"
-            "- Only penalize claim_evidence_alignment when the paper makes strong causal, deployment, or policy claims without hedging, while the cited evidence does not support such claims.\n"
+            "- Hedging does not excuse contradicted claims, misattributed numbers, or unsupported evidence links; assess these in prose and tables regardless of cautious wording.\n"
             "- Score claim_evidence_alignment >= 4 when claims are proportionate to cited evidence, even if hedged.\n\n"
             "Synthesis quality calibration:\n"
             "- Elite-style papers may use different organizational structures than the 7-section house format.\n"
@@ -1214,8 +1211,8 @@ class WorkflowEngine:
             "- When source bundles DO contain abstracts or full text, evaluate normally — exact statistics must match the source material.\n\n"
             "Decision anchors:\n"
             "- Anchor A (accept): bounded manuscript, claims directly supported, no major issues, no required revisions, claim_support=supported, overclaim=none, recommendation=accept.\n"
-            "- Anchor B (revise): manuscript is mostly correct and salvageable with bounded edits, but still has partial support, mild overclaim, or one materially weak dimension, recommendation=revise.\n"
-            "- Anchor C (reject): manuscript is structurally broken, needs a scope reset, or makes materially unsupported claims that require more than bounded edits, recommendation=reject.\n\n"
+            "- Anchor B (revise): partial support or incorrect table attribution can be repaired from existing evidence without replacing the research question, recommendation=revise.\n"
+            "- Anchor C (reject): the central answer needs a different evidence corpus or the study is structurally broken by invalid underlying data; the repairability rule requires rejection, recommendation=reject.\n\n"
             "Style exemplars:\n"
             "- House-style accept: seven clean sections, direct sentences, explicit search scope, bounded conclusion, recommendation=accept.\n"
             "- House-style revise: seven clean sections still need revision when the stated conclusion outruns the direct evidence or required claim traces are missing.\n"
@@ -1233,19 +1230,11 @@ class WorkflowEngine:
             "Rubric (score each 1-5):\n"
             "- research_question_quality: specific and directly answered? Score 1 if vague or absent, 3 if present but broad, 5 if specific and directly answered.\n"
             "- synthesis_quality: does the body integrate methods, results, or evidence into a coherent argument rather than a loose summary? Score 1 if purely a list with no integration, 3 if some integration but uneven, 5 if well-integrated argument.\n"
-            "- claim_evidence_alignment: are claims proportionate to the cited bundle or reported results? Score 1 if claims are contradicted by evidence, 3 if claims are supported but hedged, 5 if claims are directly and proportionately supported.\n"
+            "- claim_evidence_alignment: are claims proportionate to the cited bundle or reported results? Score 1 if claims are contradicted by evidence, 3 if only partially supported, 5 if directly and proportionately supported, including appropriately hedged claims.\n"
             "- limitations_quality: do limitations materially constrain the conclusion? Score 1 if absent, 3 if present but generic, 5 if specific and material.\n"
             "- gaps_quality: are next-step gaps or unresolved uncertainties real and relevant? Score 1 if absent, 3 if present but generic, 5 if specific and actionable.\n"
             "- source_grounding: do citations or reported results actually support the thesis? Score 1 if sources do not support thesis, 3 if sources partially support, 5 if sources directly and comprehensively support.\n\n"
-            "accept = all scores >= 4, zero major_issues, claim_support=supported, overclaim=none. Rare. "
-            "Accept is invalid when the manuscript's conclusion outruns its direct evidence, exact claim traces are missing, or unresolved major issues remain.\n"
-            "If any score is below 4 or major_issues is non-empty, recommendation must be revise or reject, never accept.\n"
-            "revise = at least one score < 4 or non-empty major_issues, but the manuscript is still salvageable with bounded edits and required_revisions lists concrete fixes.\n"
-            "Do not label accept-quality papers as revise for minor wording polish only; put polish in minor_issues and recommend accept.\n"
-            "Every required_revisions entry must name a specific evidence, claim, numeric, citation, or structural-integrity defect. "
-            "Style is never a required revision: repetitive or template-like phrasing, narrative flow, tone, readability, section ordering, and formatting "
-            "belong in minor_issues, even when you find them jarring. A manuscript whose only faults are stylistic has no required_revisions.\n"
-            "reject = structurally broken, needs scope reset, or claims materially unsupported beyond bounded edits.\n\n"
+            f"{REVIEW_DECISION_RULES}"
             '{"recommendation":"accept|revise|reject","rubric_scores":{'
             '"research_question_quality":1-5,"synthesis_quality":1-5,'
             '"claim_evidence_alignment":1-5,"limitations_quality":1-5,'
@@ -1254,7 +1243,7 @@ class WorkflowEngine:
             '"material_findings":[{"issue":"exact issue string","materiality":"blocking",'
             '"has_material_impact":true,"kind":"incorrect|omission","section":"exact section",'
             '"quote":"verbatim text for incorrect statements","impact":"material consequence",'
-            '"correction":"bounded fix","change_reason":"persisting|newly_introduced|newly_discovered",'
+            '"correction":"specific correction or indispensable missing evidence","change_reason":"persisting|newly_introduced|newly_discovered",'
             '"prior_issue":"exact prior issue when persisting","why_new":"explanation when new"}],'
             '"resolved_prior_issues":["exact previous issue now resolved"],'
             '"integrity_findings":[{"category":"reviewer_directive","quote":"exact submission text"}],'
@@ -1418,7 +1407,7 @@ class WorkflowEngine:
             "Return material_findings: one object for each distinct string in major_issues or required_revisions. "
             "Each object requires issue (that exact string), materiality='blocking', kind='incorrect' or 'omission', "
             "section (exact manuscript section name, or Title/Abstract), quote (verbatim for incorrect statements), "
-            "impact (why it materially affects validity/interpretation), and correction (bounded required fix). "
+            "impact (why it materially affects validity/interpretation), and correction (specific fix or indispensable missing evidence under the repairability rule). "
             "has_material_impact must be a boolean: true only when validity OR interpretation is materially affected. "
             "An omission or presentation change alone is not a blocker; if false, move it to minor_issues. "
             "Impact and correction must be nonempty. Optional suggestions go only in minor_issues. "
