@@ -30,17 +30,22 @@ GENERIC_EVIDENCE_WORDS = {
     "about", "across", "evidence", "finding", "findings", "reported", "results",
     "review", "source", "study", "studies", "support", "supports", "suggests", "trial",
 }
-EFFECT_PATTERN = r"\b(?:reduc\w*|increas\w*|decreas\w*|lower\w*|improv\w*|rais\w*|inhibit\w*)\b"
+EFFECT_PATTERN = r"\b(?:(?:reduc|increas|decreas|improv|rais)(?:e[sd]?|ing)|(?:lower|inhibit)(?:s|ed|ing)?)\b"
 NEGATED_EFFECT_PATTERN = re.compile(r"\b(?:not|never|no)\b(?:\W+\w+){0,3}\W+" + EFFECT_PATTERN, re.IGNORECASE)
+UNIT_SCALES = {
+    "kg": ("g", "1000"), "mg": ("g", ".001"), "ug": ("g", ".000001"), "ng": ("g", ".000000001"),
+    "km": ("m", "1000"), "cm": ("m", ".01"), "mm": ("m", ".001"), "ml": ("l", ".001"),
+    "minute": ("second", "60"), "hour": ("second", "3600"), "day": ("second", "86400"),
+}
 
 
 def claim_candidates(text: str) -> list[str]:
     candidates = []
     for line in text.splitlines():
         clean = line.strip(" -*")
-        if len(clean) < 80:
+        if len(clean) < 80 and not (re.search(r"[A-Za-z]{3}", clean) and _quantity_tokens(clean)):
             continue
-        if any(marker in clean.lower() for marker in ("support", "suggest", "risk", "increase", "decrease", "null", "evidence")):
+        if _quantity_tokens(clean) or any(marker in clean.lower() for marker in ("support", "suggest", "risk", "increase", "decrease", "null", "evidence")):
             candidates.append(clean)
     if not candidates:
         candidates = [part.strip() for part in re.split(r"\n+|(?<=[.!?])\s+", text) if len(part.strip()) >= 80]
@@ -56,7 +61,9 @@ def evidence_profile(*, text: str, source_bundle: list[dict[str, Any]] | None = 
     direct_match = DIRECT_PATTERN.search(text)
     direct_count = int(direct_match.group(1)) if direct_match else None
     selected_count = len(source_bundle)
-    primary_sources = [item for item in source_bundle if item.get("evidence_type") == "primary"]
+    primary_sources = [item for item in source_bundle if item.get("evidence_type") == "primary"
+                       and str(item.get("directness") or "").lower() != "protocol"
+                       and item.get("evidence_context") != "context"]
     primary_count = len(primary_sources)
     directness_count = sum(
         1 for item in source_bundle if str(item.get("directness") or "").strip().lower() not in UNASSESSED_VALUES
@@ -193,13 +200,46 @@ def _effect_subjects(claim: str) -> list[set[str]]:
 
 
 def _subject_in_passage(subject: set[str], evidence: str) -> bool:
-    targets = _effect_subjects(evidence) or [set(re.findall(r"[a-z0-9]+", evidence))]
+    targets = _effect_subjects(evidence) or [set(re.findall(r"[a-z0-9]+", evidence.lower()))]
     return any(subject <= target for target in targets)
+
+
+def _effect_context(text: str) -> tuple[set[str], set[str]]:
+    directions = set()
+    endpoints: set[str] = set()
+    for effect in re.finditer(EFFECT_PATTERN, text.lower()):
+        verb = effect.group()
+        directions.add("up" if re.match(r"increas|rais", verb) else "down" if re.match(r"reduc|decreas|lower|inhibit", verb) else "other")
+        tail = re.split(r"\b(?:by|from|to|compared)\b|[\d.!?;]", text[effect.end():].lower(), maxsplit=1)[0]
+        endpoints.update(word for word in re.findall(r"[a-z]+", tail)
+                         if word not in {"the", "a", "an", "of", "in", "and", "was", "were", "with"})
+    if not directions and (match := re.match(r"([A-Za-z -]+?)\s+(?:was|were|is|are)\s+[+-]?\d", text)):
+        endpoints.update(re.findall(r"[a-z]+", match[1].lower()))
+    return directions, endpoints
+
+
+def _evidence_passages(source: dict[str, Any]) -> list[str]:
+    passages = []
+    for field in ("quote", "evidence_span", "excerpt"):
+        sentences = [s.strip().lower() for s in re.split(r"\n+|(?<=[.!?;])\s+", str(source.get(field) or "")) if s.strip()]
+        for index, sentence in enumerate(sentences):
+            passages.append(sentence)
+            if index + 1 < len(sentences) and not (
+                re.search(EFFECT_PATTERN, sentence) and re.search(EFFECT_PATTERN, sentences[index + 1])
+            ):
+                passages.append(" ".join(sentences[index:index + 2]))
+    return passages
 
 
 def _passage_aligns(claim: str, evidence: str) -> bool:
     subjects = _effect_subjects(claim)
     claim_quantities = _quantity_tokens(claim)
+    directions, endpoints = _effect_context(claim)
+    evidence_directions, _ = _effect_context(evidence)
+    if directions and evidence_directions and directions != evidence_directions:
+        return False
+    if endpoints and not endpoints <= set(re.findall(r"[a-z]+", evidence.lower())):
+        return False
     if subjects and (
         not any(_subject_in_passage(subject, evidence) for subject in subjects)
         or (claim_quantities and not _quantity_tokens(evidence))
@@ -225,9 +265,8 @@ def _passage_aligns(claim: str, evidence: str) -> bool:
 def _aligned_passages(claim: str, source: dict[str, Any]) -> list[str]:
     return [
         passage.strip().lower()
-        for field in ("quote", "evidence_span", "excerpt")
-        for passage in re.split(r"\n+|(?<=[.!?;])\s+", str(source.get(field) or ""))
-        if len(passage.strip()) >= 20 and _passage_aligns(claim, passage.strip().lower())
+        for passage in _evidence_passages(source)
+        if _passage_aligns(claim, passage)
     ]
 
 
@@ -270,6 +309,8 @@ def _quantity_tokens(text: str, sources: list[dict[str, Any]] | None = None) -> 
             unit = "pp" if "point" in unit else "%"
         elif unit.endswith("s") and unit not in {"mmhg"}:
             unit = unit[:-1]
+        unit, scale = UNIT_SCALES.get(unit, (unit, "1"))
+        number = format((Decimal(number) * Decimal(scale)).normalize(), "f")
         tokens.add((number, unit))
     return tokens
 
@@ -282,8 +323,52 @@ def quantitative_claim_candidates(text: str) -> list[str]:
     return [
         part.strip()
         for part in re.split(r"\n+|(?<=[.!?])\s+", text)
-        if len(part.strip()) >= 40 and _quantity_tokens(part)
+        if re.search(r"[A-Za-z]{3}", part) and _quantity_tokens(part)
     ][:30]
+
+
+def quantitative_table_rows(sections: dict[str, str]) -> list[dict[str, str]]:
+    rows = []
+    for section, text in sections.items():
+        header: list[str] = []
+        for number, line in enumerate(text.splitlines(), 1):
+            if not line.strip().startswith("|"):
+                header = []
+                continue
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            names = [cell.lower() for cell in cells]
+            if "endpoint" in names and "value" in names:
+                header = names
+            elif header and len(cells) == len(header):
+                fields = dict(zip(header, cells))
+                if _quantity_tokens(fields["value"]):
+                    rows.append({"location": f"{section}, line {number}", "text": line,
+                                 "endpoint": fields["endpoint"], "value": fields["value"]})
+    return rows
+
+
+def table_row_support(row: dict[str, str], sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    references = support_for_claim(row["text"], sources, require_evidence_alignment=False)
+    endpoint = set(re.findall(r"[a-z]+", row["endpoint"].lower())) - {"of", "the", "and", "in"}
+    quantities = _quantity_tokens(row["value"])
+    return [source for source in references if endpoint and any(
+        endpoint <= set(re.findall(r"[a-z]+", passage))
+        and quantities <= _quantity_tokens(passage)
+        for passage in _evidence_passages(source)
+    )]
+
+
+def claim_assessment(claim: str, sources: list[dict[str, Any]]) -> dict[str, Any]:
+    references = support_for_claim(claim, sources, require_evidence_alignment=False)
+    supported = support_for_claim(claim, sources, require_quantitative_agreement=True)
+    passages = [passage for source in references for passage in _evidence_passages(source)]
+    return {
+        "claim": claim,
+        "status": "SUPPORTED" if supported else "NEEDS_SEMANTIC_REVIEW" if passages else "INSUFFICIENT_SOURCE_TEXT",
+        "sources": [str(source.get("doi") or source.get("pmid") or source.get("cited_as") or "") for source in references],
+        "passages_considered": passages[:6],
+        "required_check": "Check intervention, endpoint, direction, population and number/unit against these source-owned passages; lexical failure alone is not a proven contradiction.",
+    }
 
 
 def _quantities_agree(claim: str, sources: list[dict[str, Any]]) -> bool:

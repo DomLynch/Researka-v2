@@ -172,7 +172,7 @@ _GENERIC_WORDS = {
 
 
 def _tokens(value: object) -> set[str]:
-    clean = html.unescape(re.sub(r"<[^>]+>", " ", str(value or ""))).lower()
+    clean = _plain_text(value).lower()
     return {
         word for word in re.findall(r"[a-z0-9]+", clean)
         if len(word) >= 4 and word not in _GENERIC_WORDS
@@ -189,7 +189,7 @@ def _text_matches(left: object, right: object, *, floor: float) -> bool:
 
 
 def _normalized_text(value: object) -> str:
-    text = html.unescape(re.sub(r"<[^>]+>", " ", str(value or ""))).lower()
+    text = _plain_text(value).lower()
     return " ".join(re.findall(r"[a-z0-9]+", text))
 
 
@@ -245,6 +245,21 @@ def _pmc_id_map(client: httpx.Client, sources: list[dict[str, Any]]) -> dict[str
     return resolved
 
 
+def _pmc_articles(client: httpx.Client, url: str) -> list[ET.Element]:
+    for attempt in range(_metadata_attempts()):
+        try:
+            response = client.get(url)
+            if response.status_code == 404:
+                return []
+            response.raise_for_status()
+            root = ET.fromstring(response.text)
+            return [root] if root.tag == "article" else root.findall(".//article")
+        except (httpx.HTTPError, OSError, ValueError, ET.ParseError):
+            if attempt + 1 < _metadata_attempts():
+                time.sleep(0.5 * (attempt + 1))
+    return []
+
+
 def _pmc_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> dict[str, str]:
     requested: dict[str, tuple[str, dict[str, Any]]] = {}
     for source in sources:
@@ -260,7 +275,7 @@ def _pmc_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> dict
     verify_sources = [
         source
         for source in sources
-        if source.get("verification_claims") or source.get("verification_quotes")
+        if any(source.get(key) for key in ("verification_claims", "verification_quotes", "quote", "evidence_span", "excerpt"))
     ]
     if verify_sources:
         for source_key, pmcid in _pmc_id_map(client, verify_sources).items():
@@ -283,38 +298,35 @@ def _pmc_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> dict
         if email := os.getenv("RESEARKA_NCBI_EMAIL", os.getenv("RESEARKA_CROSSREF_MAILTO", "")):
             query["email"] = email
         url = f"{base}?{urllib.parse.urlencode(query)}"
-        try:
-            response = client.get(url)
-            response.raise_for_status()
-            root = ET.fromstring(response.text)
-            articles = [root] if root.tag.rsplit("}", 1)[-1] == "article" else root.findall(".//article")
-        except (httpx.HTTPError, OSError, ValueError, ET.ParseError):
-            continue
+        articles = _pmc_articles(client, url)
+        returned = {node.text for article in articles for node in article.findall("./front/article-meta/article-id[@pub-id-type='pmcid']")}
+        for pmcid in pmc_ids[start : start + 15]:
+            if pmcid not in returned:
+                articles.extend(_pmc_articles(client, f"https://www.ebi.ac.uk/europepmc/webservices/rest/{pmcid}/fullTextXML"))
         for article in articles:
-            ids = {
-                str(node.get("pub-id-type") or "").lower(): "".join(node.itertext()).strip().lower()
-                for node in article.findall(".//article-id")
-            }
-            record = requested.get(ids.get("pmcid", "").upper())
-            if not record:
-                continue
-            source_key, source = record
-            doi, pmid = (str(source.get(key) or "").strip().lower() for key in ("doi", "pmid"))
-            if not (doi and ids.get("doi") == doi or not doi and pmid and ids.get("pmid") == pmid):
-                continue
-            verified[source_key] = " ".join(
-                " ".join(node.itertext())
-                for node in article
-                if node.tag.rsplit("}", 1)[-1] in {"front", "body"}
-            )
+            verified.update(_verified_pmc_article(article, requested))
     return verified
+
+
+def _verified_pmc_article(article: ET.Element, requested: dict) -> dict[str, str]:
+    ids = {str(node.get("pub-id-type") or "").lower(): "".join(node.itertext()).strip().lower()
+           for node in article.findall("./front/article-meta/article-id")}
+    record = requested.get(ids.get("pmcid", "").upper())
+    if not record:
+        return {}
+    source_key, source = record
+    doi, pmid = (str(source.get(key) or "").strip().lower() for key in ("doi", "pmid"))
+    if not (doi and ids.get("doi") == doi or not doi and pmid and ids.get("pmid") == pmid):
+        return {}
+    return {source_key: " ".join(" ".join(node.itertext()) for node in article
+                                if node.tag.rsplit("}", 1)[-1] in {"front", "body"})}
 
 
 def _arxiv_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> dict[str, str]:
     requested = {
         arxiv_id: identity_row[0]
         for source in sources
-        if (source.get("verification_claims") or source.get("verification_quotes"))
+        if any(source.get(key) for key in ("verification_claims", "verification_quotes", "quote", "evidence_span", "excerpt"))
         and (arxiv_id := _arxiv_id(source))
         and (identity_row := _source_identity(source))
     }
@@ -375,7 +387,8 @@ def _arxiv_full_texts(client: httpx.Client, sources: list[dict[str, Any]]) -> di
 
 
 def _plain_text(value: object) -> str:
-    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", str(value or ""))).split())
+    # Statistical inequalities are text, not markup.
+    return " ".join(html.unescape(re.sub(r"</?[A-Za-z][^>]{0,200}>", " ", str(value or ""))).split())
 
 
 def _passages(authority_texts: list[str]) -> list[str]:
@@ -752,7 +765,7 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
             if (normalized := _normalized_text(value))
             for authority in authority_texts
         )
-        evidence_mismatch = bool(evidence and authority_texts) and not any(
+        evidence_unmatched = bool(evidence) and not evidence_text_verified and not any(
             _text_matches(value, authority, floor=0.35)
             for value in evidence for authority in authority_texts
         )
@@ -780,6 +793,7 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
                 "identity": identity,
                 "text": value,
                 "authority_available": bool(authority_texts),
+                "text_scope": full_text_scopes.get(identity, "registry_abstract" if abstracts else "unavailable"),
                 **evidence_check,
             })
         claims_by_text = {row["text"]: row for row in claim_checks}
@@ -804,7 +818,18 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
             "title_mismatch": bool(str(source.get("title") or "").strip()) and bool(titles) and not any(
                 _text_matches(source.get("title"), title, floor=0.6) for title in titles
             ),
-            "evidence_mismatch": evidence_mismatch,
+            "evidence_mismatch": bool(full_text) and evidence_unmatched,
+            "evidence_coverage_incomplete": not full_text and evidence_unmatched,
+            "evidence_checks": [
+                {"identity": identity, "field": key, "submitted_text": str(source[key])[:700],
+                 "text_scope": full_text_scopes.get(identity, "registry_abstract" if abstracts else "unavailable"),
+                 "matched": any(
+                     _normalized_text(source[key]) in _normalized_text(authority)
+                     or _text_matches(source[key], authority, floor=0.35)
+                     for authority in authority_texts
+                 )}
+                for key in ("quote", "evidence_span", "excerpt") if source.get(key)
+            ],
             "evidence_authority_unavailable": bool(evidence) and not authority_texts,
             "evidence_text_submitted": bool(evidence),
             "evidence_text_available": evidence_text_available,
@@ -862,7 +887,8 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
     unverified = [row["identity"] for row in results if not row.get("checked")]
     retracted = [row["identity"] for row in results if row.get("retracted")]
     title_mismatches = [row["identity"] for row in results if row.get("title_mismatch")]
-    evidence_mismatches = [row["identity"] for row in results if row.get("evidence_mismatch")]
+    evidence_problems = {field: [row["identity"] for row in results if row.get(field)]
+                         for field in ("evidence_mismatch", "evidence_coverage_incomplete")}
     evidence_text_verified = [row["identity"] for row in results if row.get("evidence_text_verified")]
     evidence_text_unverified = [
         row["identity"]
@@ -884,7 +910,7 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
         *_canonical_duplicate_indices(sources, identifier_results),
     })
     blocked = retracted or title_mismatches or identifier_mismatches
-    uncertain = evidence_mismatches or evidence_authority_unavailable or unverified or identifier_unverified or canonical_duplicate_indices
+    uncertain = any(evidence_problems.values()) or evidence_authority_unavailable or unverified or identifier_unverified or canonical_duplicate_indices
     recommendation = "reject" if blocked else _metadata_unavailable_recommendation() if uncertain else "pass"
     return {
         "verification_version": 2,
@@ -894,7 +920,9 @@ def verify_source_metadata(sources: list[dict[str, Any]], *, parallel: bool = Fa
         "unverified": unverified,
         "retracted": retracted,
         "title_mismatches": title_mismatches,
-        "evidence_mismatches": evidence_mismatches,
+        "evidence_mismatches": evidence_problems["evidence_mismatch"],
+        "evidence_coverage_incomplete": evidence_problems["evidence_coverage_incomplete"],
+        "evidence_checks": [check for row in results for check in row.get("evidence_checks", [])],
         "evidence_text_verified": evidence_text_verified,
         "evidence_text_unverified": evidence_text_unverified,
         "evidence_authority_unavailable": evidence_authority_unavailable,

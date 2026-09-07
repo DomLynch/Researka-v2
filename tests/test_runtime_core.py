@@ -231,7 +231,8 @@ def test_trace_guard_requests_revision_for_wrong_subject_not_missing_citation() 
     )
 
     revisions = workflow._claim_trace_guard_revisions(submission)
-    assert len(revisions) == 1
+    assert len(revisions) == 2
+    assert json.loads(revisions[1])["status"] == "NEEDS_SEMANTIC_REVIEW"
     assert "1/1 claims identify a source; 0/1 also align" in revisions[0]
 
 
@@ -801,8 +802,10 @@ def test_reconciler_releases_accepted_quarantine_after_agent_activation(
     assert recovered.metadata["requested_public_visibility"] == "listed"
 
 
+@pytest.mark.parametrize("state", ["PUBLISH_BLOCKED_EXTERNAL", "PUBLISHING"])
 def test_reconciler_retries_external_delivery_once_without_duplicate_work(
     monkeypatch: pytest.MonkeyPatch,
+    state: str,
 ) -> None:
     monkeypatch.delenv("RESEARKA_DISABLED_AGENT_IDS", raising=False)
     repo = InMemoryRuntimeRepository()
@@ -828,7 +831,7 @@ def test_reconciler_retries_external_delivery_once_without_duplicate_work(
     )
     repo.update_object_metadata(
         publication.id,
-        {**publication.metadata, "publication_state": "PUBLISH_BLOCKED_EXTERNAL"},
+        {**publication.metadata, "publication_state": state},
     )
 
     repaired = reconcile_stalled_submissions(
@@ -1451,10 +1454,12 @@ def test_claim_trace_guard_checks_abstract_numbers_against_evidence() -> None:
         },
     )
 
-    assert workflow._claim_trace_guard_revisions(submission) == [
+    revisions = workflow._claim_trace_guard_revisions(submission)
+    assert revisions[:1] == [
         "Align every number and unit in the abstract and conclusion with its cited evidence span; "
         "0/1 quantitative claims agree."
     ]
+    assert json.loads(revisions[1])["sources"] == ["10.1234/alpha"]
 
     source["excerpt"] = (
         "The intervention reduced the primary risk by 47 percent in the tested adult population."

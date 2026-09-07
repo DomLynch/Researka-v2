@@ -363,6 +363,7 @@ class _MetadataResponse:
 def _metadata_client(
     message: dict[str, Any], pubmed: dict[str, Any] | None = None, pmc: str = "",
     clinical_trial: dict[str, Any] | None = None, europe_pmc: dict[str, Any] | None = None,
+    pmc_ids: list[dict[str, str]] | None = None,
 ) -> type:
     class MetadataClient:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -375,6 +376,8 @@ def _metadata_client(
             return None
 
         def get(self, url: str) -> _MetadataResponse:
+            if "idconv" in url:
+                return _MetadataResponse({"records": pmc_ids or []})
             if "europepmc" in url and europe_pmc is not None:
                 return _MetadataResponse(europe_pmc)
             if "clinicaltrials.gov" in url and clinical_trial is not None:
@@ -639,7 +642,8 @@ def test_source_metadata_rejects_identity_and_evidence_mismatch(monkeypatch: pyt
     assert result is not None
     assert result["recommendation"] == Decision.REJECT.value
     assert result["title_mismatches"] == ["doi:10.1000/mismatch"]
-    assert result["evidence_mismatches"] == ["doi:10.1000/mismatch"]
+    assert result["evidence_mismatches"] == []
+    assert result["evidence_coverage_incomplete"] == ["doi:10.1000/mismatch"]
 
 
 def test_source_metadata_cross_checks_pmid_when_doi_is_present(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -795,7 +799,7 @@ def test_source_metadata_holds_when_secondary_identifier_is_unavailable(
     assert result["identifier_unverified"] == ["pmid:41536962"]
 
 
-def test_source_evidence_mismatch_is_held_for_revision(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_abstract_absence_is_incomplete_coverage_not_source_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
     monkeypatch.setattr(
         "runtime_core.doi_resolver.httpx.Client",
@@ -813,7 +817,8 @@ def test_source_evidence_mismatch_is_held_for_revision(monkeypatch: pytest.Monke
 
     assert result is not None
     assert result["recommendation"] == Decision.REVISE.value
-    assert result["evidence_mismatches"] == ["doi:10.1000/evidence-mismatch"]
+    assert result["evidence_mismatches"] == []
+    assert result["evidence_coverage_incomplete"] == ["doi:10.1000/evidence-mismatch"]
     assert result["evidence_text_unverified"] == ["doi:10.1000/evidence-mismatch"]
 
 
@@ -824,9 +829,9 @@ def test_full_text_evidence_is_not_compared_with_abstract(monkeypatch: pytest.Mo
         "runtime_core.doi_resolver.httpx.Client",
         _metadata_client(
             {"title": ["Registered intervention trial in adults"], "abstract": "Recruitment."},
-            pmc=("<article><article-meta><article-id pub-id-type='pmcid'>PMC123456</article-id>"
+            pmc=("<article><front><article-meta><article-id pub-id-type='pmcid'>PMC123456</article-id>"
                  "<article-id pub-id-type='doi'>10.1000/full-text-evidence"
-                 f"</article-id></article-meta><body><p>{exact}</p></body></article>"),
+                 f"</article-id></article-meta></front><body><p>{exact}</p></body></article>"),
         ),
     )
 
@@ -843,6 +848,38 @@ def test_full_text_evidence_is_not_compared_with_abstract(monkeypatch: pytest.Mo
     assert result["evidence_mismatches"] == []
     assert result["evidence_text_verified"] == ["doi:10.1000/full-text-evidence"]
     assert result["evidence_authority_unavailable"] == []
+
+
+@pytest.mark.parametrize("registered_doi,match", [("10.1000/full", True), ("10.1000/other", False)])
+def test_ordinary_bundle_resolves_full_text_by_doi(monkeypatch: pytest.MonkeyPatch, registered_doi: str, match: bool) -> None:
+    monkeypatch.setenv("RESEARKA_SOURCE_METADATA_CHECK_ENABLED", "1")
+    exact = "The secondary endpoint is documented exclusively in the full text."
+    monkeypatch.setattr("runtime_core.doi_resolver.httpx.Client", _metadata_client(
+        {"title": ["Trial"], "abstract": "Recruitment."},
+        pmc_ids=[{"doi": "10.1000/full", "pmcid": "PMC123456"}],
+        pmc=("<article><front><article-meta><article-id pub-id-type='pmcid'>PMC123456</article-id>"
+             f"<article-id pub-id-type='doi'>{registered_doi}</article-id></article-meta></front>"
+             f"<body><table-wrap><table><tr><td>{exact}</td></tr></table></table-wrap></body></article>"),
+    ))
+    result = verify_source_metadata([{"doi": "10.1000/full", "title": "Trial", "evidence_span": exact}])
+    assert result is not None
+    assert result["evidence_mismatches"] == []
+    assert result["evidence_text_verified"] == (["doi:10.1000/full"] if match else [])
+    assert result["evidence_coverage_incomplete"] == ([] if match else ["doi:10.1000/full"])
+    assert result["evidence_checks"][0]["text_scope"] == ("pmc_full_text" if match else "registry_abstract")
+
+
+def test_incomplete_source_coverage_is_not_an_author_revision(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("runtime_core.workflow.resolve_dois", lambda _: None)
+    monkeypatch.setattr("runtime_core.workflow.resolve_source_locators", lambda _: None)
+    monkeypatch.setattr("runtime_core.workflow.verify_source_metadata", lambda _: {
+        "recommendation": "revise", "evidence_coverage_incomplete": ["doi:10.1000/source"],
+    })
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    with pytest.raises(RuntimeError, match="system_unavailable:source_evidence_retrieval"):
+        WorkflowEngine()._run_intake(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
+    assert not repo.queued_jobs()
 
 
 def test_unverified_full_text_evidence_is_held_for_revision(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1079,7 +1116,9 @@ def test_source_metadata_retries_rate_limit_without_redundant_fallback(monkeypat
     class RateLimitedClient(_HandleClient):
         def get(self, url: str) -> Any:
             calls.append(url)
-            if len(calls) == 1:
+            if "idconv" in url:
+                return _MetadataResponse({"records": []})
+            if sum("crossref" in call for call in calls) == 1:
                 request = httpx.Request("GET", url)
                 return httpx.Response(429, request=request)
             return _MetadataResponse({"message": {
@@ -1101,8 +1140,10 @@ def test_source_metadata_retries_rate_limit_without_redundant_fallback(monkeypat
     assert result is not None
     assert result["available"] is True
     assert result["recommendation"] == "pass"
-    assert len(calls) == 2
-    assert all("crossref" in url and "mailto=research%40example.org" in url for url in calls)
+    crossref_calls = [url for url in calls if "crossref" in url]
+    assert len(crossref_calls) == 2
+    assert all("mailto=research%40example.org" in url for url in crossref_calls)
+    assert len(calls) == 3
 
 
 # --- Gate 3: provisional publish tiers --------------------------------------------

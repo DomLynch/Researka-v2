@@ -100,7 +100,8 @@ def reconcile_stalled_submissions(
         payload: dict[str, object]
         if accepted is not None:
             stage = Stage.PUBLISH
-            payload = {"reconciled": True}
+            payload = {"reconciled": True, "decision_id": accepted.id,
+                       "canonical_package_hash": accepted.metadata.get("canonical_package_hash")}
         else:
             reviews = repo.children_of(submission.id, ObjectType.REVIEW)
             if reviews:
@@ -119,7 +120,7 @@ def reconcile_stalled_submissions(
         if publication.id in active_targets:
             continue
         state = publication.metadata.get("publication_state")
-        if state not in {"ACCEPTED_QUARANTINED", "PUBLISH_BLOCKED_EXTERNAL"}:
+        if state not in {"ACCEPTED_QUARANTINED", "PUBLISH_BLOCKED_EXTERNAL", "PUBLISHING"}:
             continue
         target_events = sorted(
             events_by_target.get(publication.id, []), key=lambda event: event.ts
@@ -166,6 +167,10 @@ def operational_alerts(
     ]
     if len(terminal_failures) >= failure_threshold:
         alerts.append({"code": "repeated_terminal_failures", "count": len(terminal_failures)})
+    disagreements = [event.target_object_id for event in terminal_failures
+                     if event.payload.get("failure_class") == "review_disagreement"]
+    if disagreements:
+        alerts.append({"code": "review_adjudication_required", "submission_ids": sorted(set(disagreements))})
 
     decisions = repo.list_objects(ObjectType.DECISION, summaries_only=True)
     publications = repo.list_objects(ObjectType.PUBLICATION, summaries_only=True)
@@ -193,7 +198,7 @@ def operational_alerts(
         item
         for item in publications
         if item.metadata.get("publication_state")
-        in {"ACCEPTED_QUARANTINED", "PUBLISH_BLOCKED_EXTERNAL"}
+        in {"ACCEPTED_QUARANTINED", "PUBLISH_BLOCKED_EXTERNAL", "PUBLISHING"}
         and (now - item.created_at).total_seconds() >= publication_stall_seconds
     ]
     if stalled_deliveries:

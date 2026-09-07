@@ -651,10 +651,16 @@ def _is_intake_rejection(decision: ResearchObject) -> bool:
 
 
 def _failure_stage(decision: ResearchObject, review: ResearchObject | None) -> str:
+    if decision.metadata.get("claim_trace_guard"):
+        return "claim_trace_guard"
+    if decision.metadata.get("alpha_guard"):
+        return "editorial_guard"
     if _is_intake_rejection(decision):
         return "intake_gate"
     if decision.metadata.get("failure_category") == "integrity_duplicate":
         return "integrity_check"
+    if decision.metadata.get("gate_failures") and not decision.metadata.get("review_id"):
+        return "intake_gate"
     if review is not None:
         return "reviewer_panel"
     return "editorial"
@@ -1537,7 +1543,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                     "status": "failed",
                     "decision": None,
                     "evaluation_verdict": None,
-                    "disposition": "DEFERRED_SYSTEM",
+                    "disposition": "ESCALATE" if failure["failure_class"] == "review_disagreement" else "DEFERRED_SYSTEM",
                     "reason_code": str(failure["failure_class"] or "SYSTEM_UNAVAILABLE").upper(),
                     "fault_domain": "system",
                     "retryable": True,

@@ -87,6 +87,7 @@ class FailureClass(StrEnum):
     REVIEW_MISSING = "review_missing"
     EXACT_QUOTE_MISSING = "exact_quote_missing"
     PROVIDER_ERROR = "provider_error"
+    REVIEW_DISAGREEMENT = "review_disagreement"
     SYSTEM_UNAVAILABLE = "system_unavailable"
     OTHER = "other"
 

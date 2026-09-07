@@ -3,6 +3,7 @@ from __future__ import annotations
 from contracts import FailureClass
 
 _PATTERNS: list[tuple[FailureClass, tuple[str, ...]]] = [
+    (FailureClass.REVIEW_DISAGREEMENT, ("review_disagreement:",)),
     (FailureClass.STRUCTURE_GATE, ("structure_gate",)),
     (FailureClass.COMPILE_BLOCKER, ("compile_rapid_publication_blocked",)),
     (FailureClass.VALIDATION_ERROR, ("validation error",)),

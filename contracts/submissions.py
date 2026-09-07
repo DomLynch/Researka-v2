@@ -220,6 +220,7 @@ class SourceBundleEntry(BaseModel):
     # bundle entries instead of flagging present sources as ungrounded.
     cited_as: str | None = None
     directness: str | None = None
+    evidence_context: str | None = None
     risk_of_bias: str | None = None
     quote: str | None = None
     evidence_span: str | None = None
@@ -540,13 +541,15 @@ def run_submission_template_checks(
         index
         for index, entry in enumerate(normalized_bundle)
         if entry.evidence_type == "primary" and _is_non_load_bearing(entry)
+        and not (str(entry.directness).lower() == "protocol" and entry.evidence_context == "context"
+                 and str(entry.publication_type).lower() == "study protocol")
     ]
     results.append(
         GateResult(
             name="source_role",
             passed=not invalid_primary_roles,
             reason=(
-                "corrections, retractions, expressions of concern, and protocols cannot be primary evidence"
+                "non-result sources cannot be primary result evidence; explicitly labelled protocol/context sources are background only"
                 + (f"; invalid at indices {invalid_primary_roles}" if invalid_primary_roles else "")
             ),
         )
