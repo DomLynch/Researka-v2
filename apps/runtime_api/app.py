@@ -34,7 +34,7 @@ from contracts import (
 from runtime_core import InMemoryRuntimeRepository, PostgresRuntimeRepository, WorkflowEngine
 from runtime_core.compiler import canonical_manuscript_body, canonical_package_hash
 from runtime_core.evidence_quality import classified_title, contradiction_status_for_text, evidence_profile
-from runtime_core.failure_classifier import classify_failure_reason
+from runtime_core.failure_classifier import effective_failure_class
 from runtime_core.judge_release import (
     JUDGE_CODE_SHA as _JUDGE_CODE_SHA,
     SERVICE_GIT_SHA as _SERVICE_GIT_SHA,
@@ -1175,11 +1175,10 @@ def _publication_failure_feedback(repo: RuntimeRepository, submission_id: str) -
             continue
         if event.payload.get("stage") == Stage.PUBLISH.value:
             reason = str(event.payload.get("reason") or "")
-            failure_class = event.payload.get("failure_class")
             return {
                 "stage": Stage.PUBLISH.value,
                 "reason": reason,
-                "failure_class": classify_failure_reason(reason).value if failure_class in {None, "other"} else failure_class,
+                "failure_class": effective_failure_class(event.payload),
             }
     return None
 
@@ -1201,11 +1200,10 @@ def _terminal_submission_failure_feedback(repo: RuntimeRepository, submission_id
         if event.event_type != EventType.JOB_FAILED or event.payload.get("terminal") is False:
             return None
         reason = str(event.payload.get("reason") or "")
-        failure_class = event.payload.get("failure_class")
         return {
             "stage": event.payload.get("stage"),
             "reason": reason,
-            "failure_class": classify_failure_reason(reason).value if failure_class in {None, "other"} else failure_class,
+            "failure_class": effective_failure_class(event.payload),
         }
     return None
 
@@ -1563,7 +1561,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                     "disposition": "ESCALATE" if failure["failure_class"] == "review_disagreement" else "DEFERRED_SYSTEM",
                     "reason_code": str(failure["failure_class"] or "SYSTEM_UNAVAILABLE").upper(),
                     "fault_domain": "review" if failure["failure_class"] == "review_disagreement" else "system",
-                    "retryable": failure["failure_class"] != "review_disagreement",
+                    "retryable": failure["failure_class"] not in {"review_disagreement", "authentication_required"},
                     "resubmission": {"allowed": False, "parent_submission_id": None},
                     "publication_state": "NOT_PUBLISHED",
                     "notes": [],

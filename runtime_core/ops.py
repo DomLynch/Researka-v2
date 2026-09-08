@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from contracts import Decision, EventType, ObjectType, RuntimeEvent, RuntimeJob, Stage
 
-from .failure_classifier import classify_failure_reason
+from .failure_classifier import classify_failure_reason, effective_failure_class
 from .repos import RuntimeRepository
 from .workflow import recover_publication_delivery
 
@@ -171,6 +171,16 @@ def operational_alerts(
                      if event.payload.get("failure_class") == "review_disagreement"]
     if disagreements:
         alerts.append({"code": "review_adjudication_required", "submission_ids": sorted(set(disagreements))})
+    latest_outcomes = {
+        (event.target_object_id, event.payload.get("stage")): event
+        for event in sorted(events, key=lambda event: event.ts)
+        if event.event_type in {EventType.JOB_FAILED, EventType.JOB_COMPLETED}
+    }
+    login_failures = [event.target_object_id for event in latest_outcomes.values()
+                      if event.event_type == EventType.JOB_FAILED
+                      and effective_failure_class(event.payload) == "authentication_required"]
+    if login_failures:
+        alerts.append({"code": "reviewer_authentication_required", "submission_ids": sorted(set(login_failures))})
 
     decisions = repo.list_objects(ObjectType.DECISION, summaries_only=True)
     publications = repo.list_objects(ObjectType.PUBLICATION, summaries_only=True)

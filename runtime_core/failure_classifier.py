@@ -4,6 +4,7 @@ from contracts import FailureClass
 
 _PATTERNS: list[tuple[FailureClass, tuple[str, ...]]] = [
     (FailureClass.REVIEW_DISAGREEMENT, ("review_disagreement:",)),
+    (FailureClass.AUTHENTICATION_REQUIRED, ("codex_authentication_failed",)),
     (FailureClass.STRUCTURE_GATE, ("structure_gate",)),
     (FailureClass.COMPILE_BLOCKER, ("compile_rapid_publication_blocked",)),
     (FailureClass.VALIDATION_ERROR, ("validation error",)),
@@ -37,3 +38,11 @@ def classify_failure_reason(reason: str | None) -> FailureClass:
         if any(needle in lowered for needle in needles):
             return failure_class
     return FailureClass.OTHER
+
+
+def effective_failure_class(payload: dict) -> str:
+    stored = payload.get("failure_class")
+    detected = classify_failure_reason(str(payload.get("reason") or "")).value
+    if stored in {None, "other"} or (stored == "provider_error" and detected == "authentication_required"):
+        return detected
+    return str(stored)

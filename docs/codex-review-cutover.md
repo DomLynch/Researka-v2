@@ -39,6 +39,12 @@ invalid cost data is marked `unreported`, not evidence of a free request.
    job ID. Preserve the original submissions and failed attempt history.
    Follow resulting decisions/publications; never override an editorial gate.
 
+An expired/revoked CLI login returns `DEFERRED_SYSTEM` with
+`AUTHENTICATION_REQUIRED`, not an author rejection or automatic retry.
+The `reviewer_authentication_required` operational alert persists until a
+later outcome for the same stage supersedes the failure. Renew Core's login interactively
+in its own Codex home, then retry the saved review; never share agent credentials.
+
 Rollback: keep the previous SHA and nonsecret config backup. Stop/drain the
 worker before switching releases; do not roll back to an exhausted provider
 and resume spending blindly. Leave failed work recorded for operator recovery.

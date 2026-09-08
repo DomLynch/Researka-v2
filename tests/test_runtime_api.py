@@ -719,21 +719,85 @@ def test_submission_decision_reports_only_terminal_review_failure(client: TestCl
     assert payload["pipeline"]["attempts"][-1]["terminal"] is True
 
 
-def test_review_disagreement_is_not_retryable_provider_failure(client: TestClient, monkeypatch) -> None:
+@pytest.mark.parametrize("reason,disposition,domain,category,alert", [
+    ("review_disagreement:unresolved after one adjudication", "ESCALATE", "review",
+     "review_disagreement", "review_adjudication_required"),
+    ("provider_error:provider_unavailable:panel_both_gpt_reviewers_failed:bad_request:codex_authentication_failed",
+     "DEFERRED_SYSTEM", "system", "authentication_required", "reviewer_authentication_required"),
+])
+def test_operator_failures_are_not_retryable_provider_failures(
+    client: TestClient, monkeypatch, reason, disposition, domain, category, alert,
+) -> None:
+    from runtime_core.ops import operational_alerts, reconcile_stalled_submissions
+
     created = client.post("/submissions", json=_minimal_submission_payload()).json()
     worker = cast(Any, client.app).state.worker
     original = worker.engine.handle_job
     def disagree(job, repository):
         if job.stage == Stage.REVIEW:
-            raise ValueError("review_disagreement:unresolved after one adjudication")
+            raise ValueError(reason)
         return original(job, repository)
     monkeypatch.setattr(worker.engine, "handle_job", disagree)
     client.post("/jobs/run-once", headers=_worker_headers())
     result = client.post("/jobs/run-once", headers=_worker_headers()).json()
     response = client.get(f"/submissions/{created['submission']['id']}/decision").json()
     assert result["retried"] == 0
-    assert response["disposition"] == "ESCALATE"
-    assert response["fault_domain"] == "review"
+    assert response["disposition"] == disposition
+    assert response["fault_domain"] == domain
+    assert response["failure_category"] == category
+    assert response["retryable"] is False
+    assert response["resubmission"]["allowed"] is False
+    repo = _repository(client)
+    assert repo.queued_jobs() == []
+    assert repo.children_of(created["submission"]["id"], ObjectType.DECISION) == []
+    assert {"code": alert, "submission_ids": [created["submission"]["id"]]} in operational_alerts(repo)
+    assert reconcile_stalled_submissions(repo, stale_after_seconds=0) == []
+
+
+@pytest.mark.parametrize("stored_category", ["authentication_required", "provider_error"])
+def test_authentication_alert_persists_until_successful_recovery(client: TestClient, stored_category) -> None:
+    from datetime import datetime, timedelta, timezone
+    from runtime_core.ops import operational_alerts
+
+    repo = _repository(client)
+    now = datetime.now(timezone.utc)
+    failed = RuntimeEvent(
+        event_type=EventType.JOB_FAILED, target_object_id="auth-recovery",
+        ts=now - timedelta(hours=2),
+        payload={"stage": Stage.REVIEW.value, "terminal": True,
+                 "failure_class": stored_category, "reason": "provider_error:codex_authentication_failed"},
+    )
+    repo.record_event(failed)
+    alert = {"code": "reviewer_authentication_required", "submission_ids": ["auth-recovery"]}
+    assert alert in operational_alerts(repo, now=now)
+    repo.record_event(RuntimeEvent(
+        event_type=EventType.JOB_COMPLETED, target_object_id="auth-recovery",
+        ts=now, payload={"stage": Stage.INTAKE.value},
+    ))
+    assert alert in operational_alerts(repo, now=now)
+    repo.record_event(RuntimeEvent(
+        event_type=EventType.JOB_COMPLETED, target_object_id="auth-recovery",
+        ts=now, payload={"stage": Stage.REVIEW.value},
+    ))
+    # A late-arriving older failure must not reopen the recovered alert.
+    repo.record_event(failed.model_copy(update={"id": "late-auth-event"}))
+    assert alert not in operational_alerts(repo, now=now)
+
+
+def test_legacy_authentication_failure_is_not_reported_retryable(client: TestClient) -> None:
+    created = client.post("/submissions", json=_minimal_submission_payload()).json()
+    submission_id = created["submission"]["id"]
+    repo = _repository(client)
+    for job in repo.queued_jobs():
+        repo.complete_job(job.id)
+    repo.record_event(RuntimeEvent(
+        event_type=EventType.JOB_FAILED, target_object_id=submission_id,
+        payload={"stage": Stage.REVIEW.value, "terminal": True, "failure_class": "provider_error",
+                 "reason": "provider_error:provider_unavailable:codex_authentication_failed"},
+    ))
+    response = client.get(f"/submissions/{submission_id}/decision").json()
+    assert response["disposition"] == "DEFERRED_SYSTEM"
+    assert response["failure_category"] == "authentication_required"
     assert response["retryable"] is False
     assert response["resubmission"]["allowed"] is False
 
