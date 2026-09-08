@@ -22,6 +22,7 @@ def material_review():
         "section": "Results", "quote": "Mortality was 48%.",
         "impact": "The wrong endpoint changes the interpretation.",
         "correction": "Report the actual survival endpoint and value.",
+        "repairability": "bounded_revision",
     }])
     return payload
 
@@ -94,7 +95,7 @@ def test_supported_accept_remains_unchanged_by_repairability_check():
 
 
 @pytest.mark.parametrize("basis", ["new_evidence", "fabrication", "invalid_data"])
-@pytest.mark.parametrize("reassessed", [True, False])
+@pytest.mark.parametrize("reassessed", [True, False, None])
 def test_reconsidered_revise_cannot_retain_an_irreparable_finding(basis, reassessed):
     rejected = material_review()
     rejected["recommendation"] = "reject"
@@ -105,6 +106,8 @@ def test_reconsidered_revise_cannot_retain_an_irreparable_finding(basis, reasses
         repairability="bounded_revision" if reassessed else basis,
         why_not_revise="" if reassessed else "Even a bounded evidence map cannot use these invalid data.",
     )
+    if reassessed is None:
+        revised["material_findings"][0].pop("repairability")
     primary, secondary = Reviews(SOL, [rejected, revised]), Reviews(TERRA, [rejected, revised])
     backup = Reviews("forbidden", [])
     submission = ResearchObject(object_type=ObjectType.SUBMISSION, title="Trial", metadata={
@@ -115,7 +118,7 @@ def test_reconsidered_revise_cannot_retain_an_irreparable_finding(basis, reasses
     if reassessed:
         assert engine._review_submission(submission)[0] == "revise"
     else:
-        with pytest.raises(ValueError, match="revise_conflicts_with_irreparable_finding"):
+        with pytest.raises(ValueError, match="revise_requires_explicit_bounded_repairability"):
             engine._review_submission(submission)
     assert primary.calls == secondary.calls == 2
     assert backup.calls == 0

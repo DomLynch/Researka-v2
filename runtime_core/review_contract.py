@@ -245,9 +245,9 @@ def review_materiality_failure(payload: dict, context: dict) -> str | None:
         return "previous_material_issues_not_accounted_for"
     recommendation = str(payload.get("recommendation") or "").strip().lower()
     if recommendation == "revise" and any(
-        finding.get("repairability") in ("new_evidence", "fabrication", "invalid_data") for finding in findings
+        finding.get("repairability") != "bounded_revision" for finding in findings
     ):
-        return "revise_conflicts_with_irreparable_finding"
+        return "revise_requires_explicit_bounded_repairability"
     if recommendation == "reject":
         return _rejection_basis_failure(findings)
     return None
