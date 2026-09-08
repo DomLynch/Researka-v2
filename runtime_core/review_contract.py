@@ -210,6 +210,21 @@ def _material_finding_failure(finding: dict, context: dict) -> str | None:
     return None
 
 
+def _rejection_basis_failure(findings: list[dict]) -> str | None:
+    irreparable = False
+    for finding in findings:
+        repairability = finding.get("repairability")
+        if repairability == "bounded_revision":
+            continue
+        if not isinstance(repairability, str) or repairability not in {"new_evidence", "fabrication", "invalid_data"}:
+            return "reject_requires_finding_repairability"
+        reason = finding.get("why_not_revise")
+        if not isinstance(reason, str) or not any(char.isalnum() for char in reason):
+            return "reject_requires_why_not_revise"
+        irreparable = True
+    return None if irreparable else "reject_requires_irreparable_finding_use_revise"
+
+
 def review_materiality_failure(payload: dict, context: dict) -> str | None:
     issues = set(payload.get("major_issues", [])) | set(payload.get("required_revisions", []))
     findings = payload.get("material_findings", [])
@@ -228,6 +243,13 @@ def review_materiality_failure(payload: dict, context: dict) -> str | None:
     persisting = {finding.get("prior_issue") for finding in findings if finding.get("change_reason") == "persisting"}
     if set(context.get("previous_issues", [])) != set(resolved) | persisting:
         return "previous_material_issues_not_accounted_for"
+    recommendation = str(payload.get("recommendation") or "").strip().lower()
+    if recommendation == "revise" and any(
+        finding.get("repairability") in ("new_evidence", "fabrication", "invalid_data") for finding in findings
+    ):
+        return "revise_conflicts_with_irreparable_finding"
+    if recommendation == "reject":
+        return _rejection_basis_failure(findings)
     return None
 
 

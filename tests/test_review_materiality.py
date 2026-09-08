@@ -26,6 +26,108 @@ def material_review():
     return payload
 
 
+@pytest.mark.parametrize("repairability,reason,error", [
+    (None, None, "reject_requires_finding_repairability"),
+    ([], None, "reject_requires_finding_repairability"),
+    ("scope_reset", "Too broad.", "reject_requires_finding_repairability"),
+    ("bounded_revision", None, "reject_requires_irreparable_finding_use_revise"),
+    ("new_evidence", "", "reject_requires_why_not_revise"),
+    ("invalid_data", "...", "reject_requires_why_not_revise"),
+    ("new_evidence", "No source supports any finding on the stated topic.", None),
+    ("fabrication", "The underlying participant records are demonstrably invented.", None),
+    ("invalid_data", "Corrupt measurements underpin every result and cannot be recovered.", None),
+])
+def test_reject_requires_an_explained_irreparable_finding(repairability, reason, error):
+    payload = material_review()
+    payload["recommendation"] = "reject"
+    payload["material_findings"][0].update(repairability=repairability, why_not_revise=reason)
+    assert review_materiality_failure(payload, CONTEXT) == error
+
+
+def test_bounded_finding_cannot_hide_an_irreparable_one():
+    payload = material_review()
+    payload["recommendation"] = "reject"
+    payload["material_findings"][0]["repairability"] = "bounded_revision"
+    payload["required_revisions"].append("Replace invalid underlying data.")
+    payload["material_findings"].append({
+        **payload["material_findings"][0], "issue": "Replace invalid underlying data.",
+        "repairability": "invalid_data", "why_not_revise": "The only measurements are corrupted.",
+    })
+    assert review_materiality_failure(payload, CONTEXT) is None
+
+
+@pytest.mark.parametrize("corrected", [True, False])
+def test_bounded_scope_reject_is_reconsidered_without_autoaccept_or_backup(corrected):
+    issue = "Narrow the human claim to a preclinical evidence map and correct outcome labels."
+    payload = material_review()
+    payload.update(recommendation="reject", required_revisions=[issue])
+    payload["material_findings"][0].update(
+        issue=issue, section="Conclusion", quote="Human benefit is not established.",
+        correction=issue, repairability="bounded_revision",
+        impact="The title and outcome labels promise more than the acknowledged scope supports.",
+    )
+    revised = copy.deepcopy(payload)
+    if corrected:
+        revised.update(recommendation="revise", review_markdown="Revise to an evidence map; do not claim human benefit.")
+    primary, secondary = Reviews(SOL, [payload, revised]), Reviews(TERRA, [payload, revised])
+    backup = Reviews("forbidden", [])
+    submission = ResearchObject(object_type=ObjectType.SUBMISSION, title="Senescence Subgroups", metadata={
+        "sections": {"Conclusion": "Human benefit is not established."}, "source_bundle": [],
+    })
+    engine = WorkflowEngine(provider=ReviewerPanel(
+        primary=primary, sparring=secondary, fallback=backup, quorum_policy=MODEL_QUORUM_POLICY))
+    if corrected:
+        decision, _, metadata = engine._review_submission(submission)
+        assert decision == "revise"
+        assert metadata["required_revisions"] == [issue]
+        assert metadata["material_findings"] == revised["material_findings"]
+    else:
+        with pytest.raises(ValueError, match="review_disagreement"):
+            engine._review_submission(submission)
+    assert primary.calls == secondary.calls == 2
+    assert backup.calls == 0
+
+
+def test_supported_accept_remains_unchanged_by_repairability_check():
+    payload = _review_payload("accept")
+    assert review_materiality_failure(payload, CONTEXT) is None
+
+
+@pytest.mark.parametrize("basis", ["new_evidence", "fabrication", "invalid_data"])
+@pytest.mark.parametrize("reassessed", [True, False])
+def test_reconsidered_revise_cannot_retain_an_irreparable_finding(basis, reassessed):
+    rejected = material_review()
+    rejected["recommendation"] = "reject"
+    rejected["material_findings"][0]["repairability"] = basis
+    revised = copy.deepcopy(rejected)
+    revised["recommendation"] = "revise"
+    revised["material_findings"][0].update(
+        repairability="bounded_revision" if reassessed else basis,
+        why_not_revise="" if reassessed else "Even a bounded evidence map cannot use these invalid data.",
+    )
+    primary, secondary = Reviews(SOL, [rejected, revised]), Reviews(TERRA, [rejected, revised])
+    backup = Reviews("forbidden", [])
+    submission = ResearchObject(object_type=ObjectType.SUBMISSION, title="Trial", metadata={
+        "sections": CONTEXT["sections"], "source_bundle": [],
+    })
+    engine = WorkflowEngine(provider=ReviewerPanel(
+        primary=primary, sparring=secondary, fallback=backup, quorum_policy=MODEL_QUORUM_POLICY))
+    if reassessed:
+        assert engine._review_submission(submission)[0] == "revise"
+    else:
+        with pytest.raises(ValueError, match="revise_conflicts_with_irreparable_finding"):
+            engine._review_submission(submission)
+    assert primary.calls == secondary.calls == 2
+    assert backup.calls == 0
+
+
+@pytest.mark.parametrize("recommendation", ["reject", " REJECT "])
+def test_empty_or_case_variant_rejection_cannot_bypass_repairability(recommendation):
+    payload = _review_payload("accept")
+    payload["recommendation"] = recommendation
+    assert review_materiality_failure(payload, CONTEXT) == "reject_requires_irreparable_finding_use_revise"
+
+
 CONTEXT = {"sections": {"Results": "Mortality was 48%."}, "previous_issues": []}
 
 

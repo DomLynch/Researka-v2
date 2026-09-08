@@ -1211,8 +1211,8 @@ class WorkflowEngine:
             "- When source bundles DO contain abstracts or full text, evaluate normally — exact statistics must match the source material.\n\n"
             "Decision anchors:\n"
             "- Anchor A (accept): bounded manuscript, claims directly supported, no major issues, no required revisions, claim_support=supported, overclaim=none, recommendation=accept.\n"
-            "- Anchor B (revise): partial support or incorrect table attribution can be repaired from existing evidence without replacing the research question, recommendation=revise.\n"
-            "- Anchor C (reject): the central answer needs a different evidence corpus or the study is structurally broken by invalid underlying data; the repairability rule requires rejection, recommendation=reject.\n\n"
+            "- Anchor B (revise): partial support, incorrect table attribution, or an overbroad clinical question can be repaired from existing evidence, including an honestly bounded evidence map on the same topic, recommendation=revise.\n"
+            "- Anchor C (reject): even a useful bounded evidence map needs new evidence, or proven fabrication/invalid underlying data prevents repair; explain why reclassification cannot fix the specific finding, recommendation=reject.\n\n"
             "Style exemplars:\n"
             "- House-style accept: seven clean sections, direct sentences, explicit search scope, bounded conclusion, recommendation=accept.\n"
             "- House-style revise: seven clean sections still need revision when the stated conclusion outruns the direct evidence or required claim traces are missing.\n"
@@ -1244,6 +1244,7 @@ class WorkflowEngine:
             '"has_material_impact":true,"kind":"incorrect|omission","section":"exact section",'
             '"quote":"verbatim text for incorrect statements","impact":"material consequence",'
             '"correction":"specific correction or indispensable missing evidence","change_reason":"persisting|newly_introduced|newly_discovered",'
+            '"repairability":"bounded_revision|new_evidence|fabrication|invalid_data","why_not_revise":"required for irreparable findings supporting reject",'
             '"prior_issue":"exact prior issue when persisting","why_new":"explanation when new"}],'
             '"resolved_prior_issues":["exact previous issue now resolved"],'
             '"integrity_findings":[{"category":"reviewer_directive","quote":"exact submission text"}],'

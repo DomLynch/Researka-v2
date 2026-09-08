@@ -2163,7 +2163,7 @@ def test_reviewer_prompt_keeps_triage_and_decision_contract_visible() -> None:
     )
     assert "rapid evidence synthesis reviewer" in prompt.lower()
     assert "Apply one repairability rule to every section and table" in prompt
-    assert "preserving the research question and a supported answer" in prompt
+    assert "narrowing the question and conclusions or reclassifying as an evidence map" in prompt
     assert "Issue count, manuscript length, repair effort, and mixed findings do not alone" in prompt
     assert "Judge substance, not house style" in prompt
     assert "House-style revise" in prompt

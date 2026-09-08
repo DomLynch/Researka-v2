@@ -140,7 +140,9 @@ def test_backup_disagreement_preserves_original_provider_failure(monkeypatch):
 def test_every_article_type_uses_the_same_repairability_and_grounding_rules(article_type):
     prompt = WorkflowEngine()._review_system_prompt(article_type.value)
     assert prompt.count("Apply one repairability rule to every section and table") == 1
-    assert "Reject when at least one demonstrated material defect requires new evidence" in prompt
+    assert "requires new evidence even for that bounded scope" in prompt
+    assert "If all findings are bounded_revision, return revise" in prompt
+    assert "Relabeling must not conceal fabrication, invalid data, contradictions" in prompt
     assert "A title correction or reclassification is not itself a scope reset" in prompt
     assert "verbatim quote for an incorrect statement" in prompt
     assert "use kind=omission for missing content, without inventing a quote" in prompt
