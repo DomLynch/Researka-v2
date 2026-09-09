@@ -1,7 +1,7 @@
 QUALITY_BIN := .venv-quality/bin
 JSCPD := npm exec --yes --package=jscpd@5.1.2 -- jscpd
 
-.PHONY: quality-setup quality complexity architecture duplicates quality-test dead-code mock-audit
+.PHONY: quality-setup quality complexity architecture duplicates quality-test dead-code mock-audit contract-test
 quality-setup:
 	uv venv --allow-existing .venv-quality
 	uv pip install --python $(QUALITY_BIN)/python -r requirements-quality.txt
@@ -29,3 +29,7 @@ dead-code:
 
 mock-audit:
 	$(QUALITY_BIN)/python quality/mock_density.py
+
+# Override UV_PROJECT_ENVIRONMENT when another developer owns the local .venv.
+contract-test:
+	uv run --locked --extra dev python -m pytest -q tests/test_publication_contract.py tests/test_submission_schema.py

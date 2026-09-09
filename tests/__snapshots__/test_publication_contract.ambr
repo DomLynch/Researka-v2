@@ -1,0 +1,20 @@
+# serializer version: 1
+# name: test_citation_replay_reaches_real_intake[False]
+  dict({
+    'citation_membership': False,
+    'decision_after_intake': 'revise',
+    'failed_template_gates': list([
+      'citation_membership',
+    ]),
+    'publication_count': 0,
+  })
+# ---
+# name: test_citation_replay_reaches_real_intake[True]
+  dict({
+    'citation_membership': True,
+    'decision_after_intake': None,
+    'failed_template_gates': list([
+    ]),
+    'publication_count': 0,
+  })
+# ---

@@ -21,6 +21,8 @@ dev = [
   "requests>=2.32.0",
   "ruff>=0.8.0",
   "types-requests>=2.32.0",
+  "schemathesis>=4.25.2",
+  "syrupy>=6.0.0",
 ]
 
 [build-system]
