@@ -87,6 +87,23 @@ _SOURCE_ID_CONTEXT = re.compile(
 )
 _SOURCE_IDENTIFIER_CONTEXT = re.compile(r"\b(?:pmids?|dois?|identifiers?)\b", re.IGNORECASE)
 _DOI = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
+_SOURCE_ID_ALLEGATIONS = tuple(
+    re.compile(
+        rf"(?:{problem.pattern})\s+(?:{context.pattern}|{_DOI.pattern})|"
+        rf"(?:{context.pattern}|{_DOI.pattern})(?:\s+(?:{_DOI.pattern}|\d+))?"
+        r"(?:\s+(?:citations?|references?))?"
+        r"(?:\s+(?:is|are|was|were|appears?|seems?)(?:\s+to be)?)?\s+"
+        rf"(?:{problem.pattern})",
+        re.IGNORECASE,
+    )
+    for problem, context in (
+        (_SOURCE_ID_PROBLEM, _SOURCE_ID_CONTEXT),
+        (_SOURCE_IDENTIFIER_PROBLEM, _SOURCE_IDENTIFIER_CONTEXT),
+    )
+)
+_SOURCE_ID_NEGATION = re.compile(
+    r"\b(?:no(?:\s+evidence(?:\s+of|\s+that)?)?|not)\s+(?:the\s+)?$", re.IGNORECASE
+)
 _MISSING_MANUSCRIPT = re.compile(
     r"\b(?:missing|no) (?:full )?(?:manuscript|submission)? ?(?:text|content)\b|"
     r"\b(?:manuscript|submission)(?: text| content)? (?:is )?(?:missing|absent|not (?:provided|present|included))\b|"
@@ -142,16 +159,12 @@ def _source_integrity_failure(
     feedback: list[str],
     source_verification: dict[str, object] | None,
 ) -> str | None:
-    allegations = [
-        item
-        for item in feedback
-        if (
-            _SOURCE_ID_PROBLEM.search(item) and (_SOURCE_ID_CONTEXT.search(item) or _DOI.search(item))
-        ) or (
-            _SOURCE_IDENTIFIER_PROBLEM.search(item)
-            and (_SOURCE_IDENTIFIER_CONTEXT.search(item) or _DOI.search(item))
-        )
-    ]
+    # Bind the allegation to a source/identifier noun, not unrelated words
+    # elsewhere in an entire review (e.g. an unverified effect estimate).
+    allegations = [item for item in feedback if any(
+        not _SOURCE_ID_NEGATION.search(item[:match.start()])
+        for pattern in _SOURCE_ID_ALLEGATIONS for match in pattern.finditer(item)
+    )]
     if not allegations:
         return None
     allowed: set[str] = set()

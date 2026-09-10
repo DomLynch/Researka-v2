@@ -1472,6 +1472,43 @@ def test_review_allows_verified_source_support_criticism() -> None:
     assert metadata["major_issues"] == [issue]
 
 
+@pytest.mark.parametrize("feedback", [
+    "The reported effect could not be resolved from the source excerpt.",
+    "The manuscript claim is unverified by the cited source excerpt.",
+    "The source supports the study population. The claimed endpoint was not found.",
+    "PMID 41536962 resolves. The effect estimate is unverified.",
+    "PMID 41536962 provides invalid support for this causal claim.",
+    "No fabricated sources were found.",
+    "The sources are not fabricated.",
+    "There is no evidence of fabricated citations.",
+    "There is no evidence that the sources are fabricated.",
+    "The DOI is not invalid.",
+])
+def test_source_identity_guard_allows_support_criticism_and_negation(feedback: str) -> None:
+    from runtime_core.review_contract import review_grounding_failure
+
+    assert review_grounding_failure({"review_markdown": feedback}, user_prompt="paper") is None
+
+
+@pytest.mark.parametrize("feedback", [
+    "PMID 41536962 is fabricated.",
+    "PMID 41536962 does not resolve.",
+    "PMID 41536962 is invalid because it resolves to another source.",
+    "The fabricated source uses PMID 41536962.",
+    "The DOI citations appear fabricated: PMID 41536962.",
+    "No fabricated sources were found earlier, but PMID 41536962 is fake.",
+])
+@pytest.mark.parametrize("verified_problem", [False, True])
+def test_source_identity_guard_still_requires_platform_evidence(feedback: str, verified_problem: bool) -> None:
+    from runtime_core.review_contract import review_grounding_failure
+
+    result = review_grounding_failure(
+        {"review_markdown": feedback}, user_prompt="paper",
+        source_verification={"identifier_mismatches": ["pmid:41536962"] if verified_problem else []},
+    )
+    assert result == (None if verified_problem else "unsupported_source_integrity_finding:pmid:41536962")
+
+
 def test_review_does_not_treat_invalid_support_as_fake_identifier() -> None:
     issue = "The citation is invalid support for the manuscript's broad causal claim."
     payload = _review_payload(
