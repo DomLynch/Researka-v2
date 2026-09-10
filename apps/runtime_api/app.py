@@ -56,6 +56,7 @@ from runtime_core.osf import (
 from runtime_core.ops import operational_alerts, submission_lifecycle
 from runtime_core.prompts import REVIEWER_PROMPT_VERSION, REPAIRABILITY_RULE, REVIEW_DECISION_RULES
 from runtime_core.review_contract import REVIEW_RUBRIC_KEYS
+from runtime_core.sanitizer import MIN_SECTION_CHARS
 from runtime_core.repos import RuntimeRepository, postgres_dsn_from_env
 from runtime_core.publication_sidecars import build_sidecar, sidecar_manifest
 from runtime_core.workflow import release_quarantined_publication
@@ -95,6 +96,7 @@ def _submission_contract() -> dict:
         article_types[article_type] = {
             "label": publication_template.label,
             "required_sections": list(intake.required_sections),
+            "minimum_required_section_characters": MIN_SECTION_CHARS if intake.required_sections else 0,
             "recommended_sections": list(intake.recommended_sections),
             "research_question_section": intake.research_question_section,
             "minimum_research_question_words": intake.minimum_research_question_words,
@@ -113,6 +115,10 @@ def _submission_contract() -> dict:
         },
         "canonical_input": "sections",
         "body_markdown_authoritative": False,
+        "required_section_character_counting": (
+            "Remove leading hyphen/asterisk bullet markers, collapse whitespace to single spaces, "
+            "trim, then count characters including spaces. This is a character floor, not a word target."
+        ),
         "article_types": article_types,
         "submission_schema": SubmissionPayload.model_json_schema(),
         "source_schema": SourceBundleEntry.model_json_schema(),

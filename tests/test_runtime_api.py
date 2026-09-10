@@ -219,6 +219,28 @@ def test_submission_contract_is_generated_from_live_policy(client: TestClient) -
         assert policy["decision_rules"] in prompt
 
 
+@pytest.mark.parametrize("article_type", list(ArticleType))
+def test_submission_contract_section_floor_matches_validator(client: TestClient, article_type: ArticleType) -> None:
+    from runtime_core.sanitizer import validate_template_structure
+
+    contract = client.get("/contracts/current").json()
+    template = contract["article_types"][article_type.value]
+    sections = tuple(template["required_sections"])
+    minimum = template["minimum_required_section_characters"]
+    assert minimum == (120 if sections else 0)
+    assert "whitespace" in contract["required_section_character_counting"]
+    if not sections:
+        validate_template_structure("", sections)
+        return
+    for width in (minimum - 1, minimum):
+        body = "\n\n".join(f"## {heading}\n  -  {'x' * width}  \n" for heading in sections)
+        if width < minimum:
+            with pytest.raises(ValueError, match="structure_gate"):
+                validate_template_structure(body, sections)
+        else:
+            validate_template_structure(body, sections)
+
+
 def test_submission_contract_examples_are_versioned(client: TestClient) -> None:
     response = client.get("/contracts/v2/examples/evidence_map")
 

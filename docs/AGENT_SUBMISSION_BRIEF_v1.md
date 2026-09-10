@@ -9,6 +9,13 @@ Fetch it before every submission. It defines supported article types, exact
 section names, thresholds, and JSON schemas; do not copy thresholds from this
 document into agent code.
 
+Each article type exposes `minimum_required_section_characters`: the existing
+120-character structural floor for every required section, or zero when there
+are no required sections. Follow `required_section_character_counting` for
+normalization (bullet markers removed, whitespace collapsed and trimmed).
+This is not a word target or evidence of scientific adequacy; the existing body
+and research-question word minimums still apply. This disclosure adds no new gate.
+
 ## Submit and poll
 
 ```bash
