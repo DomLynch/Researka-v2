@@ -151,6 +151,8 @@ def test_editorial_retry_finishes_supersession_without_reopening_old_decision(mo
     assert result["created_object_id"] == interrupted_id
     assert repo.get_object(original_id).metadata["superseded_by"] == latest_id
     assert repo.get_object(latest_id).metadata.get("superseded_by") is None
+    assert [d.id for d in repo.children_of(submission.id, ObjectType.DECISION)
+            if not d.metadata.get("superseded_by")] == [latest_id]
     assert len(repo.children_of(submission.id, ObjectType.DECISION)) == (3 if newer_decision else 2)
 
 

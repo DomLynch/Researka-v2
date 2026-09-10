@@ -237,6 +237,42 @@ class Reviews:
             provider="codex", model=self.model, text=json.dumps(response), usage=ProviderUsage()))
 
 
+@pytest.mark.parametrize("failure", ["stitched_rows", "paraphrase", "issue_copy"])
+@pytest.mark.parametrize("repaired", [True, False])
+def test_review_format_repairs_still_require_exact_grounded_findings(failure, repaired):
+    rows = ["| Study A | 10 mg |", "| Study B | 20 mg |", "| Study C | 30 mg |"]
+    valid = material_review()
+    valid["material_findings"][0]["quote"] = rows[0]
+    broken = copy.deepcopy(valid)
+    if failure == "issue_copy":
+        broken["required_revisions"][0] += " Recompute the estimate."
+    else:
+        broken["material_findings"][0]["quote"] = (
+            rows[0] + "\n" + rows[2] if failure == "stitched_rows" else "Study A reported 10 mg."
+        )
+    final = valid if repaired else broken
+    primary, secondary = Reviews(SOL, [broken, final]), Reviews(TERRA, [broken, final])
+    backup = Reviews("forbidden", [])
+    engine = WorkflowEngine(provider=ReviewerPanel(
+        primary=primary, sparring=secondary, fallback=backup, quorum_policy=MODEL_QUORUM_POLICY))
+    submission = ResearchObject(object_type=ObjectType.SUBMISSION, title="Trial", metadata={
+        "sections": {"Results": "\n".join(rows)}, "source_bundle": [],
+    })
+    if repaired:
+        recommendation, _, metadata = engine._review_submission(submission)
+        assert recommendation == "revise"
+        assert metadata["material_findings"] == valid["material_findings"]
+    else:
+        with pytest.raises(ValueError, match="review_disagreement"):
+            engine._review_submission(submission)
+    assert primary.calls == secondary.calls == 2
+    assert backup.calls == 0
+    prompt = primary.requests[0]["system_prompt"]
+    assert "copy one identical issue string" in prompt
+    assert "one short contiguous span" in prompt
+    assert "never stitch non-adjacent rows" in prompt
+
+
 @pytest.mark.parametrize("repair", [True, False])
 def test_optional_only_revise_gets_one_gpt_reconsideration_not_paid_backup_or_autoaccept(repair):
     optional = material_review()
