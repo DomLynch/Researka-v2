@@ -1483,6 +1483,11 @@ def test_review_allows_verified_source_support_criticism() -> None:
     "There is no evidence of fabricated citations.",
     "There is no evidence that the sources are fabricated.",
     "The DOI is not invalid.",
+    "Unverified source data do not establish a causal effect.",
+    "The unverified source-level effect estimate needs a comparator.",
+    "The unverified reference range does not support the endpoint.",
+    "The unverified source evidence does not establish that finding.",
+    "Unverified source passages do not establish a causal effect.",
 ])
 def test_source_identity_guard_allows_support_criticism_and_negation(feedback: str) -> None:
     from runtime_core.review_contract import review_grounding_failure
@@ -1497,6 +1502,15 @@ def test_source_identity_guard_allows_support_criticism_and_negation(feedback: s
     "The fabricated source uses PMID 41536962.",
     "The DOI citations appear fabricated: PMID 41536962.",
     "No fabricated sources were found earlier, but PMID 41536962 is fake.",
+    "PMID: 41536962 is fabricated.",
+    "The source (PMID 41536962) is fabricated.",
+    "PMID 41536962 is demonstrably fabricated.",
+    "The cited sources are clearly fabricated: PMID 41536962.",
+    "PMID `41536962` is fabricated.",
+    "**PMID 41536962** is fabricated.",
+    "PMID 41536962 is likely to be fabricated.",
+    "PMID 41536962 has been fabricated.",
+    "PMID 41536962 was found to be invalid.",
 ])
 @pytest.mark.parametrize("verified_problem", [False, True])
 def test_source_identity_guard_still_requires_platform_evidence(feedback: str, verified_problem: bool) -> None:
@@ -1507,6 +1521,19 @@ def test_source_identity_guard_still_requires_platform_evidence(feedback: str, v
         source_verification={"identifier_mismatches": ["pmid:41536962"] if verified_problem else []},
     )
     assert result == (None if verified_problem else "unsupported_source_integrity_finding:pmid:41536962")
+
+
+@pytest.mark.parametrize("separator", [" and ", ", "])
+@pytest.mark.parametrize("grounded_count", [0, 1, 2])
+def test_source_identity_lists_require_evidence_for_every_identifier(separator: str, grounded_count: int) -> None:
+    from runtime_core.review_contract import review_grounding_failure
+
+    identifiers = ["pmid:41536962", "pmid:41536963"]
+    result = review_grounding_failure(
+        {"review_markdown": f"PMIDs 41536962{separator}41536963 are fabricated."}, user_prompt="paper",
+        source_verification={"identifier_mismatches": identifiers[:grounded_count]},
+    )
+    assert result == (None if grounded_count == 2 else f"unsupported_source_integrity_finding:{identifiers[grounded_count]}")
 
 
 def test_review_does_not_treat_invalid_support_as_fake_identifier() -> None:

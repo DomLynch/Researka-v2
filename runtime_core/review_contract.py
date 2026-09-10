@@ -89,10 +89,16 @@ _SOURCE_IDENTIFIER_CONTEXT = re.compile(r"\b(?:pmids?|dois?|identifiers?)\b", re
 _DOI = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
 _SOURCE_ID_ALLEGATIONS = tuple(
     re.compile(
-        rf"(?:{problem.pattern})\s+(?:{context.pattern}|{_DOI.pattern})|"
-        rf"(?:{context.pattern}|{_DOI.pattern})(?:\s+(?:{_DOI.pattern}|\d+))?"
+        rf"(?:{problem.pattern})\s+(?:{context.pattern}|{_DOI.pattern})"
+        r"(?![- ](?:data|text|evidence|excerpts?|passages?|claims?|effects?|estimates?|values?|findings?|level|range)\b)|"
+        rf"(?:{context.pattern}|{_DOI.pattern})"
+        r"(?![- ](?:data|text|evidence|excerpts?|passages?|claims?|effects?|estimates?|values?|findings?|level|range)\b)"
+        rf"(?:\s*[:(]?\s*(?:(?:PMID|DOI)\s*:?\s*)?(?:{_DOI.pattern}|\d+)\)?)?"
+        rf"(?:\s*(?:,\s*(?:and\s+)?|and\s+)(?:{_DOI.pattern}|\d+)){{0,20}}"
         r"(?:\s+(?:citations?|references?))?"
-        r"(?:\s+(?:is|are|was|were|appears?|seems?)(?:\s+to be)?)?\s+"
+        r"(?:\s+(?:is|are|was|were|appears?|seems?|has been|have been))?"
+        r"(?:\s+(?:found|shown|reported|clearly|demonstrably|apparently|likely|probably|obviously|potentially|possibly|entirely)){0,2}"
+        r"(?:\s+to be)?\s+"
         rf"(?:{problem.pattern})",
         re.IGNORECASE,
     )
@@ -161,8 +167,8 @@ def _source_integrity_failure(
 ) -> str | None:
     # Bind the allegation to a source/identifier noun, not unrelated words
     # elsewhere in an entire review (e.g. an unverified effect estimate).
-    allegations = [item for item in feedback if any(
-        not _SOURCE_ID_NEGATION.search(item[:match.start()])
+    allegations = [item for item in (text.replace("`", "").replace("**", "") for text in feedback) if any(
+        not _SOURCE_ID_NEGATION.search(item, max(0, match.start() - 80), match.start())
         for pattern in _SOURCE_ID_ALLEGATIONS for match in pattern.finditer(item)
     )]
     if not allegations:
