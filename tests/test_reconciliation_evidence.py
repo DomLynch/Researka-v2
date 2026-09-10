@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 
-from contracts import ObjectType, ResearchObject, Stage, ProviderUsage, FailureClass
+from contracts import ObjectType, ResearchObject, RuntimeJob, Stage, ProviderUsage, FailureClass
 from runtime_core.doi_resolver import _pmc_full_texts, _normalized_text, _tokens
 from runtime_core.evidence_quality import claim_assessment, claim_candidates, quantitative_claim_candidates, support_for_claim, evidence_profile
 from runtime_core.failure_classifier import classify_failure_reason
@@ -109,6 +109,49 @@ def test_editorial_override_not_mislabelled_reviewer_failure():
     decision = ResearchObject(object_type=ObjectType.DECISION, title="Revision", metadata={"claim_trace_guard": True})
     review = ResearchObject(object_type=ObjectType.REVIEW, title="Accept")
     assert _failure_stage(decision, review) == "claim_trace_guard"
+
+
+@pytest.mark.parametrize("newer_decision", [False, True])
+def test_editorial_retry_finishes_supersession_without_reopening_old_decision(monkeypatch, newer_decision):
+    repo = InMemoryRuntimeRepository()
+    submission = _authenticated_workflow_submission(repo)
+    original = accepted_publish_job(repo, submission)
+    original_id = original.payload["decision_id"]
+    review = repo.create_object(ResearchObject(
+        object_type=ObjectType.REVIEW, parent_object_id=submission.id, title="Reassessment",
+        metadata={"recommendation": "revise", "reviewed_package_hash": original.payload["canonical_package_hash"]},
+    ))
+    job = RuntimeJob(target_object_id=submission.id, stage=Stage.EDITORIAL, payload={"review_id": review.id})
+    engine = WorkflowEngine()
+    update = repo.update_object_metadata
+
+    def interrupt_supersession(object_id, metadata):
+        if object_id == original_id and metadata.get("superseded_by"):
+            raise RuntimeError("interrupted_supersession")
+        return update(object_id, metadata)
+
+    monkeypatch.setattr(repo, "update_object_metadata", interrupt_supersession)
+    with pytest.raises(RuntimeError, match="interrupted_supersession"):
+        engine._run_editorial(job, repo)
+    decisions = repo.children_of(submission.id, ObjectType.DECISION)
+    assert len(decisions) == 2
+    interrupted_id = decisions[-1].id
+    monkeypatch.setattr(repo, "update_object_metadata", update)
+    if newer_decision:
+        newest = engine._run_editorial(RuntimeJob(
+            target_object_id=submission.id, stage=Stage.EDITORIAL,
+            payload={"review_id": review.id},
+        ), repo)
+        latest_id = newest["created_object_id"]
+    else:
+        latest_id = interrupted_id
+
+    result = engine._run_editorial(job, repo)
+    assert result["deduped"] is True
+    assert result["created_object_id"] == interrupted_id
+    assert repo.get_object(original_id).metadata["superseded_by"] == latest_id
+    assert repo.get_object(latest_id).metadata.get("superseded_by") is None
+    assert len(repo.children_of(submission.id, ObjectType.DECISION)) == (3 if newer_decision else 2)
 
 
 def test_revision_context_is_server_owned_and_contains_original_issues():

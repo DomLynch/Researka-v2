@@ -1042,7 +1042,10 @@ def _supersede_prior_decisions(
     submission_id: str,
     decision_id: str,
 ) -> None:
-    for prior in repository.children_of(submission_id, ObjectType.DECISION):
+    decisions = repository.children_of(submission_id, ObjectType.DECISION)
+    if not decisions or decisions[-1].id != decision_id:
+        return
+    for prior in decisions:
         if prior.id != decision_id and not prior.metadata.get("superseded_by"):
             repository.update_object_metadata(
                 prior.id, {**prior.metadata, "superseded_by": decision_id}
@@ -2193,6 +2196,7 @@ class WorkflowEngine:
             repository, submission.id, ObjectType.DECISION, operation_id
         )
         if existing is not None:
+            _supersede_prior_decisions(repository, submission.id, existing.id)
             decision_value = str(existing.metadata.get("decision") or "")
             derivation = emit_decision_to_derivation_web(
                 submission=submission, decision=existing
@@ -2239,12 +2243,14 @@ class WorkflowEngine:
             "revise": Decision.REVISE,
             "reject": Decision.REJECT,
         }[recommendation]
-        context = WorkflowContext(
-            target_object_id=submission.id,
-            domain_slug=str(submission.metadata.get("domain_slug", "general")),
-            review_ids=[review.id],
+        outcome = self.plan_from_editorial(
+            WorkflowContext(
+                target_object_id=submission.id,
+                domain_slug=str(submission.metadata.get("domain_slug", "general")),
+                review_ids=[review.id],
+            ),
+            decision,
         )
-        outcome = self.plan_from_editorial(context, decision)
         taxonomy = (
             {
                 "evaluation_verdict": decision.value,
