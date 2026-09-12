@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware import Middleware
 
 from apps.runtime_api import rate_limits
-from apps.runtime_api.error_reporting import ErrorReportingMiddleware
+from apps.runtime_api.error_reporting import ErrorReportingMiddleware, report_api_startup
 from apps.worker.main import WorkerApp
 from contracts import (
     PUBLICATION_TEMPLATES,
@@ -1307,6 +1307,7 @@ def _submission_decision_response(
     return response
 
 
+@report_api_startup
 def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     warn_if_osf_default_owner_missing()
     if repository is not None:

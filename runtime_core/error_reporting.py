@@ -27,7 +27,7 @@ _TECHNICAL_FAILURES = {
     FailureClass.PROVIDER_ERROR, FailureClass.SYSTEM_UNAVAILABLE, FailureClass.OTHER,
 }
 _STAGES = {stage.value for stage in Stage} | {
-    "api", "worker_startup", "worker_loop", "maintenance", "lease_heartbeat", "smoke",
+    "api", "api_startup", "worker_startup", "worker_loop", "maintenance", "lease_heartbeat", "smoke",
 }
 
 
@@ -61,7 +61,8 @@ def configure_error_reporting(service: str) -> bool:
             traces_sample_rate=0.0, profiles_sample_rate=0.0,
             enable_logs=False, enable_metrics=False, auto_session_tracking=False,
             send_client_reports=False, enable_backpressure_handling=False,
-            trace_propagation_targets=[], server_name="", shutdown_timeout=2,
+            trace_propagation_targets=[], server_name="", shutdown_timeout=2, debug=False,
+            spotlight=False,
         )
         _service = service if service in {"api", "worker"} else "unknown"
         return True
