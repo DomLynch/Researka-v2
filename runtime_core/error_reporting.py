@@ -109,11 +109,12 @@ def report_error(
         tags = {"service": _service, "stage": stage if stage in _STAGES else "unknown", **_job_tags(job)}
         if failure_class in _TECHNICAL_FAILURES:
             tags["failure_class"] = failure_class.value
+        frames = _safe_frames(exc)
         return _client.capture_event({
             "level": "error", "tags": tags,
             "exception": {"values": [{
                 "type": kind, "value": "[redacted]",
-                "stacktrace": {"frames": _safe_frames(exc)},
+                **({"stacktrace": {"frames": frames}} if frames else {}),
             }]},
         })
     except Exception:

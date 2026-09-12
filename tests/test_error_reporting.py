@@ -87,6 +87,7 @@ def test_actual_envelope_excludes_exception_scope_and_sdk_context(captured):
     assert event["release"].startswith("researka-core@")
     assert event["environment"] == "test"
     assert event["exception"]["values"][0]["value"] == "[redacted]"
+    assert "stacktrace" not in event["exception"]["values"][0]
     assert not ({"request", "user", "extra", "contexts", "breadcrumbs", "server_name", "sdk"} & event.keys())
     wire = b"\n".join(envelope.serialize() for envelope in captured.envelopes)
     assert SECRET.encode() not in wire
@@ -207,6 +208,7 @@ def test_untrusted_identifiers_and_exception_type_are_not_sent(captured):
     reporting.report_error(error_type(SECRET), stage=SECRET, job=job)
     event = captured.events[0]
     assert event["exception"]["values"][0]["type"] == "ApplicationError"
+    assert "stacktrace" not in event["exception"]["values"][0]
     assert event["tags"]["stage"] == "unknown"
     assert "target_id" not in event["tags"]
     assert SECRET not in json.dumps(event)
