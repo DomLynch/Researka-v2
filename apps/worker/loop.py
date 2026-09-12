@@ -9,6 +9,7 @@ from threading import Event
 from apps.worker.main import WorkerApp
 from runtime_core import WorkflowEngine
 from runtime_core.derivation_web import is_configured as derivation_web_configured
+from runtime_core.error_reporting import configure_error_reporting, flush_error_reporting, report_error
 from runtime_core.ops import operational_alerts, reconcile_stalled_submissions
 from runtime_core.osf import (
     config_from_env as osf_service_config,
@@ -97,6 +98,7 @@ def main() -> None:
                         "alerts": alerts,
                     }, sort_keys=True), flush=True)
             except Exception as exc:
+                report_error(exc, stage="maintenance")
                 print(json.dumps({"event": "worker_maintenance_error", "error": str(exc)}, sort_keys=True), flush=True)
             next_maintenance = time.monotonic() + maintenance_interval
         try:
@@ -105,9 +107,21 @@ def main() -> None:
             if not result.get("claimed"):
                 stop_event.wait(idle_sleep)
         except Exception as exc:
+            report_error(exc, stage="worker_loop")
             print(json.dumps({"event": "worker_error", "error": str(exc)}, sort_keys=True), flush=True)
             stop_event.wait(error_sleep)
 
 
+def run() -> None:
+    configure_error_reporting("worker")
+    try:
+        main()
+    except Exception as exc:
+        report_error(exc, stage="worker_startup")
+        raise
+    finally:
+        flush_error_reporting()
+
+
 if __name__ == "__main__":
-    main()
+    run()

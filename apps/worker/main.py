@@ -7,6 +7,7 @@ from typing import Protocol
 
 from contracts import EventType, FailureClass, RuntimeEvent, RuntimeJob, Stage
 from runtime_core import InMemoryRuntimeRepository, WorkflowEngine
+from runtime_core.error_reporting import report_error, report_job_failure
 from runtime_core.ops import classify_failure
 from runtime_core.repos import RuntimeRepository
 
@@ -49,7 +50,8 @@ class WorkerApp:
                 if not self.repository.renew_job_lease(job.id, job.lease_token):
                     lost.set()
                     return
-            except Exception:
+            except Exception as exc:
+                report_error(exc, stage="lease_heartbeat", job=job)
                 lost.set()
                 return
 
@@ -180,6 +182,7 @@ class WorkerApp:
                         },
                     ),
                 )
+            report_job_failure(retry_error or exc, job, failure_class, retrying=retry_job is not None)
             return {
                 "claimed": 1,
                 "completed": 0,

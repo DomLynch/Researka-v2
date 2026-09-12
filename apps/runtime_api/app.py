@@ -11,8 +11,10 @@ from pathlib import Path
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.middleware import Middleware
 
 from apps.runtime_api import rate_limits
+from apps.runtime_api.error_reporting import ErrorReportingMiddleware
 from apps.worker.main import WorkerApp
 from contracts import (
     PUBLICATION_TEMPLATES,
@@ -1315,7 +1317,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
         if os.getenv("RESEARKA_V2_ENV", "development").strip().lower() == "production":
             raise RuntimeError("researka_v2_postgres_dsn_required_in_production")
         repo = InMemoryRuntimeRepository()
-    app = FastAPI(title="Researka v2 Runtime API")
+    app = FastAPI(title="Researka v2 Runtime API", middleware=[Middleware(ErrorReportingMiddleware)])
     app.state.repository = repo
     app.state.engine = WorkflowEngine()
     app.state.worker = WorkerApp(repo, worker_id="api-worker", engine=app.state.engine)
