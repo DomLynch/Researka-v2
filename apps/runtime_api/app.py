@@ -1024,9 +1024,10 @@ def _model_list(value: object) -> list[str]:
     return [item.strip() for item in value.replace(",", "|").split("|") if item.strip()]
 
 
-def _decision_derivation_map(repo: RuntimeRepository) -> dict[str, dict]:
+def _decision_derivation_map(repo: RuntimeRepository, submission_id: str | None = None) -> dict[str, dict]:
     derivations: dict[str, dict] = {}
-    for event in repo.list_events():
+    events = repo.list_events() if submission_id is None else repo.events_for_target(submission_id)
+    for event in events:
         decision_id = event.payload.get("created_object_id")
         derivation = event.payload.get("derivation_web")
         if isinstance(decision_id, str) and isinstance(derivation, dict):
@@ -1165,7 +1166,7 @@ def _decision_publication_feedback(repo: RuntimeRepository, submission_id: str) 
     direct = repo.publication_for_target(submission_id)
     if direct is not None:
         return _publication_feedback(direct)
-    for event in reversed(repo.list_events()):
+    for event in reversed(repo.events_for_target(submission_id)):
         if event.target_object_id != submission_id or event.event_type != EventType.JOB_COMPLETED:
             continue
         if event.payload.get("stage") != Stage.PUBLISH.value or not event.payload.get("deduped"):
@@ -1178,7 +1179,7 @@ def _decision_publication_feedback(repo: RuntimeRepository, submission_id: str) 
 
 
 def _publication_failure_feedback(repo: RuntimeRepository, submission_id: str) -> dict | None:
-    for event in reversed(repo.list_events()):
+    for event in reversed(repo.events_for_target(submission_id)):
         if event.target_object_id != submission_id or event.event_type != EventType.JOB_FAILED:
             continue
         if event.payload.get("stage") == Stage.PUBLISH.value:
@@ -1202,7 +1203,7 @@ def _current_attempt_decisions(repo: RuntimeRepository, submission_id: str, pipe
 
 def _terminal_submission_failure_feedback(repo: RuntimeRepository, submission_id: str) -> dict | None:
     lifecycle_events = {EventType.JOB_QUEUED, EventType.JOB_LEASED, EventType.JOB_COMPLETED, EventType.JOB_FAILED}
-    for event in reversed(repo.list_events()):
+    for event in reversed(repo.events_for_target(submission_id)):
         if event.target_object_id != submission_id or event.event_type not in lifecycle_events:
             continue
         if event.event_type != EventType.JOB_FAILED or event.payload.get("terminal") is False:
@@ -1229,7 +1230,7 @@ def _submission_decision_response(
         decision=decision,
         submission=submission if submission and submission.object_type == ObjectType.SUBMISSION else None,
         review=review if review and review.object_type == ObjectType.REVIEW else None,
-        derivation=_decision_derivation_map(repo).get(decision.id),
+        derivation=_decision_derivation_map(repo, submission_id).get(decision.id),
     )
     decision_value = public_record["decision"]
     publication = _decision_publication_feedback(repo, submission_id)
