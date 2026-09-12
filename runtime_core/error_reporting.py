@@ -59,7 +59,7 @@ def configure_error_reporting(service: str) -> bool:
             include_source_context=False, max_request_body_size="never",
             max_breadcrumbs=0, before_send=_before_send,
             traces_sample_rate=0.0, profiles_sample_rate=0.0,
-            enable_logs=False, enable_metrics=False, auto_session_tracking=False,
+            enable_logs=False, before_send_metric=lambda _metric, _hint: None, auto_session_tracking=False,
             send_client_reports=False, enable_backpressure_handling=False,
             trace_propagation_targets=[], server_name="", shutdown_timeout=2, debug=False,
             spotlight=False,
