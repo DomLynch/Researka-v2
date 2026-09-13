@@ -339,7 +339,8 @@ def _claim_trace_guard_revisions(submission: ResearchObject, review: ResearchObj
     decisive_prose = "\n".join(
         [str(submission.metadata.get("abstract") or ""), conclusion]
     )
-    quantitative_claims = quantitative_claim_candidates(decisive_prose)
+    quantitative_claims = [claim for claim in quantitative_claim_candidates(decisive_prose)
+                           if resolved(claim) != "not_source_claim"]
     quantitative_exact = sum(
         1
         for claim in quantitative_claims
@@ -417,7 +418,7 @@ def _review_claim_text(submission: ResearchObject) -> str:
     prose = "\n".join([str(submission.metadata.get("abstract") or ""),
                        *(str(value) for name, value in sections.items()
                          if article_type == ArticleType.ALPHA_MEMO.value or name.strip().lower() in names)])
-    return "\n".join(line for line in prose.splitlines() if not line.lstrip().startswith("|"))
+    return "\n".join(line for line in prose.splitlines() if line.strip() and not line.lstrip().startswith("|"))
 
 
 def _review_verification_sources(submission: ResearchObject, sources: list[dict]) -> list[dict]:

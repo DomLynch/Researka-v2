@@ -458,7 +458,10 @@ def agreed_claim_resolutions(claims: list[str], sources: list[dict[str, Any]], r
                     r"^(?:(?:Background|Methods):\s*)?(?:We (?:mapped|searched|screened|selected)|"
                     r"This (?:evidence map|review|synthesis) (?:asked|aimed|catalogs|maps))\b", claim, re.IGNORECASE,
                 )
-                if structural and not references and not _quantity_tokens(claim) and not re.search(EFFECT_PATTERN, claim, re.IGNORECASE):
+                source_counts = re.findall(r"\b(\d+)\s+(?:(?:retained|included|selected)\s+)?sources\b", claim, re.IGNORECASE)
+                without_counts = re.sub(r"\b\d+\s+(?:(?:retained|included|selected)\s+)?sources\b", "sources", claim, flags=re.IGNORECASE)
+                if (structural and not references and all(int(count) == len(sources) for count in source_counts)
+                        and not _quantity_tokens(without_counts) and not re.search(EFFECT_PATTERN, claim, re.IGNORECASE)):
                     accepted[claim_id] = (status, frozenset())
                 continue
             if status != "supported":
