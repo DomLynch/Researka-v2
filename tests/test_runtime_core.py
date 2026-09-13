@@ -1471,6 +1471,7 @@ def test_research_synthesis_class_requires_directness_and_risk_appraisal() -> No
     sources = [
         {
             "title": f"Direct trial {index}",
+            "excerpt": "The evidence supports a bounded effect.",
             "evidence_type": "primary",
             "directness": "direct clinical",
             "risk_of_bias": "low" if index < 4 else "not appraised",
@@ -1894,7 +1895,7 @@ def test_publish_preserves_research_synthesis_with_direct_clinical_core(
     full_body = "\n\n".join(
         [
             "# Full manuscript",
-            "## Abstract\n\nEvidence-honesty note: 54/85 retained sources are indirect, review-level, adjacent, or mechanistic and are used only to bound interpretation. The conclusion therefore does not support broad causal, clinical, or policy claims [bundle:1].",
+            "## Abstract\n\nEvidence-honesty note: 54/85 retained sources are indirect, review-level, adjacent, or mechanistic and are used only to bound interpretation [bundle:1]. The conclusion therefore does not support broad causal, clinical, or policy claims [bundle:1].",
             "## Introduction\n\nThe corpus contains 31 direct clinical sources, 53 adjacent, review, or context sources, and 1 mechanistic or model-system source.",
             "## Methods\n\nThe methods describe source retrieval, screening, extraction, appraisal, synthesis, and verification in enough detail to audit the accepted manuscript.",
             "## Results\n\nThe results preserve heterogeneous source-level findings, separate direct findings from adjacent evidence, and report contextual evidence without overstating clinical certainty [bundle:1].",
@@ -1990,7 +1991,7 @@ def test_publish_labels_declared_evidence_map_as_evidence_map(
                 "sections": {
                     "Evidence Landscape": (
                         "This evidence map catalogs heterogeneous source-level findings without collapsing them into a single "
-                        "causal thesis. It preserves source-level disagreement and frames conclusions as exploratory [bundle:1]."
+                        "causal thesis [bundle:1]. It preserves source-level disagreement and frames conclusions as exploratory [bundle:1]."
                     ),
                     "Limitations": "The map is bounded by corpus coverage, heterogeneous endpoints, and uncertain external validity.",
                 },
