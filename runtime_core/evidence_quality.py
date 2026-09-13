@@ -40,17 +40,29 @@ UNIT_SCALES = {
 }
 
 
+def _claim_units(text: str) -> list[str]:
+    # Keep decimal statistics and author abbreviations intact. A following
+    # citation belongs to the preceding sentence, not to the next study.
+    units = []
+    for line in text.splitlines():
+        for part in re.split(r'(?<=[.!?])\s+(?=[A-Z"“])', line):
+            clean = part.strip(" -*")
+            if clean:
+                units.append(clean)
+    return units
+
+
 def claim_candidates(text: str) -> list[str]:
     candidates = []
-    for line in text.splitlines():
-        clean = line.strip(" -*")
-        if len(clean) < 80 and not (re.search(r"[A-Za-z]{3}", clean) and _quantity_tokens(clean)):
+    for clean in _claim_units(text):
+        cited = bool(BUNDLE_REFERENCE_PATTERN.search(clean) or BRACKETED_CITATION_PATTERN.search(clean))
+        if len(clean) < 80 and not (re.search(r"[A-Za-z]{3}", clean) and (_quantity_tokens(clean) or cited)):
             continue
-        if _quantity_tokens(clean) or any(marker in clean.lower() for marker in ("support", "suggest", "risk", "increase", "decrease", "null", "evidence")):
+        if cited or _quantity_tokens(clean) or any(marker in clean.lower() for marker in ("support", "suggest", "risk", "increase", "decrease", "null", "evidence")):
             candidates.append(clean)
     if not candidates:
-        candidates = [part.strip() for part in re.split(r"\n+|(?<=[.!?])\s+", text) if len(part.strip()) >= 80]
-    return candidates[:30]
+        candidates = [part for part in _claim_units(text) if len(part) >= 80]
+    return candidates
 
 
 def evidence_profile(*, text: str, source_bundle: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -232,6 +244,19 @@ def _evidence_passages(source: dict[str, Any]) -> list[str]:
     return passages
 
 
+def _claim_text(text: str, sources: list[dict[str, Any]]) -> str:
+    # Resolve references before removing their typography from the scientific
+    # comparison. Author names and bundle labels are not outcome endpoints.
+    text = BUNDLE_REFERENCE_PATTERN.sub(" ", NUMERIC_CITATION_PATTERN.sub(" ", text))
+    for source in sources:
+        for field in ("cited_as", "doi"):
+            label = str(source.get(field) or "").strip()
+            if label:
+                text = re.sub(r"[\[(]\s*" + re.escape(label) + r"\s*[\])]", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"^Results:\s*", "", text, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text).strip(' ."“”')
+
+
 def _passage_aligns(claim: str, evidence: str) -> bool:
     subjects = _effect_subjects(claim)
     claim_quantities = _quantity_tokens(claim)
@@ -322,10 +347,10 @@ def quantity_tokens(text: str, sources: list[dict[str, Any]] | None = None) -> s
 
 def quantitative_claim_candidates(text: str) -> list[str]:
     return [
-        part.strip()
-        for part in re.split(r"\n+|(?<=[.!?])\s+", text)
+        part
+        for part in _claim_units(text)
         if re.search(r"[A-Za-z]{3}", part) and _quantity_tokens(part)
-    ][:30]
+    ]
 
 
 def quantitative_table_rows(sections: dict[str, str]) -> list[dict[str, str]]:
@@ -381,7 +406,7 @@ def claim_assessment(claim: str, sources: list[dict[str, Any]]) -> dict[str, Any
     supported = support_for_claim(claim, sources, require_quantitative_agreement=True)
     passages = [passage for source in references for passage in _evidence_passages(source)]
     comparisons = [{"source_id": source["source_id"], "passage": passage[:2000], "truncated": len(passage) > 2000,
-                    "mismatch_axes": _passage_differences(claim, passage)}
+                    "mismatch_axes": _passage_differences(_claim_text(claim, sources), passage)}
                    for source in references for field in ("quote", "evidence_span", "excerpt")
                    if (passage := str(source.get(field) or "").strip())]
     status = "SUPPORTED" if supported else "NEEDS_SEMANTIC_REVIEW" if passages else "INSUFFICIENT_SOURCE_TEXT"
@@ -455,16 +480,17 @@ def support_for_claim(
             )
         )
     }
+    comparison = _claim_text(text, sources)
     aligned_indexes = [
         index
         for index in sorted(
             bundle_indexes | numeric_indexes | doi_indexes | pmid_indexes | cited_as_indexes | span_indexes
         )
-        if not require_evidence_alignment or _evidence_aligns(text, sources[index])
+        if not require_evidence_alignment or _evidence_aligns(comparison, sources[index])
     ]
     aligned_sources = [sources[index] for index in aligned_indexes]
-    if (require_evidence_alignment and not _subjects_covered(text, aligned_sources)) or (
-        require_quantitative_agreement and not _quantities_agree(text, aligned_sources)
+    if (require_evidence_alignment and not _subjects_covered(comparison, aligned_sources)) or (
+        require_quantitative_agreement and not _quantities_agree(comparison, aligned_sources)
     ):
         return []
     support: list[dict[str, Any]] = []
