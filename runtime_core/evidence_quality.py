@@ -40,7 +40,7 @@ UNIT_SCALES = {
 }
 
 
-def _claim_units(text: str) -> list[str]:
+def claim_units(text: str) -> list[str]:
     # Keep decimal statistics and author abbreviations intact. A following
     # citation belongs to the preceding sentence, not to the next study.
     citation = r'(?:\[bundle:\d+\]|\[(?:\d+[\s,;-]*)+\]|[\[(][A-Za-z][^\]\)\n]{0,120}\b(?:19|20)\d{2}[\])])'
@@ -57,7 +57,7 @@ def _claim_units(text: str) -> list[str]:
 
 def claim_candidates(text: str) -> list[str]:
     candidates = []
-    for clean in _claim_units(text):
+    for clean in claim_units(text):
         cited = bool(BUNDLE_REFERENCE_PATTERN.search(clean) or BRACKETED_CITATION_PATTERN.search(clean))
         effect = bool(re.search(EFFECT_PATTERN, clean, re.IGNORECASE))
         if len(clean) < 80 and not (re.search(r"[A-Za-z]{3}", clean) and (_quantity_tokens(clean) or cited or effect)):
@@ -65,7 +65,7 @@ def claim_candidates(text: str) -> list[str]:
         if cited or effect or _quantity_tokens(clean) or any(marker in clean.lower() for marker in ("support", "suggest", "risk", "increase", "decrease", "null", "evidence")):
             candidates.append(clean)
     if not candidates:
-        candidates = [part for part in _claim_units(text) if len(part) >= 80]
+        candidates = [part for part in claim_units(text) if len(part) >= 80]
     return candidates
 
 
@@ -352,7 +352,7 @@ def quantity_tokens(text: str, sources: list[dict[str, Any]] | None = None) -> s
 def quantitative_claim_candidates(text: str) -> list[str]:
     return [
         part
-        for part in _claim_units(text)
+        for part in claim_units(text)
         if re.search(r"[A-Za-z]{3}", part) and _quantity_tokens(part)
     ]
 
@@ -428,6 +428,42 @@ def claim_assessment(claim: str, sources: list[dict[str, Any]]) -> dict[str, Any
     }
 
 
+def _explicit_effect_conflict(claim: str, passages: list[str]) -> bool:
+    # Compare individual effect clauses, so a correct glucose result cannot
+    # conceal a reversed mortality result elsewhere in the same quotation.
+    clauses = re.split(r"[;.!?]\s+|\b(?:but|while|whereas)\b", claim, flags=re.IGNORECASE)
+    evidence_clauses = [part for passage in passages for part in re.split(
+        r"[;.!?]\s+|\b(?:but|while|whereas)\b", passage, flags=re.IGNORECASE,
+    )]
+    for clause in clauses:
+        if not re.search(EFFECT_PATTERN, clause, re.IGNORECASE):
+            continue
+        clause = re.sub(r"^\s*(?:In|Among)\b[^,]+,\s*", "", clause, flags=re.IGNORECASE)
+        # Comparator/context tails are assessed explicitly by both reviewers.
+        outcome = re.split(r"\b(?:versus|relative to|following|after)\b", clause, maxsplit=1, flags=re.IGNORECASE)[0]
+        directions, endpoints = _effect_context(outcome)
+        subjects = _effect_subjects(clause)
+        for evidence in evidence_clauses:
+            other_directions, _ = _effect_context(evidence)
+            if (directions and other_directions and directions.isdisjoint(other_directions)) or (
+                bool(NEGATED_EFFECT_PATTERN.search(clause)) != bool(NEGATED_EFFECT_PATTERN.search(evidence))
+            ):
+                continue
+            if endpoints and not endpoints <= set(re.findall(r"[a-z]+", evidence.lower())):
+                continue
+            other_subjects = _effect_subjects(evidence)
+            if subjects and other_subjects and not any(subject <= other for subject in subjects for other in other_subjects):
+                continue
+            quantities = _quantity_tokens(evidence)
+            quantities.update((number, "") for number, _ in tuple(quantities))
+            if not _quantity_tokens(clause) <= quantities:
+                continue
+            break
+        else:
+            return True
+    return False
+
+
 def agreed_claim_resolutions(claims: list[str], sources: list[dict[str, Any]], receipts: list[dict]) -> dict[str, str]:
     """Consume only authenticated reviewer receipts supplied by the workflow.
 
@@ -461,7 +497,8 @@ def agreed_claim_resolutions(claims: list[str], sources: list[dict[str, Any]], r
                 source_counts = re.findall(r"\b(\d+)\s+(?:(?:retained|included|selected)\s+)?sources\b", claim, re.IGNORECASE)
                 without_counts = re.sub(r"\b\d+\s+(?:(?:retained|included|selected)\s+)?sources\b", "sources", claim, flags=re.IGNORECASE)
                 if (structural and not references and all(int(count) == len(sources) for count in source_counts)
-                        and not _quantity_tokens(without_counts) and not re.search(EFFECT_PATTERN, claim, re.IGNORECASE)):
+                        and not _quantity_tokens(without_counts) and not re.search(EFFECT_PATTERN, claim, re.IGNORECASE)
+                        and not re.search(r"\b(?:that|showing|showed|demonstrat\w*|caus\w*|cur\w*|prevent\w*|benefit\w*|effective|efficacy)\b", claim, re.IGNORECASE)):
                     accepted[claim_id] = (status, frozenset())
                 continue
             if status != "supported":
@@ -492,12 +529,7 @@ def agreed_claim_resolutions(claims: list[str], sources: list[dict[str, Any]], r
                 identities.add(passage["source_id"])
             else:
                 comparison = _claim_text(claim, sources)
-                evidence = " ".join(quoted)
-                directions, endpoints = _effect_context(comparison)
-                evidence_directions, _ = _effect_context(evidence)
-                if (directions and evidence_directions and directions.isdisjoint(evidence_directions)) or (
-                    bool(NEGATED_EFFECT_PATTERN.search(comparison)) != bool(NEGATED_EFFECT_PATTERN.search(evidence))
-                ) or (endpoints and not endpoints.intersection(re.findall(r"[a-z]+", evidence.lower()))):
+                if _explicit_effect_conflict(comparison, quoted):
                     continue  # Semantic votes cannot erase explicit contradictions.
                 quantities = _quantity_tokens(" ".join(quoted))
                 quantities.update((number, "") for number, _ in tuple(quantities))

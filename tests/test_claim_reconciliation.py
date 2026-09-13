@@ -283,3 +283,68 @@ def test_review_and_guard_share_evidence_map_section_coverage():
         _review_claim_text(submission)
         == "Mortality was 5% [1].\nGlucose increased [2]."
     )
+
+
+def test_verifier_uses_same_citation_boundaries_and_keeps_negative_numbers():
+    from runtime_core.verify import _claim_checks
+
+    sources = [{"source_id": "source_1"}, {"source_id": "source_2"}]
+    _claim_checks(
+        "Aspirin reduced mortality. [bundle:1] Metformin increased glucose. [bundle:2]",
+        sources,
+        100,
+    )
+    assert "Metformin" not in str(sources[0].get("verification_claims"))
+    assert "Aspirin" not in str(sources[1].get("verification_claims"))
+    _, unmapped, _ = _claim_checks(
+        "-5 mmHg was the blood pressure difference.", [], 100
+    )
+    assert unmapped[0].startswith("-5 mmHg")
+
+
+def test_public_traces_distinguish_lexical_match_from_signed_review_resolution():
+    from runtime_core.publication_sidecars import build_sidecar
+
+    claim = "Combined training improved handgrip strength versus controls [bundle:1]."
+    row = _resolution(claim, "Unused in sidecar rendering")
+    receipt = {"review_id": "review-123", "resolutions": {row["claim_id"]: "supported"}}
+    publication = ResearchObject(
+        object_type=ObjectType.PUBLICATION,
+        title="Training",
+        body_markdown=claim,
+        metadata={"claim_reconciliation": receipt},
+    )
+    result, _, _ = build_sidecar(publication, None, "citation_traces.json")
+    assert result["traces"][0]["review_resolution"] == "supported"
+    assert result["traces"][0]["citation_support"] == []
+    assert result["claim_reconciliation"]["review_id"] == "review-123"
+
+
+@pytest.mark.parametrize(
+    "claim,quote",
+    [
+        (
+            "Aspirin reduced mortality by 5% [bundle:1].",
+            "Metformin reduced mortality by 5%.",
+        ),
+        (
+            "Aspirin reduced systolic blood pressure by 5% [bundle:1].",
+            "Aspirin reduced fasting blood glucose by 5%.",
+        ),
+        (
+            "Aspirin reduced mortality by 5% [bundle:1].",
+            "Aspirin increased mortality by 5% but reduced glucose by 10%.",
+        ),
+    ],
+)
+def test_semantic_votes_cannot_borrow_subject_endpoint_or_direction(claim, quote):
+    assert not agreed_claim_resolutions(
+        [claim], [{"quote": quote}], _votes(_resolution(claim, quote))
+    )
+
+
+def test_structural_prefix_cannot_hide_cures_or_prevention():
+    claim = "We mapped evidence showing that aspirin cures cancer and prevents stroke."
+    assert not agreed_claim_resolutions(
+        [claim], [], _votes(_resolution(claim, "", "not_source_claim"))
+    )
