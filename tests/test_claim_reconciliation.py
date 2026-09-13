@@ -348,3 +348,85 @@ def test_structural_prefix_cannot_hide_cures_or_prevention():
     assert not agreed_claim_resolutions(
         [claim], [], _votes(_resolution(claim, "", "not_source_claim"))
     )
+
+
+def test_semantic_votes_cannot_borrow_number_from_another_intervention():
+    claim = "Aspirin reduced mortality by 5% [bundle:1]."
+    quote = "Aspirin reduced mortality by 10%. Metformin reduced mortality by 5%."
+    assert not agreed_claim_resolutions(
+        [claim], [{"quote": quote}], _votes(_resolution(claim, quote))
+    )
+
+
+@pytest.mark.parametrize(
+    "claim,quote",
+    [
+        (
+            "Aspirin reduced mortality by 5% [bundle:1].",
+            "Aspirin increased mortality by 5% and reduced glucose by 10%.",
+        ),
+        (
+            "Aspirin and Metformin reduced mortality by 5% [bundle:1].",
+            "Aspirin reduced mortality by 5%.",
+        ),
+    ],
+)
+def test_semantic_votes_cannot_pool_unsplit_effects_or_drop_subjects(claim, quote):
+    assert not agreed_claim_resolutions(
+        [claim], [{"quote": quote}], _votes(_resolution(claim, quote))
+    )
+
+
+def test_claim_and_vote_order_are_stable():
+    import random
+
+    claims = [
+        "Combined training improved handgrip strength versus controls [bundle:1].",
+        "Mortality was 5% [bundle:1].",
+    ]
+    quote = "Combined training produced greater improvement in handgrip strength than controls."
+    votes = _votes(_resolution(claims[0], quote))
+    expected = agreed_claim_resolutions(claims, [{"excerpt": quote}], votes)
+    assert expected
+    for seed in range(20):
+        shuffled_claims, shuffled_votes = list(claims), list(votes)
+        random.Random(seed).shuffle(shuffled_claims)
+        random.Random(seed).shuffle(shuffled_votes)
+        assert (
+            agreed_claim_resolutions(
+                shuffled_claims, [{"excerpt": quote}], shuffled_votes
+            )
+            == expected
+        )
+
+
+def test_structural_label_does_not_exempt_a_safety_statement():
+    claim = "We mapped evidence: Aspirin is safe for long-term treatment in adults with chronic kidney disease."
+    assert claim in claim_candidates(claim)
+    assert not agreed_claim_resolutions(
+        [claim], [], _votes(_resolution(claim, "", "not_source_claim"))
+    )
+
+
+@pytest.mark.parametrize(
+    "claim,quote",
+    [
+        (
+            "Aspirin reduced mortality by 5% [bundle:1].",
+            "Mortality was reduced by 5% with Metformin.",
+        ),
+        ("Mortality was 5% [bundle:1].", "Diabetes incidence was 5%."),
+    ],
+)
+def test_semantic_votes_preserve_passive_subject_and_numeric_endpoint(claim, quote):
+    assert not agreed_claim_resolutions(
+        [claim], [{"quote": quote}], _votes(_resolution(claim, quote))
+    )
+
+
+def test_research_question_cannot_hide_an_appended_empirical_answer():
+    claim = "This evidence map asked whether aspirin was safe and found that it caused no adverse events in adults."
+    assert claim in claim_candidates(claim)
+    assert not agreed_claim_resolutions(
+        [claim], [], _votes(_resolution(claim, "", "not_source_claim"))
+    )
