@@ -317,11 +317,8 @@ def _quantity_tokens(text: str, sources: list[dict[str, Any]] | None = None) -> 
         " ",
         DOI_PATTERN.sub(" ", PMID_PATTERN.sub(" ", NUMERIC_CITATION_PATTERN.sub(" ", text))),
     )
-    for source in sources or []:
-        for field in ("doi", "cited_as"):
-            value = str(source.get(field) or "").strip()
-            if value:
-                cleaned = re.sub(re.escape(value), " ", cleaned, flags=re.IGNORECASE)
+    # Only syntactic citation tokens above may be removed. An arbitrary
+    # source.cited_as value (e.g. "50%") must not erase a scientific quantity.
     tokens: set[tuple[str, str]] = set()
     for match in QUANTITY_PATTERN.finditer(cleaned):
         raw_number = re.sub(r"[,\s]", "", match.group("number"))
