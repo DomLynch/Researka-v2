@@ -430,3 +430,9 @@ def test_research_question_cannot_hide_an_appended_empirical_answer():
     assert not agreed_claim_resolutions(
         [claim], [], _votes(_resolution(claim, "", "not_source_claim"))
     )
+
+
+def test_arbitrary_citation_metadata_cannot_erase_a_wrong_quantity():
+    claim = "Aspirin reduced mortality by 50% [bundle:1]."
+    sources = [{"cited_as": "50%", "excerpt": "Aspirin reduced mortality by 5%."}]
+    assert not support_for_claim(claim, sources, require_quantitative_agreement=True)
