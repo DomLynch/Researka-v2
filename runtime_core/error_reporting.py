@@ -107,6 +107,8 @@ def report_error(
         if getattr(builtins, kind, None) is not type(exc):
             kind = "ApplicationError"
         tags = {"service": _service, "stage": stage if stage in _STAGES else "unknown", **_job_tags(job)}
+        # Only our internal smoke callsite marks tests; never inspect exception text or payloads.
+        tags["synthetic_test"] = "true" if stage == "smoke" else "false"
         if failure_class in _TECHNICAL_FAILURES:
             tags["failure_class"] = failure_class.value
         frames = _safe_frames(exc)

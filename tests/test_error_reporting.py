@@ -69,6 +69,7 @@ def test_actual_envelope_excludes_exception_scope_and_sdk_context(captured):
         scope.set_user({"email": SECRET})
         scope.set_extra("manuscript", SECRET)
         scope.set_tag("auth", SECRET)
+        scope.set_tag("synthetic_test", "true")
         scope.set_context("prompt", {"text": SECRET})
         scope.add_attachment(bytes=SECRET.encode(), filename="private.txt")
         try:
@@ -83,7 +84,7 @@ def test_actual_envelope_excludes_exception_scope_and_sdk_context(captured):
     event = captured.events[0]
     assert event["event_id"] == event_id
     assert event["tags"] == {"service": "worker", "stage": Stage.REVIEW.value, "job_id": job.id,
-                             "target_id": job.target_object_id, "failure_class": "other"}
+                             "target_id": job.target_object_id, "failure_class": "other", "synthetic_test": "false"}
     assert event["release"].startswith("researka-core@")
     assert event["environment"] == "test"
     assert event["exception"]["values"][0]["value"] == "[redacted]"
@@ -116,6 +117,7 @@ def test_api_real_unhandled_error_is_captured_but_handled_response_is_not(captur
         assert client.get("/test-handled").status_code == 422
     assert len(captured.events) == 1
     assert captured.events[0]["tags"]["service"] == "api"
+    assert captured.events[0]["tags"]["synthetic_test"] == "false"
     assert SECRET not in json.dumps(captured.events)
     frames = captured.events[0]["exception"]["values"][0]["stacktrace"]["frames"]
     assert frames and all(frame["filename"].startswith(("apps/", "runtime_core/", "contracts/")) for frame in frames)
@@ -162,6 +164,7 @@ def test_retry_emits_only_terminal_failure_with_safe_job_metadata(captured, monk
     assert worker.run_once()["retried"] == 0
     assert len(captured.events) == 1
     assert captured.events[0]["tags"]["failure_class"] == "provider_error"
+    assert captured.events[0]["tags"]["synthetic_test"] == "false"
     assert SECRET not in json.dumps(captured.events)
 
 
@@ -199,7 +202,21 @@ def test_api_startup_failure_is_captured_before_middleware_exists(captured, monk
     with pytest.raises(RuntimeError, match="postgres_dsn_required"):
         create_app()
     assert len(captured.events) == 1
-    assert captured.events[0]["tags"] == {"service": "api", "stage": "api_startup"}
+    assert captured.events[0]["tags"] == {"service": "api", "stage": "api_startup", "synthetic_test": "false"}
+
+
+@pytest.mark.parametrize("captured", ["api", "worker"], indirect=True)
+@pytest.mark.parametrize("stage", ["smoke", "api", "worker_loop", "not-a-stage"])
+def test_synthetic_marker_uses_only_internal_smoke_stage(captured, stage):
+    job = RuntimeJob(target_object_id=str(uuid4()), stage=Stage.REVIEW,
+                     payload={"synthetic_test": True, "stage": "smoke"})
+    with sentry_sdk.isolation_scope() as scope:
+        scope.set_tag("synthetic_test", "false" if stage == "smoke" else "true")
+        reporting.report_error(RuntimeError("smoke synthetic_test=true " + SECRET), stage=stage, job=job)
+    event = captured.events[0]
+    assert event["tags"]["synthetic_test"] == ("true" if stage == "smoke" else "false")
+    assert event["tags"]["stage"] == ("unknown" if stage == "not-a-stage" else stage)
+    assert SECRET.encode() not in b"\n".join(envelope.serialize() for envelope in captured.envelopes)
 
 
 def test_untrusted_identifiers_and_exception_type_are_not_sent(captured):
