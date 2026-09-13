@@ -34,6 +34,7 @@ from .derivation_web import (
 from .agent_query import fail_agent_query_job, run_agent_query_job
 from .doi_resolver import resolve_dois, resolve_source_locators, source_identity, validate_resolver_urls, verify_source_metadata
 from .evidence_quality import (
+    agreed_claim_resolutions,
     claim_assessment,
     claim_candidates,
     classified_title,
@@ -281,7 +282,7 @@ def _alpha_accept_guard_revisions(
     return revisions
 
 
-def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
+def _claim_trace_guard_revisions(submission: ResearchObject, review: ResearchObject | None = None) -> list[str]:
     article_type = str(submission.metadata.get("article_type") or "")
     if article_type not in {
         ArticleType.ALPHA_MEMO.value,
@@ -292,32 +293,8 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
         return []
     sections = submission.metadata.get("sections")
     section_map = sections if isinstance(sections, dict) else {}
-    if article_type == ArticleType.ALPHA_MEMO.value:
-        prose = "\n".join(
-            [
-                str(submission.metadata.get("abstract") or ""),
-                *map(str, section_map.values()),
-            ]
-        )
-        minimum_ratio = 1.0
-    else:
-        claim_sections = {"key findings", "findings", "results", "conclusion"}
-        if article_type == ArticleType.EVIDENCE_MAP.value:
-            claim_sections.update(
-                {"findings map", "evidence landscape", "tensions and gaps"}
-            )
-        major_sections = [
-            str(value)
-            for name, value in section_map.items()
-            if str(name).strip().lower() in claim_sections
-        ]
-        prose = "\n".join(
-            [str(submission.metadata.get("abstract") or ""), *major_sections]
-        )
-        minimum_ratio = 0.8
-    prose = "\n".join(
-        line for line in prose.splitlines() if not line.lstrip().startswith("|")
-    )
+    minimum_ratio = 1.0 if article_type == ArticleType.ALPHA_MEMO.value else 0.8
+    prose = _review_claim_text(submission)
     raw_bundle = submission.metadata.get("source_bundle")
     bundle = (
         [item for item in raw_bundle if isinstance(item, dict)]
@@ -325,10 +302,21 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
         else []
     )
     bundle = _authoritative_bundle(submission, bundle)
-    profile = evidence_profile(text=prose, source_bundle=bundle)
-    count = int(profile.get("claim_trace_count") or 0)
-    cited = int(profile.get("citation_trace_count") or 0)
-    exact = int(profile.get("exact_claim_trace_count") or 0)
+    claims = claim_candidates(prose)
+    resolutions: dict[str, str] = {}
+    if review is not None and review.metadata.get("quorum_policy") == MODEL_QUORUM_POLICY:
+        if review.object_type != ObjectType.REVIEW or review.parent_object_id != submission.id:
+            raise ValueError("review_submission_mismatch")
+        _require_accept_quorum(review, submission.id, _canonical_submission_hash(submission))
+        resolutions = agreed_claim_resolutions(claims, bundle, review.metadata.get("reviewer_receipts", []))
+
+    def resolved(claim: str) -> str | None:
+        return resolutions.get("claim_" + hashlib.sha256(claim.encode()).hexdigest()[:16])
+
+    claims = [claim for claim in claims if resolved(claim) != "not_source_claim"]
+    count = len(claims)
+    cited = sum(bool(support_for_claim(claim, bundle, require_evidence_alignment=False)) for claim in claims)
+    exact = sum(bool(support_for_claim(claim, bundle)) or resolved(claim) == "supported" for claim in claims)
     if not count:
         return [
             "Add at least one substantive, source-traceable claim before acceptance."
@@ -340,8 +328,8 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
             f"quote, evidence span, or excerpt. {cited}/{count} claims identify a source; {exact}/{count} "
             f"also align with its evidence text (required {required}). Correct the citation mapping or "
             f"submit the matching evidence span; unrelated metadata will not satisfy this check.",
-            *[json.dumps(claim_assessment(claim, bundle)) for claim in claim_candidates(prose)
-              if not support_for_claim(claim, bundle)],
+            *[json.dumps(claim_assessment(claim, bundle)) for claim in claims
+              if not support_for_claim(claim, bundle) and resolved(claim) != "supported"],
         ]
     conclusion = "\n".join(
         str(value)
@@ -355,14 +343,14 @@ def _claim_trace_guard_revisions(submission: ResearchObject) -> list[str]:
     quantitative_exact = sum(
         1
         for claim in quantitative_claims
-        if support_for_claim(claim, bundle, require_quantitative_agreement=True)
+        if support_for_claim(claim, bundle, require_quantitative_agreement=True) or resolved(claim) == "supported"
     )
     if quantitative_exact < len(quantitative_claims):
         return [
             "Align every number and unit in the abstract and conclusion with its cited evidence span; "
             f"{quantitative_exact}/{len(quantitative_claims)} quantitative claims agree.",
             *[json.dumps(claim_assessment(claim, bundle)) for claim in quantitative_claims
-              if not support_for_claim(claim, bundle, require_quantitative_agreement=True)],
+              if not support_for_claim(claim, bundle, require_quantitative_agreement=True) and resolved(claim) != "supported"],
         ]
     table_revisions = _table_evidence_revisions(section_map, bundle)
     if table_revisions:
@@ -422,9 +410,14 @@ def _require_source_retrieval(receipt: dict) -> None:
 
 def _review_claim_text(submission: ResearchObject) -> str:
     sections = submission.metadata.get("sections") or {}
-    return "\n".join([str(submission.metadata.get("abstract") or ""),
-                      *(str(value) for name, value in sections.items()
-                        if name.lower() in {"results", "key findings", "findings", "conclusion"})])
+    article_type = submission.metadata.get("article_type")
+    names = {"results", "key findings", "findings", "conclusion"}
+    if article_type == ArticleType.EVIDENCE_MAP.value:
+        names.update({"findings map", "evidence landscape", "tensions and gaps"})
+    prose = "\n".join([str(submission.metadata.get("abstract") or ""),
+                       *(str(value) for name, value in sections.items()
+                         if article_type == ArticleType.ALPHA_MEMO.value or name.strip().lower() in names)])
+    return "\n".join(line for line in prose.splitlines() if not line.lstrip().startswith("|"))
 
 
 def _review_verification_sources(submission: ResearchObject, sources: list[dict]) -> list[dict]:
@@ -1425,6 +1418,17 @@ class WorkflowEngine:
             "Every previous required issue must be accounted for as resolved or persisting. "
             "Claim diagnostics are bounded comparisons, not exhaustive semantic verdicts. Inspect context, conflicting "
             "passages and mismatched axes before deciding whether any claim actually requires correction.\n"
+            "For every claim_evidence_checks item requiring reconciliation, return claim_resolutions: objects with "
+            "claim_id (copy exactly), status ('supported', 'unresolved', or 'not_source_claim'), and rationale "
+            "(explain the evidence and each apparent mismatch). For supported, include passages: a list of "
+            "{source_id: 'source_N', quote: exact contiguous text copied from that cited source's quote/evidence_span/excerpt}. "
+            "Use original source_bundle text or authoritative_claim_checks passages; never quote manuscript prose as source evidence. "
+            "Include axes with intervention, population, comparator, endpoint, direction, negation, number_or_unit, "
+            "each 'aligned' only after checking that axis. Cover every assertion in multi-clause claims against its own "
+            "source; no borrowing outcomes, numbers, or comparator effects between studies. Protocols cannot supply completed results. "
+            "Use not_source_claim only for the manuscript's own research question or mapping/search/selection description, "
+            "never for empirical findings, efficacy, safety, or outcome claims. Unresolved evidence stays unresolved. "
+            "A general supported verdict cannot substitute for these individual records.\n"
         )
         submission_summary = json.dumps(manuscript_data, ensure_ascii=False)
         user_prompt = (
@@ -2239,7 +2243,7 @@ class WorkflowEngine:
             alpha_guard_revisions = _alpha_accept_guard_revisions(
                 submission, repository
             )
-            trace_guard_revisions = _claim_trace_guard_revisions(submission)
+            trace_guard_revisions = _claim_trace_guard_revisions(submission, review)
             if alpha_guard_revisions or trace_guard_revisions:
                 recommendation = Decision.REVISE.value
         decision = {
@@ -2415,7 +2419,7 @@ class WorkflowEngine:
             raise ValueError("judge_release_invalid")
         guards = [
             *_alpha_accept_guard_revisions(submission, repository),
-            *_claim_trace_guard_revisions(submission),
+            *_claim_trace_guard_revisions(submission, review),
         ]
         if guards:
             raise ValueError(f"publish_accept_guard_failed:{' | '.join(guards)}")

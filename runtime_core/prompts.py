@@ -1,4 +1,4 @@
-REVIEWER_PROMPT_VERSION = "reviewer-v15-explicit-repairability"
+REVIEWER_PROMPT_VERSION = "reviewer-v16-claim-reconciliation"
 EDITOR_PROMPT_VERSION = "editor-v2-quantitative-trace"
 
 REPAIRABILITY_RULE = (

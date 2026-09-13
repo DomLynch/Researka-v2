@@ -43,10 +43,13 @@ UNIT_SCALES = {
 def _claim_units(text: str) -> list[str]:
     # Keep decimal statistics and author abbreviations intact. A following
     # citation belongs to the preceding sentence, not to the next study.
+    citation = r'(?:\[bundle:\d+\]|\[(?:\d+[\s,;-]*)+\]|[\[(][A-Za-z][^\]\)\n]{0,120}\b(?:19|20)\d{2}[\])])'
     units = []
     for line in text.splitlines():
-        for part in re.split(r'(?<=[.!?])\s+(?=[A-Z"“])', line):
-            clean = part.strip(" -*")
+        protected = re.sub(r'\b(?:Dr|Mr|Mrs|Ms|Prof|al|[A-Z])\.', lambda m: m[0][:-1] + '\uffff', line)
+        separated = re.sub(r'([.!?]["”]?(?:\s*' + citation + r')*)\s+(?=[A-Za-z0-9+\-"“])', r'\1\n', protected)
+        for part in separated.replace('\uffff', '.').splitlines():
+            clean = re.sub(r"^\s*[-*]\s+", "", part).strip()
             if clean:
                 units.append(clean)
     return units
@@ -56,9 +59,10 @@ def claim_candidates(text: str) -> list[str]:
     candidates = []
     for clean in _claim_units(text):
         cited = bool(BUNDLE_REFERENCE_PATTERN.search(clean) or BRACKETED_CITATION_PATTERN.search(clean))
-        if len(clean) < 80 and not (re.search(r"[A-Za-z]{3}", clean) and (_quantity_tokens(clean) or cited)):
+        effect = bool(re.search(EFFECT_PATTERN, clean, re.IGNORECASE))
+        if len(clean) < 80 and not (re.search(r"[A-Za-z]{3}", clean) and (_quantity_tokens(clean) or cited or effect)):
             continue
-        if cited or _quantity_tokens(clean) or any(marker in clean.lower() for marker in ("support", "suggest", "risk", "increase", "decrease", "null", "evidence")):
+        if cited or effect or _quantity_tokens(clean) or any(marker in clean.lower() for marker in ("support", "suggest", "risk", "increase", "decrease", "null", "evidence")):
             candidates.append(clean)
     if not candidates:
         candidates = [part for part in _claim_units(text) if len(part) >= 80]
@@ -251,10 +255,10 @@ def _claim_text(text: str, sources: list[dict[str, Any]]) -> str:
     for source in sources:
         for field in ("cited_as", "doi"):
             label = str(source.get(field) or "").strip()
-            if label:
+            if label and (DOI_PATTERN.fullmatch(label) or re.fullmatch(r"[A-Za-z][A-Za-z .,'’&-]*\s+(?:19|20)\d{2}[a-z]?", label)):
                 text = re.sub(r"[\[(]\s*" + re.escape(label) + r"\s*[\])]", " ", text, flags=re.IGNORECASE)
     text = re.sub(r"^Results:\s*", "", text, flags=re.IGNORECASE)
-    return re.sub(r"\s+", " ", text).strip(' ."“”')
+    return re.sub(r"\s+", " ", text).strip(' "“”').rstrip('."”')
 
 
 def _passage_aligns(claim: str, evidence: str) -> bool:
@@ -422,6 +426,85 @@ def claim_assessment(claim: str, sources: list[dict[str, Any]]) -> dict[str, Any
         "comparisons": comparisons[:6],
         "required_check": "Check intervention, endpoint, direction, population and number/unit against these source-owned passages; lexical failure alone is not a proven contradiction.",
     }
+
+
+def agreed_claim_resolutions(claims: list[str], sources: list[dict[str, Any]], receipts: list[dict]) -> dict[str, str]:
+    """Consume only authenticated reviewer receipts supplied by the workflow.
+
+    A whole-paper ACCEPT is insufficient. Both reviewers must resolve the same
+    atomic claim, with owned passages and explicit scientific-axis judgments.
+    """
+    votes: list[dict[str, tuple[str, frozenset[str]]]] = []
+    for receipt in receipts:
+        if not receipt.get("ok") or receipt.get("recommendation") != "accept":
+            continue
+        rows = receipt.get("response", {}).get("claim_resolutions", [])
+        if not isinstance(rows, list):
+            continue
+        by_id = {row.get("claim_id"): row for row in rows if isinstance(row, dict) and isinstance(row.get("claim_id"), str)}
+        if len(by_id) != len(rows):
+            continue  # Duplicate or malformed votes cannot manufacture agreement.
+        accepted: dict[str, tuple[str, frozenset[str]]] = {}
+        for claim in claims:
+            claim_id = "claim_" + hashlib.sha256(claim.encode()).hexdigest()[:16]
+            row = by_id.get(claim_id, {})
+            status = row.get("status")
+            rationale = row.get("rationale")
+            if not isinstance(rationale, str) or len(rationale.strip()) < 20:
+                continue
+            references = support_for_claim(claim, sources, require_evidence_alignment=False)
+            if status == "not_source_claim":
+                structural = re.match(
+                    r"^(?:(?:Background|Methods):\s*)?(?:We (?:mapped|searched|screened|selected)|"
+                    r"This (?:evidence map|review|synthesis) (?:asked|aimed|catalogs|maps))\b", claim, re.IGNORECASE,
+                )
+                if structural and not references and not _quantity_tokens(claim) and not re.search(EFFECT_PATTERN, claim, re.IGNORECASE):
+                    accepted[claim_id] = (status, frozenset())
+                continue
+            if status != "supported":
+                continue
+            axes = row.get("axes")
+            if not isinstance(axes, dict) or any(axes.get(axis) != "aligned" for axis in (
+                "intervention", "population", "comparator", "endpoint", "direction", "negation", "number_or_unit",
+            )):
+                continue
+            owned = {source["source_id"]: source for source in references}
+            if len(owned) != len(references):
+                continue
+            passages = row.get("passages")
+            if not isinstance(passages, list) or not passages:
+                continue
+            quoted = []
+            identities = set()
+            for passage in passages:
+                if not isinstance(passage, dict) or not isinstance(passage.get("source_id"), str):
+                    break
+                source = owned.get(passage["source_id"])
+                quote = passage.get("quote")
+                if not source or not isinstance(quote, str) or len(quote.strip()) < 20 or not any(
+                    quote in str(source.get(field) or "") for field in ("quote", "evidence_span", "excerpt")
+                ):
+                    break
+                quoted.append(quote)
+                identities.add(passage["source_id"])
+            else:
+                comparison = _claim_text(claim, sources)
+                evidence = " ".join(quoted)
+                directions, endpoints = _effect_context(comparison)
+                evidence_directions, _ = _effect_context(evidence)
+                if (directions and evidence_directions and directions.isdisjoint(evidence_directions)) or (
+                    bool(NEGATED_EFFECT_PATTERN.search(comparison)) != bool(NEGATED_EFFECT_PATTERN.search(evidence))
+                ) or (endpoints and not endpoints.intersection(re.findall(r"[a-z]+", evidence.lower()))):
+                    continue  # Semantic votes cannot erase explicit contradictions.
+                quantities = _quantity_tokens(" ".join(quoted))
+                quantities.update((number, "") for number, _ in tuple(quantities))
+                if _quantity_tokens(comparison) <= quantities:
+                    accepted[claim_id] = (status, frozenset(identities))
+        votes.append(accepted)
+    if len(votes) != 2:
+        return {}
+    return {claim_id: status for claim_id, (status, identities) in votes[0].items()
+            if votes[1].get(claim_id) == (status, identities)}
 
 
 def _quantities_agree(claim: str, sources: list[dict[str, Any]]) -> bool:
