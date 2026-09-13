@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from runtime_core.doi_resolver import normalize_arxiv_id, resolve_dois, source_identity, verify_source_metadata
-from runtime_core.evidence_quality import quantity_tokens, support_for_claim
+from runtime_core.evidence_quality import claim_units, quantity_tokens, support_for_claim
 
 VERIFY_SCHEMA_VERSION = 2
 _DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.IGNORECASE)
@@ -101,8 +101,8 @@ def _claim_checks(
     _, body = _reference_first_text(text)
     unmapped_quotes: list[str] = []
     unmapped_numbers: list[str] = []
-    for sentence in re.split(r"\n+|(?<=[.!?])\s+", body):
-        sentence = sentence.strip(" -*#")
+    for sentence in claim_units(body):
+        sentence = sentence.strip(" #")
         if len(sentence) < 20:
             continue
         mapped_ids = {

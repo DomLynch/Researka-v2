@@ -282,6 +282,15 @@ def _alpha_accept_guard_revisions(
     return revisions
 
 
+def _review_claim_resolutions(submission: ResearchObject, review: ResearchObject | None, claims: list[str], bundle: list[dict]) -> dict[str, str]:
+    if review is None or review.metadata.get("quorum_policy") != MODEL_QUORUM_POLICY:
+        return {}
+    if review.object_type != ObjectType.REVIEW or review.parent_object_id != submission.id:
+        raise ValueError("review_submission_mismatch")
+    _require_accept_quorum(review, submission.id, _canonical_submission_hash(submission))
+    return agreed_claim_resolutions(claims, bundle, review.metadata.get("reviewer_receipts", []))
+
+
 def _claim_trace_guard_revisions(submission: ResearchObject, review: ResearchObject | None = None) -> list[str]:
     article_type = str(submission.metadata.get("article_type") or "")
     if article_type not in {
@@ -303,12 +312,7 @@ def _claim_trace_guard_revisions(submission: ResearchObject, review: ResearchObj
     )
     bundle = _authoritative_bundle(submission, bundle)
     claims = claim_candidates(prose)
-    resolutions: dict[str, str] = {}
-    if review is not None and review.metadata.get("quorum_policy") == MODEL_QUORUM_POLICY:
-        if review.object_type != ObjectType.REVIEW or review.parent_object_id != submission.id:
-            raise ValueError("review_submission_mismatch")
-        _require_accept_quorum(review, submission.id, _canonical_submission_hash(submission))
-        resolutions = agreed_claim_resolutions(claims, bundle, review.metadata.get("reviewer_receipts", []))
+    resolutions = _review_claim_resolutions(submission, review, claims, bundle)
 
     def resolved(claim: str) -> str | None:
         return resolutions.get("claim_" + hashlib.sha256(claim.encode()).hexdigest()[:16])
@@ -1389,6 +1393,11 @@ class WorkflowEngine:
                 claim_assessment(claim, authoritative_sources)
                 for claim in claim_candidates(_review_claim_text(submission))
             ],
+            "claim_reconciliation_required": [
+                "claim_" + hashlib.sha256(claim.encode()).hexdigest()[:16]
+                for claim in claim_candidates(_review_claim_text(submission))
+                if not support_for_claim(claim, authoritative_sources, require_quantitative_agreement=True)
+            ],
             "table_evidence_checks": _table_evidence_revisions(
                 submission.metadata.get("sections") or {},
                 authoritative_sources,
@@ -1419,7 +1428,7 @@ class WorkflowEngine:
             "Every previous required issue must be accounted for as resolved or persisting. "
             "Claim diagnostics are bounded comparisons, not exhaustive semantic verdicts. Inspect context, conflicting "
             "passages and mismatched axes before deciding whether any claim actually requires correction.\n"
-            "For every claim_evidence_checks item requiring reconciliation, return claim_resolutions: objects with "
+            "For every ID in claim_reconciliation_required, return claim_resolutions: objects with "
             "claim_id (copy exactly), status ('supported', 'unresolved', or 'not_source_claim'), and rationale "
             "(explain the evidence and each apparent mismatch). For supported, include passages: a list of "
             "{source_id: 'source_N', quote: exact contiguous text copied from that cited source's quote/evidence_span/excerpt}. "
@@ -2505,6 +2514,15 @@ class WorkflowEngine:
                 ),
                 "publication_class": pub_class,
                 "evidence_profile": profile,
+                "claim_reconciliation": {
+                    "review_id": review.id,
+                    "canonical_package_hash": package_hash,
+                    "method": "signed-two-model-claim-reconciliation-v1",
+                    "resolutions": _review_claim_resolutions(
+                        submission, review, claim_candidates(_review_claim_text(submission)),
+                        _authoritative_bundle(submission, source_bundle),
+                    ),
+                },
                 "evidence_text_verification": _evidence_text_verification(
                     submission.metadata
                 ),

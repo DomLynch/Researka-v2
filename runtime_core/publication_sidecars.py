@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import re
 from typing import Any
@@ -184,6 +185,9 @@ def build_sidecar(publication: ResearchObject, submission: ResearchObject | None
                     "claim_id": f"claim_{index}",
                     "claim": claim,
                     "citation_support": exact,
+                    "review_resolution": (publication.metadata.get("claim_reconciliation") or {}).get("resolutions", {}).get(
+                        "claim_" + hashlib.sha256(claim.encode()).hexdigest()[:16]
+                    ),
                     "candidate_sources": [] if exact else [
                         {**source, "support_kind": "candidate_source_row"} for source in sources[:5]
                     ],
@@ -192,6 +196,7 @@ def build_sidecar(publication: ResearchObject, submission: ResearchObject | None
         return {
             "publication_id": publication.id,
             "traces": traces,
+            "claim_reconciliation": publication.metadata.get("claim_reconciliation"),
         }, "application/json", sidecar_name
     if sidecar_name == "risk_of_bias.json":
         return {
