@@ -48,30 +48,36 @@ def _sample_claim(
 
 
 def test_postgres_connect_has_bounded_timeout(monkeypatch) -> None:
-    calls: list[tuple[str, dict[str, object]]] = []
+    # Connections come from one bounded pool per process. The env-configured
+    # connect timeout must reach every pooled connection, the pool acquire wait
+    # must be bounded too, and the pool must be capped.
+    built: list[dict[str, object]] = []
 
-    class _Psycopg:
-        @staticmethod
-        def connect(dsn: str, **kwargs: object) -> object:
-            calls.append((dsn, kwargs))
+    class _FakePool:
+        def __init__(self, dsn: str, **kwargs: object) -> None:
+            built.append({"dsn": dsn, **kwargs})
+
+        def connection(self) -> object:
             return object()
 
-    monkeypatch.setenv("RESEARKA_V2_POSTGRES_CONNECT_TIMEOUT_SEC", "7")
-    repo = PostgresRuntimeRepository.__new__(PostgresRuntimeRepository)
-    monkeypatch.setattr(repo, "_psycopg", _Psycopg, raising=False)
-    monkeypatch.setattr(repo, "_dict_row", object(), raising=False)
-    repo.dsn = "postgresql://example"
-    repo.connect_timeout_seconds = _postgres_connect_timeout_seconds()
+    import psycopg_pool
 
+    monkeypatch.setenv("RESEARKA_V2_POSTGRES_CONNECT_TIMEOUT_SEC", "7")
+    monkeypatch.setenv("RESEARKA_V2_POSTGRES_POOL_MAX", "3")
+    monkeypatch.setattr(psycopg_pool, "ConnectionPool", _FakePool)
+    monkeypatch.setattr(PostgresRuntimeRepository, "_ensure_schema", lambda self: None)
+
+    repo = PostgresRuntimeRepository("postgresql://example")
     repo._connect()
 
-    assert calls == [
-        (
-            "postgresql://example",
-            {"row_factory": repo._dict_row, "connect_timeout": 7},
-        )
-    ]
-
+    assert len(built) == 1
+    pool = built[0]
+    assert pool["dsn"] == "postgresql://example"
+    assert pool["kwargs"] == {"row_factory": repo._dict_row, "connect_timeout": 7}
+    assert pool["timeout"] == 7.0
+    assert pool["min_size"] == 1
+    assert pool["max_size"] == 3
+    assert pool["open"] is True
 
 def test_postgres_operation_lookup_casts_text_payload_to_jsonb(monkeypatch) -> None:
     calls: list[tuple[str, tuple[object, ...]]] = []
