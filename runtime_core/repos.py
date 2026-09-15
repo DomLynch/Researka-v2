@@ -650,28 +650,46 @@ def _postgres_connect_timeout_seconds() -> int:
     return max(1, int(raw)) if raw.isdigit() else 5
 
 
+def _postgres_pool_max_size() -> int:
+    raw = os.environ.get("RESEARKA_V2_POSTGRES_POOL_MAX", "8").strip()
+    return max(1, int(raw)) if raw.isdigit() else 8
+
+
 class PostgresRuntimeRepository:
     def __init__(self, dsn: str, *, lease_ttl_seconds: float = 300) -> None:
         try:
             import psycopg
             from psycopg.rows import dict_row
+            from psycopg_pool import ConnectionPool
         except Exception as exc:
             raise RuntimeError(
-                "psycopg is required for PostgresRuntimeRepository"
+                "psycopg and psycopg_pool are required for PostgresRuntimeRepository"
             ) from exc
         self._psycopg = psycopg
         self._dict_row = dict_row
         self.dsn = dsn
         self.lease_ttl_seconds = lease_ttl_seconds
         self.connect_timeout_seconds = _postgres_connect_timeout_seconds()
+        # One bounded pool per process. Every repository call used to open a fresh
+        # TCP connection, and a publication listing performs a lookup per object, so
+        # overlapping requests exhausted Postgres connection slots and deadlocked.
+        # Pooled connections are reused and capped: callers queue on the pool, not
+        # on the database.
+        self._pool = ConnectionPool(
+            dsn,
+            kwargs={"row_factory": dict_row, "connect_timeout": self.connect_timeout_seconds},
+            min_size=1,
+            max_size=_postgres_pool_max_size(),
+            timeout=float(self.connect_timeout_seconds),
+            open=True,
+        )
         self._ensure_schema()
 
     def _connect(self):
-        return self._psycopg.connect(
-            self.dsn,
-            row_factory=self._dict_row,
-            connect_timeout=self.connect_timeout_seconds,
-        )
+        # Yields a pooled connection; commits on clean exit, rolls back on
+        # exception, then returns it to the pool. Same contract as the
+        # psycopg.connect() context manager it replaces.
+        return self._pool.connection()
 
     def healthcheck(self) -> bool:
         try:
