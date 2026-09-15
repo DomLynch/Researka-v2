@@ -806,6 +806,28 @@ def _claims_are_scoping_only(cards: list[ClaimCard]) -> bool:
     return exploratory and weak >= max(1, len(cards) // 2) and exact == 0
 
 
+# Claim-card derivation is two full-body regex passes per publication, and the
+# listing re-ran it for every publication on every request (0/402 have saved
+# cards) only to decide a class label. The result depends solely on the
+# immutable published body, so memoise it per (id, body hash). Metadata-only
+# updates (DOI, status) never make it stale; a body change simply misses.
+_scoping_only_cache: dict[str, bool] = {}
+_SCOPING_ONLY_CACHE_MAX = 4096
+
+
+def _claims_scoping_only_cached(repo: RuntimeRepository, publication: ResearchObject) -> bool:
+    body = publication.body_markdown or ""
+    key = f"{publication.id}:{hashlib.sha256(body.encode()).hexdigest()[:16]}"
+    hit = _scoping_only_cache.get(key)
+    if hit is not None:
+        return hit
+    result = _claims_are_scoping_only(_publication_claim_cards(repo, publication))
+    if len(_scoping_only_cache) >= _SCOPING_ONLY_CACHE_MAX:
+        _scoping_only_cache.pop(next(iter(_scoping_only_cache)))
+    _scoping_only_cache[key] = result
+    return result
+
+
 def _public_publication_class(repo: RuntimeRepository, publication: ResearchObject) -> str | None:
     stored = publication.metadata.get("publication_class")
     pub_class = str(stored or "").strip() or None
@@ -813,8 +835,7 @@ def _public_publication_class(repo: RuntimeRepository, publication: ResearchObje
     if article_type == "evidence_map":
         return "evidence_map"
     if pub_class == "research_synthesis":
-        cards = _publication_claim_cards(repo, publication)
-        if not _claims_are_scoping_only(cards):
+        if not _claims_scoping_only_cached(repo, publication):
             return pub_class
         raw_profile = publication.metadata.get("evidence_profile")
         profile = raw_profile if isinstance(raw_profile, dict) else {}
