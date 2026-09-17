@@ -47,6 +47,11 @@ Top-level modules only:
 - Prefer explicit code over frameworks and wrappers.
 - Add a new layer only with written justification.
 - Delete before generalizing.
+- Producer import surface is frozen: the symbols and signatures listed in
+  `tests/test_producer_import_surface.py` are loaded by the Research Agent Bot
+  at submit time. Renaming, relocating, changing a signature, or adding an
+  import-time side effect is a breaking change — update that test in the same
+  commit and coordinate with the agent dev.
 
 ## Default v4 Toolkit
 Do not run the whole playbook on every task. Use this default stack unless risk clearly requires more:
