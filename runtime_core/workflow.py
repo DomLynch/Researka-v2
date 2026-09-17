@@ -45,7 +45,7 @@ from .evidence_quality import (
     support_for_claim,
     table_row_support,
 )
-from .integrity_client import check_integrity, index_integrity, integrity_base_url
+from .integrity_client import check_integrity, index_integrity, integrity_base_url, unavailable_recommendation
 from .judge_release import build_judge_release, judge_release_manifest_valid
 from .osf import mint_publication_doi_from_repository, osf_publication_metadata_from_env
 from .prompts import EDITOR_PROMPT_VERSION, REVIEWER_PROMPT_VERSION, REPAIRABILITY_RULE, REVIEW_DECISION_RULES
@@ -730,7 +730,26 @@ def _checked_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
             "recommendation": "pass",
             "reason": "integrity_disabled_nonproduction",
         }
-    return result
+    return _integrity_without_degenerate_match(result) if result else result
+
+
+def _integrity_without_degenerate_match(integrity: dict[str, Any]) -> dict[str, Any]:
+    """A hold that names no matched publication or source is not evidence of
+    duplication — it is a degenerate score. 78 submissions were rejected
+    May–July 2026 with duplication_score 1.0 and an empty match set. Treat
+    such a result like an unreachable service: stamped unavailable, never a
+    silent pass, and held only under RESEARKA_INTEGRITY_FAIL_CLOSED."""
+    if str(integrity.get("recommendation") or "").lower() not in {"reject", "revise"}:
+        return integrity
+    if integrity.get("matched_publication_id") or integrity.get("matched_sources"):
+        return integrity
+    return {
+        **integrity,
+        "available": False,
+        "recommendation": unavailable_recommendation(),
+        "reason": "integrity_degenerate_match",
+        "degenerate_match_ignored": True,
+    }
 
 
 def _integrity_without_self_match(

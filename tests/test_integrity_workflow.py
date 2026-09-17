@@ -433,7 +433,7 @@ def test_publish_blocks_when_integrity_recheck_finds_duplicate(monkeypatch: pyte
         calls += 1
         if calls == 1:
             return {"available": True, "recommendation": "pass", "similarity_score": 0.01}
-        return {"available": True, "recommendation": Decision.REJECT.value, "duplication_score": 0.99}
+        return {"available": True, "recommendation": Decision.REJECT.value, "duplication_score": 0.99, "matched_publication_id": "pub-duplicate"}
 
     monkeypatch.setattr("runtime_core.workflow.check_integrity", fake_check)
     monkeypatch.setattr("runtime_core.workflow.index_integrity", lambda payload: None)
@@ -494,7 +494,7 @@ def test_osf_side_effect_is_blocked_when_final_integrity_check_fails(
         calls += 1
         if calls == 1:
             return {"available": True, "recommendation": "pass", "similarity_score": 0.01}
-        return {"available": True, "recommendation": Decision.REJECT.value, "duplication_score": 0.99}
+        return {"available": True, "recommendation": Decision.REJECT.value, "duplication_score": 0.99, "matched_publication_id": "pub-duplicate"}
 
     monkeypatch.setattr("runtime_core.workflow.check_integrity", fake_check)
     monkeypatch.setattr(
@@ -590,8 +590,34 @@ def test_integrity_decisions_are_not_indexed(monkeypatch: pytest.MonkeyPatch) ->
     submission = _submission(repo)
     indexed: list[dict[str, Any]] = []
     monkeypatch.setattr("runtime_core.workflow.index_integrity", lambda payload: indexed.append(payload))
-    monkeypatch.setattr("runtime_core.workflow.check_integrity", lambda payload: {"recommendation": Decision.REJECT.value})
+    monkeypatch.setattr("runtime_core.workflow.check_integrity", lambda payload: {"recommendation": Decision.REJECT.value, "matched_publication_id": "pub-duplicate"})
 
     WorkflowEngine(provider=AcceptProvider()).handle_job(RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo)
 
     assert indexed == []
+
+
+def test_integrity_reject_naming_no_match_is_degenerate_not_a_hold(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: 78 submissions were rejected May–July 2026 on
+    duplication_score 1.0 with an empty match set. A hold that identifies no
+    matched publication or source is a degenerate score, handled like an
+    unreachable service — stamped unavailable, never silently passed."""
+    from runtime_core.workflow import _integrity_without_degenerate_match
+
+    degenerate = {"available": True, "recommendation": "reject", "duplication_score": 1.0,
+                  "matched_publication_id": None, "matched_sources": []}
+    monkeypatch.delenv("RESEARKA_INTEGRITY_FAIL_CLOSED", raising=False)
+    out = _integrity_without_degenerate_match(degenerate)
+    assert out["available"] is False
+    assert out["reason"] == "integrity_degenerate_match"
+    assert out["recommendation"] == "revise"  # fail-closed is the default: held, not rejected
+
+    monkeypatch.setenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "0")
+    assert _integrity_without_degenerate_match(degenerate)["recommendation"] == "pass"
+
+    # A genuine hold that names its match is untouched.
+    real = {**degenerate, "matched_publication_id": "pub-123"}
+    assert _integrity_without_degenerate_match(real) is real
+    # A pass is untouched regardless of match set.
+    passing = {"available": True, "recommendation": "pass", "matched_sources": []}
+    assert _integrity_without_degenerate_match(passing) is passing

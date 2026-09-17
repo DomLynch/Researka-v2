@@ -49,7 +49,7 @@ def _headers() -> dict[str, str]:
     return {"x-api-key": api_key} if api_key else {}
 
 
-def _unavailable_recommendation() -> str:
+def unavailable_recommendation() -> str:
     # When the enabled integrity service is unreachable we never silently pass:
     # the result is always stamped available=False. RESEARKA_INTEGRITY_FAIL_CLOSED=1
     # additionally holds the submission (revise) instead of letting it proceed.
@@ -81,7 +81,7 @@ def check_integrity(payload: dict[str, Any]) -> dict[str, Any] | None:
     log.warning("integrity_check_unavailable", extra={"error": str(last_exc), "attempts": attempts})
     return {
         "available": False,
-        "recommendation": _unavailable_recommendation(),
+        "recommendation": unavailable_recommendation(),
         "reason": f"integrity_unavailable: {last_exc}",
         "attempts": attempts,
     }
