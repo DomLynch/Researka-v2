@@ -22,6 +22,11 @@ REVIEW_RUBRIC_KEYS = (
     "gaps_quality",
     "source_grounding",
 )
+# Defect taxonomy every blocking finding must declare, matching the reviewer
+# prompt rule that required revisions name an evidence, claim, numeric,
+# citation, or structural-integrity defect. Paired with rubric_key it gives
+# producers a machine-readable target instead of free text to guess from.
+FINDING_DEFECT_TYPES = frozenset({"evidence", "claim", "numeric", "citation", "structural"})
 CLAIM_SUPPORT_VERDICTS = {"supported", "partially_supported", "unsupported"}
 OVERCLAIM_VERDICTS = {"none", "mild", "significant"}
 SYNTHESIS_QUALITY_VERDICTS = {"strong", "adequate", "weak", "empty"}
@@ -200,6 +205,17 @@ def _verbatim_quote_in_section(quote: str, section: str) -> bool:
     return bool(re.search(prefix + re.escape(quote) + r"(?!\w|[.,]\d)", " ".join(section.split())))
 
 
+def _finding_taxonomy_failure(finding: dict) -> str | None:
+    """Closed-set fields every blocking finding must declare."""
+    if finding.get("kind") not in {"omission", "incorrect"}:
+        return "material_issue_invalid_kind"
+    if finding.get("rubric_key") not in REVIEW_RUBRIC_KEYS:
+        return "material_issue_invalid_rubric_key"
+    if finding.get("defect_type") not in FINDING_DEFECT_TYPES:
+        return "material_issue_invalid_defect_type"
+    return None
+
+
 def _material_finding_failure(finding: dict, context: dict) -> str | None:
     if finding.get("materiality") != "blocking" or finding.get("has_material_impact") is not True or re.match(
         r"\s*(?:optional\s*[:\-]|non[- ]blocking\s*[:\-])", str(finding.get("issue") or ""), re.I
@@ -211,8 +227,8 @@ def _material_finding_failure(finding: dict, context: dict) -> str | None:
     section, quote = finding.get("section"), finding.get("quote")
     if not isinstance(section, str) or not section.strip():
         return "material_issue_missing_location"
-    if finding.get("kind") not in {"omission", "incorrect"}:
-        return "material_issue_invalid_kind"
+    if failure := _finding_taxonomy_failure(finding):
+        return failure
     if finding.get("kind") == "incorrect" and (
         not isinstance(quote, str) or not _normalized_words(quote)
         or not _verbatim_quote_in_section(quote, str(context.get("sections", {}).get(section, "")))

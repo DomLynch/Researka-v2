@@ -1086,6 +1086,10 @@ def _public_decision_record(
     ]))
     major_issues = _string_list(review_metadata.get("major_issues"))
     minor_issues = _string_list(review_metadata.get("minor_issues"))
+    # Structured findings carry rubric_key + defect_type per blocker, so a
+    # producer can target the repair instead of parsing free-text revisions.
+    raw_findings = review_metadata.get("material_findings")
+    material_findings = [f for f in raw_findings if isinstance(f, dict)] if isinstance(raw_findings, list) else []
     domain_slug = submission_metadata.get("domain_slug") or "general"
     topic = submission_metadata.get("topic") or domain_slug or "research"
     category = submission_metadata.get("category") or str(domain_slug).removesuffix("_research")
@@ -1123,6 +1127,7 @@ def _public_decision_record(
         "rubric_scores": _score_dict(review_metadata.get("rubric_scores")),
         "rubric_calibration": review_metadata.get("rubric_calibration"),
         "required_revisions": required_revisions,
+        "material_findings": material_findings,
         "major_issues": major_issues,
         "minor_issues": minor_issues,
         "claim_support_verdict": review_metadata.get("claim_support_verdict"),
@@ -1283,6 +1288,9 @@ def _submission_decision_response(
     )
     response = {
         "status": "complete",
+        # outcome is a closed, never-null enum: accept|revise|reject|pending|failed.
+        # decision stays nullable for compatibility; parse outcome instead.
+        "outcome": decision_value,
         "decision": decision_value,
         "evaluation_verdict": decision.metadata.get("evaluation_verdict") or decision_value,
         "disposition": decision.metadata.get("disposition"),
@@ -1303,6 +1311,7 @@ def _submission_decision_response(
         "rubric_scores": public_record["rubric_scores"],
         "rubric_calibration": public_record["rubric_calibration"],
         "required_revisions": public_record["required_revisions"],
+        "material_findings": public_record["material_findings"],
         "major_issues": public_record["major_issues"],
         "minor_issues": public_record["minor_issues"],
         "claim_support_verdict": public_record["claim_support_verdict"],
@@ -1587,6 +1596,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
             if failure:
                 return {
                     "status": "failed",
+                    "outcome": "failed",
                     "decision": None,
                     "evaluation_verdict": None,
                     "disposition": "ESCALATE" if failure["failure_class"] == "review_disagreement" else "DEFERRED_SYSTEM",
@@ -1602,7 +1612,7 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
                     "failed_checks": [failure["reason"]],
                     "pipeline": pipeline,
                 }
-            return {"status": "pending", "decision": None, "notes": [], "gate_failures": [], "pipeline": pipeline}
+            return {"status": "pending", "outcome": "pending", "decision": None, "notes": [], "gate_failures": [], "pipeline": pipeline}
         latest = decisions[-1]
         return _submission_decision_response(repo=app.state.repository, submission_id=submission_id, decision=latest)
 

@@ -3210,3 +3210,42 @@ def test_jobs_queue_requires_admin(client: TestClient) -> None:
     """Operator-only: the queue + event log expose other agents' payloads."""
     assert client.get("/jobs/queue").status_code == 403
     assert client.get("/jobs/queue", headers=_worker_headers()).status_code == 200
+
+
+def test_decision_endpoint_outcome_is_never_null_and_exposes_material_findings(client: TestClient) -> None:
+    """Producers parse `outcome`, a closed never-null enum, and receive the
+    structured material_findings (rubric_key + defect_type) that the flat
+    required_revisions strings cannot carry."""
+    submission = client.post(
+        "/submissions",
+        json={
+            "title": "Outcome enum probe",
+            "abstract": "Bounded external submission.",
+            "sections": {"Research Question": "x " * 60},
+            "source_bundle": _valid_source_bundle(),
+            "author_agent_id": "agent-demo",
+            "domain_slug": "longevity",
+        },
+    ).json()["submission"]
+    pending = client.get(f"/submissions/{submission['id']}/decision").json()
+    assert pending["status"] == "pending" and pending["outcome"] == "pending"
+
+    finding = {
+        "issue": "Fix it.", "materiality": "blocking", "kind": "omission",
+        "rubric_key": "source_grounding", "defect_type": "citation",
+        "has_material_impact": True, "section": "Results",
+        "impact": "Changes interpretation.", "correction": "Cite the trial.",
+        "repairability": "bounded_revision",
+    }
+    review = _repository(client).create_object(ResearchObject(
+        object_type=ObjectType.REVIEW, parent_object_id=submission["id"], title="r",
+        metadata={"required_revisions": ["Fix it."], "material_findings": [finding]},
+    ))
+    _repository(client).create_object(ResearchObject(
+        object_type=ObjectType.DECISION, parent_object_id=submission["id"], title="d",
+        metadata={"decision": Decision.REVISE.value, "review_id": review.id},
+    ))
+    done = client.get(f"/submissions/{submission['id']}/decision").json()
+    assert done["status"] == "complete" and done["outcome"] == "revise"
+    assert done["material_findings"][0]["rubric_key"] == "source_grounding"
+    assert done["material_findings"][0]["defect_type"] == "citation"

@@ -1243,6 +1243,8 @@ class WorkflowEngine:
             '"major_issues":["..."],"minor_issues":["..."],"required_revisions":["..."],'
             '"material_findings":[{"issue":"exact issue string","materiality":"blocking",'
             '"has_material_impact":true,"kind":"incorrect|omission","section":"exact section",'
+            '"rubric_key":"research_question_quality|synthesis_quality|claim_evidence_alignment|limitations_quality|gaps_quality|source_grounding",'
+            '"defect_type":"evidence|claim|numeric|citation|structural",'
             '"quote":"verbatim text for incorrect statements","impact":"material consequence",'
             '"correction":"specific correction or indispensable missing evidence","change_reason":"persisting|newly_introduced|newly_discovered",'
             '"repairability":"bounded_revision|new_evidence|fabrication|invalid_data","why_not_revise":"required for irreparable findings supporting reject",'
@@ -1417,6 +1419,7 @@ class WorkflowEngine:
             "Each object requires issue (that exact string), materiality='blocking', kind='incorrect' or 'omission', "
             "section (exact manuscript section name, or Title/Abstract), quote (verbatim for incorrect statements), "
             "impact (why it materially affects validity/interpretation), and correction (specific fix or indispensable missing evidence under the repairability rule). "
+            "Also give rubric_key (the one rubric dimension this finding lowers) and defect_type (evidence, claim, numeric, citation, or structural) so the author can target the repair. "
             "For kind='incorrect', quote must be one short contiguous span copied character-for-character from that section. "
             "For an incorrect table finding, one exact row is sufficient; never stitch non-adjacent rows, omit intervening words, or paraphrase prose inside quote. "
             "has_material_impact must be a boolean: true only when validity OR interpretation is materially affected. "

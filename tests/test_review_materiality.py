@@ -18,6 +18,7 @@ def material_review():
     payload = _review_payload("revise")
     payload.update(major_issues=[], required_revisions=["Correct the endpoint value."], material_findings=[{
         "issue": "Correct the endpoint value.", "materiality": "blocking", "kind": "incorrect",
+        "rubric_key": "claim_evidence_alignment", "defect_type": "numeric",
         "has_material_impact": True,
         "section": "Results", "quote": "Mortality was 48%.",
         "impact": "The wrong endpoint changes the interpretation.",
@@ -358,3 +359,17 @@ def test_punctuation_is_not_a_material_explanation(field, value):
 def test_ambiguous_comparisons_never_claim_a_proven_contradiction(claim, passage):
     result = claim_assessment(claim, [{"doi": "10.1234/test", "evidence_span": passage}])
     assert result["status"] == "NEEDS_SEMANTIC_REVIEW"
+
+
+@pytest.mark.parametrize("field,value,error", [
+    ("rubric_key", "novelty", "material_issue_invalid_rubric_key"),
+    ("rubric_key", None, "material_issue_invalid_rubric_key"),
+    ("defect_type", "style", "material_issue_invalid_defect_type"),
+    ("defect_type", None, "material_issue_invalid_defect_type"),
+])
+def test_blocking_findings_must_declare_rubric_key_and_defect_type(field, value, error):
+    """Structured revision feedback: every blocker names the rubric dimension it
+    lowers and its defect class, so producers repair by target, not by guessing."""
+    payload = material_review()
+    payload["material_findings"][0][field] = value
+    assert review_materiality_failure(payload, CONTEXT) == error
