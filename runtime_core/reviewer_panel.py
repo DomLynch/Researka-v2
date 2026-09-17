@@ -720,6 +720,13 @@ def _legacy_primary(primary_provider: str) -> LanguageModelProvider:
     raise RuntimeError(f"unknown_primary_reviewer_provider:{primary_provider}")
 
 
+def _quorum_approved(model: str) -> str:
+    model = model.strip()
+    if model not in MODEL_QUORUM_PROVIDERS:
+        raise RuntimeError(f"reviewer_model_not_quorum_approved:{model}")
+    return model
+
+
 def reviewer_from_env() -> LanguageModelProvider:
     selected = os.getenv("RESEARKA_V2_PROVIDER", "deterministic").strip().lower()
     if selected in {"judge_panel", "panel", "reviewer_panel"}:
@@ -741,11 +748,18 @@ def reviewer_from_env() -> LanguageModelProvider:
             from .codex_provider import CodexProvider
 
             review_attestation_secret(required=True)
-            backup = OpenRouterProvider(model="z-ai/glm-5.3-flash", base_url=or_base_url)
+            # The publication bar is set by these three models. They are env-
+            # selectable, but only among MODEL_QUORUM_PROVIDERS: an unregistered
+            # name fails here at boot instead of silently zeroing the accept
+            # quorum at review time.
+            primary_model = _quorum_approved(os.getenv("RESEARKA_V2_CODEX_PRIMARY_MODEL", "gpt-5.6-sol"))
+            sparring_model = _quorum_approved(os.getenv("RESEARKA_V2_CODEX_SPARRING_MODEL", "gpt-5.6-terra"))
+            backup_model = _quorum_approved(os.getenv("RESEARKA_V2_QUORUM_FALLBACK_MODEL", "z-ai/glm-5.3-flash"))
+            backup = OpenRouterProvider(model=backup_model, base_url=or_base_url)
             backup.max_attempts = backup.max_attempts_on_rate_limit = 1
             return ReviewerPanel(
-                primary=CodexProvider(model="gpt-5.6-sol", reasoning_effort="high"),
-                sparring=CodexProvider(model="gpt-5.6-terra", reasoning_effort="medium"),
+                primary=CodexProvider(model=primary_model, reasoning_effort="high"),
+                sparring=CodexProvider(model=sparring_model, reasoning_effort="medium"),
                 fallback=backup,
                 quorum_policy=MODEL_QUORUM_POLICY,
             )
