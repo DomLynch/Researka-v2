@@ -21,7 +21,6 @@ from runtime_core.repos import (
     PostgresRuntimeRepository,
     _decode_osf_token_metadata,
     _encode_osf_token_metadata,
-    _postgres_connect_timeout_seconds,
     postgres_dsn_from_env,
     postgres_runtime_available,
 )
@@ -57,6 +56,10 @@ def test_postgres_connect_has_bounded_timeout(monkeypatch) -> None:
         def __init__(self, dsn: str, **kwargs: object) -> None:
             built.append({"dsn": dsn, **kwargs})
 
+        @staticmethod
+        def check_connection(_conn: object) -> None:
+            return None
+
         def connection(self) -> object:
             return object()
 
@@ -78,6 +81,68 @@ def test_postgres_connect_has_bounded_timeout(monkeypatch) -> None:
     assert pool["min_size"] == 1
     assert pool["max_size"] == 3
     assert pool["open"] is True
+    # Health check on checkout: a DB restart must not hand out dead connections.
+    assert pool["check"] is _FakePool.check_connection
+
+
+def test_postgres_close_closes_pool_exactly_once() -> None:
+    class _FakePool:
+        def __init__(self) -> None:
+            self.close_calls = 0
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+    repo = PostgresRuntimeRepository.__new__(PostgresRuntimeRepository)
+    repo._pool = _FakePool()
+    repo._closed = False
+
+    repo.close()
+    repo.close()
+
+    assert repo._pool.close_calls == 1
+
+
+def test_inmemory_close_is_a_no_op() -> None:
+    InMemoryRuntimeRepository().close()
+
+
+def test_api_shutdown_closes_internally_created_repository(monkeypatch) -> None:
+    from fastapi.testclient import TestClient
+
+    from apps.runtime_api.app import create_app
+
+    closed: list[bool] = []
+
+    class _Repo(InMemoryRuntimeRepository):
+        def close(self) -> None:
+            closed.append(True)
+
+    monkeypatch.setenv("RESEARKA_V2_POSTGRES_DSN", "postgresql://example")
+    monkeypatch.setattr("apps.runtime_api.app.PostgresRuntimeRepository", lambda _dsn: _Repo())
+
+    app = create_app()
+    with TestClient(app):
+        pass
+
+    assert closed == [True]
+
+
+def test_api_shutdown_does_not_close_injected_repository() -> None:
+    from fastapi.testclient import TestClient
+
+    from apps.runtime_api.app import create_app
+
+    closed: list[bool] = []
+
+    class _Repo(InMemoryRuntimeRepository):
+        def close(self) -> None:
+            closed.append(True)
+
+    with TestClient(create_app(_Repo())):
+        pass
+
+    assert closed == []
 
 def test_postgres_operation_lookup_casts_text_payload_to_jsonb(monkeypatch) -> None:
     calls: list[tuple[str, tuple[object, ...]]] = []

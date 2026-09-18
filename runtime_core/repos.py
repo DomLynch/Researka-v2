@@ -125,6 +125,7 @@ def _decode_osf_token_metadata(raw: str) -> dict | None:
 
 class RuntimeRepository(Protocol):
     def healthcheck(self) -> bool: ...
+    def close(self) -> None: ...
     def reset(self) -> None: ...
     def create_object(self, obj: ResearchObject) -> ResearchObject: ...
     def create_object_and_enqueue_job(
@@ -242,6 +243,11 @@ class InMemoryRuntimeRepository:
 
     def healthcheck(self) -> bool:
         return True
+
+    def close(self) -> None:
+        # No external resources to release; satisfies the RuntimeRepository
+        # protocol so callers can close any repository uniformly.
+        return None
 
     def create_object(self, obj: ResearchObject) -> ResearchObject:
         self.objects[obj.id] = obj
@@ -682,7 +688,11 @@ class PostgresRuntimeRepository:
             max_size=_postgres_pool_max_size(),
             timeout=float(self.connect_timeout_seconds),
             open=True,
+            # Verify health on checkout so a DB restart or server-side idle
+            # reaping doesn't hand out dead connections that fail mid-query.
+            check=ConnectionPool.check_connection,
         )
+        self._closed = False
         self._ensure_schema()
 
     def _connect(self):
@@ -690,6 +700,14 @@ class PostgresRuntimeRepository:
         # exception, then returns it to the pool. Same contract as the
         # psycopg.connect() context manager it replaces.
         return self._pool.connection()
+
+    def close(self) -> None:
+        # Idempotent: psycopg_pool's close() returns early when already closed,
+        # but the flag also guards fakes/test doubles without that behavior.
+        if self._closed:
+            return
+        self._closed = True
+        self._pool.close()
 
     def healthcheck(self) -> bool:
         try:

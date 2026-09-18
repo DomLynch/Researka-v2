@@ -35,6 +35,31 @@ class _SlowReviewEngine:
         return {"reviewed": True}
 
 
+class _ClosableRepo:
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+def _patch_loop_infra(
+    monkeypatch: pytest.MonkeyPatch,
+    repo: _ClosableRepo,
+    worker: object,
+    handlers: dict[int, object],
+) -> None:
+    monkeypatch.setattr(worker_loop, "warn_if_osf_default_owner_missing", lambda: None)
+    monkeypatch.setattr(worker_loop, "postgres_dsn_from_env", lambda: "postgresql://example")
+    monkeypatch.setattr(worker_loop, "PostgresRuntimeRepository", lambda _dsn: repo)
+    monkeypatch.setattr(worker_loop, "WorkflowEngine", lambda: object())
+    monkeypatch.setattr(worker_loop, "WorkerApp", lambda *_args, **_kwargs: worker)
+    monkeypatch.setattr(worker_loop, "reconcile_stalled_submissions", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(worker_loop, "operational_alerts", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(worker_loop.signal, "signal", lambda sig, handler: handlers.setdefault(sig, handler))
+    monkeypatch.setattr(worker_loop.time, "sleep", lambda _seconds: (_ for _ in ()).throw(AssertionError("sleep")))
+
+
 def test_worker_sigterm_interrupts_idle_wait(monkeypatch) -> None:
     handlers: dict[int, object] = {}
 
@@ -45,17 +70,26 @@ def test_worker_sigterm_interrupts_idle_wait(monkeypatch) -> None:
             handler(signal.SIGTERM, None)
             return {"claimed": 0, "completed": 0, "failed": 0}
 
-    monkeypatch.setattr(worker_loop, "warn_if_osf_default_owner_missing", lambda: None)
-    monkeypatch.setattr(worker_loop, "postgres_dsn_from_env", lambda: "postgresql://example")
-    monkeypatch.setattr(worker_loop, "PostgresRuntimeRepository", lambda _dsn: object())
-    monkeypatch.setattr(worker_loop, "WorkflowEngine", lambda: object())
-    monkeypatch.setattr(worker_loop, "WorkerApp", lambda *_args, **_kwargs: _StoppingWorker())
-    monkeypatch.setattr(worker_loop, "reconcile_stalled_submissions", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr(worker_loop, "operational_alerts", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr(worker_loop.signal, "signal", lambda sig, handler: handlers.setdefault(sig, handler))
-    monkeypatch.setattr(worker_loop.time, "sleep", lambda _seconds: (_ for _ in ()).throw(AssertionError("sleep")))
+    repo = _ClosableRepo()
+    _patch_loop_infra(monkeypatch, repo, _StoppingWorker(), handlers)
 
     worker_loop.main()
+
+    assert repo.close_calls == 1
+
+
+def test_worker_loop_closes_repository_on_exception(monkeypatch) -> None:
+    class _CrashingWorker:
+        def run_once(self) -> dict[str, int]:
+            raise KeyboardInterrupt
+
+    repo = _ClosableRepo()
+    _patch_loop_infra(monkeypatch, repo, _CrashingWorker(), {})
+
+    with pytest.raises(KeyboardInterrupt):
+        worker_loop.main()
+
+    assert repo.close_calls == 1
 
 
 def test_worker_production_dependencies_require_osf_delivery(monkeypatch) -> None:

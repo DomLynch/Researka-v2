@@ -1354,6 +1354,13 @@ def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     app.state.engine = WorkflowEngine()
     app.state.worker = WorkerApp(repo, worker_id="api-worker", engine=app.state.engine)
 
+    if repository is None:
+        # Only close pools this factory created itself; an injected repository
+        # (e.g. shared by tests) stays owned by its caller.
+        @app.on_event("shutdown")
+        def _close_owned_repository() -> None:
+            repo.close()
+
     @app.get("/live")
     def live() -> dict[str, str]:
         return {"status": "ok", "service": "researka-v2-runtime-api"}

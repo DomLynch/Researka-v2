@@ -77,39 +77,42 @@ def main() -> None:
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
 
-    while not stop_event.is_set():
-        if time.monotonic() >= next_maintenance:
+    try:
+        while not stop_event.is_set():
+            if time.monotonic() >= next_maintenance:
+                try:
+                    repaired = reconcile_stalled_submissions(
+                        repository,
+                        stale_after_seconds=_sleep_seconds("RESEARKA_V2_RECONCILE_STALE_SEC", 120.0),
+                    )
+                    alerts = operational_alerts(
+                        repository,
+                        queue_age_seconds=_sleep_seconds("RESEARKA_V2_ALERT_QUEUE_AGE_SEC", 900.0),
+                        failure_window_seconds=_sleep_seconds("RESEARKA_V2_ALERT_FAILURE_WINDOW_SEC", 3600.0),
+                        failure_threshold=int(_sleep_seconds("RESEARKA_V2_ALERT_FAILURE_THRESHOLD", 3.0)),
+                        publication_stall_seconds=_sleep_seconds("RESEARKA_V2_ALERT_PUBLICATION_STALL_SEC", 86400.0),
+                    )
+                    if repaired or alerts:
+                        print(json.dumps({
+                            "event": "worker_maintenance",
+                            "reconciled_jobs": [job.id for job in repaired],
+                            "alerts": alerts,
+                        }, sort_keys=True), flush=True)
+                except Exception as exc:
+                    report_error(exc, stage="maintenance")
+                    print(json.dumps({"event": "worker_maintenance_error", "error": str(exc)}, sort_keys=True), flush=True)
+                next_maintenance = time.monotonic() + maintenance_interval
             try:
-                repaired = reconcile_stalled_submissions(
-                    repository,
-                    stale_after_seconds=_sleep_seconds("RESEARKA_V2_RECONCILE_STALE_SEC", 120.0),
-                )
-                alerts = operational_alerts(
-                    repository,
-                    queue_age_seconds=_sleep_seconds("RESEARKA_V2_ALERT_QUEUE_AGE_SEC", 900.0),
-                    failure_window_seconds=_sleep_seconds("RESEARKA_V2_ALERT_FAILURE_WINDOW_SEC", 3600.0),
-                    failure_threshold=int(_sleep_seconds("RESEARKA_V2_ALERT_FAILURE_THRESHOLD", 3.0)),
-                    publication_stall_seconds=_sleep_seconds("RESEARKA_V2_ALERT_PUBLICATION_STALL_SEC", 86400.0),
-                )
-                if repaired or alerts:
-                    print(json.dumps({
-                        "event": "worker_maintenance",
-                        "reconciled_jobs": [job.id for job in repaired],
-                        "alerts": alerts,
-                    }, sort_keys=True), flush=True)
+                result = worker.run_once()
+                print(json.dumps({"event": "worker_run_once", **result}, sort_keys=True), flush=True)
+                if not result.get("claimed"):
+                    stop_event.wait(idle_sleep)
             except Exception as exc:
-                report_error(exc, stage="maintenance")
-                print(json.dumps({"event": "worker_maintenance_error", "error": str(exc)}, sort_keys=True), flush=True)
-            next_maintenance = time.monotonic() + maintenance_interval
-        try:
-            result = worker.run_once()
-            print(json.dumps({"event": "worker_run_once", **result}, sort_keys=True), flush=True)
-            if not result.get("claimed"):
-                stop_event.wait(idle_sleep)
-        except Exception as exc:
-            report_error(exc, stage="worker_loop")
-            print(json.dumps({"event": "worker_error", "error": str(exc)}, sort_keys=True), flush=True)
-            stop_event.wait(error_sleep)
+                report_error(exc, stage="worker_loop")
+                print(json.dumps({"event": "worker_error", "error": str(exc)}, sort_keys=True), flush=True)
+                stop_event.wait(error_sleep)
+    finally:
+        repository.close()
 
 
 def run() -> None:
