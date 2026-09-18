@@ -763,7 +763,7 @@ def test_postgres_merge_object_metadata_uses_jsonb_merge_sql(monkeypatch) -> Non
 
     assert repo.merge_object_metadata("pub-1", patch) is None
     query, params = calls[0]
-    assert "metadata || %s::jsonb" in query
+    assert "metadata::jsonb || %s::jsonb" in query
     assert "SET metadata = %s" not in query
     assert params == (json.dumps(patch), "pub-1")
 
@@ -820,9 +820,53 @@ def test_postgres_merge_object_metadata_and_enqueue_job_uses_jsonb_merge_sql(
     updated, queued = repo.merge_object_metadata_and_enqueue_job("pub-2", patch, job)
 
     merge_query, merge_params = calls[0]
-    assert "metadata || %s::jsonb" in merge_query
+    assert "metadata::jsonb || %s::jsonb" in merge_query
     assert merge_params == (json.dumps(patch), "pub-2")
     assert updated.metadata == {"existing": 1, "added": True}
     assert queued.id == job.id
     assert any("INSERT INTO runtime_jobs" in query for query, _ in calls)
     assert any("INSERT INTO runtime_events" in query for query, _ in calls)
+
+
+def test_postgres_merge_object_metadata_against_real_database() -> None:
+    """Integration: the merge SQL must run against a real TEXT metadata column.
+    Fake-cursor tests locked in a `metadata ||` query that Postgres resolves as
+    text concatenation on this schema — only a live database catches that."""
+    if not postgres_runtime_available():
+        return
+    dsn = postgres_dsn_from_env()
+    assert dsn is not None
+    repo = PostgresRuntimeRepository(dsn)
+    repo.reset()
+    obj = repo.create_object(
+        ResearchObject(object_type=ObjectType.SUBMISSION, title="Merge target")
+    )
+
+    merged = repo.merge_object_metadata(
+        obj.id, {"integrity": {"recommendation": "pass"}, "publication_state": "PUBLISHING"}
+    )
+    assert merged is not None
+    assert merged.metadata["integrity"] == {"recommendation": "pass"}
+    assert merged.metadata["publication_state"] == "PUBLISHING"
+
+    # A second disjoint merge survives alongside the first (no lost updates).
+    again = repo.merge_object_metadata(obj.id, {"delivery_recovery_count": 2})
+    assert again is not None
+    assert again.metadata["integrity"] == {"recommendation": "pass"}
+    assert again.metadata["publication_state"] == "PUBLISHING"
+    assert again.metadata["delivery_recovery_count"] == 2
+
+    # Re-read from the database: persisted document is valid and complete.
+    stored = repo.get_object(obj.id)
+    assert stored is not None and stored.metadata == again.metadata
+
+    # Merge + enqueue variant: patch applied and job queued atomically.
+    job = RuntimeJob(target_object_id=obj.id, stage=Stage.REVIEW)
+    updated, queued = repo.merge_object_metadata_and_enqueue_job(
+        obj.id, {"review_requested": True}, job
+    )
+    assert updated.metadata["review_requested"] is True
+    assert updated.metadata["integrity"] == {"recommendation": "pass"}
+    assert queued.id == job.id
+    assert repo.get_object(obj.id).metadata["review_requested"] is True
+    assert repo.merge_object_metadata("missing-object", {"x": 1}) is None

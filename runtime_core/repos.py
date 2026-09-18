@@ -1095,20 +1095,25 @@ class PostgresRuntimeRepository:
         self, object_id: str, patch: dict
     ) -> ResearchObject | None:
         # jsonb || is an atomic top-level merge inside a single UPDATE, so
-        # disjoint keys written by concurrent writers both survive.
+        # disjoint keys written by concurrent writers both survive. The column
+        # is TEXT, so the stored side must be cast explicitly — without the
+        # cast Postgres resolves text || jsonb as string concatenation.
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE research_objects
-                SET metadata = metadata || %s::jsonb
+                SET metadata = metadata::jsonb || %s::jsonb
                 WHERE id = %s
                 RETURNING *
                 """,
                 (json.dumps(patch), object_id),
             )
             row = cur.fetchone()
+            # Parse before commit: if the stored row is ever unparseable the
+            # transaction rolls back instead of persisting corruption.
+            obj = self._object_from_row(row)
             conn.commit()
-            return self._object_from_row(row)
+            return obj
 
     def update_objects_metadata(self, updates: dict[str, dict]) -> list[ResearchObject]:
         changed: list[ResearchObject] = []
@@ -1212,7 +1217,8 @@ class PostgresRuntimeRepository:
         )
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
-                "UPDATE research_objects SET metadata = metadata || %s::jsonb WHERE id = %s RETURNING *",
+                # TEXT column: cast the stored side or || concatenates strings.
+                "UPDATE research_objects SET metadata = metadata::jsonb || %s::jsonb WHERE id = %s RETURNING *",
                 (json.dumps(patch), object_id),
             )
             updated = self._object_from_row(cur.fetchone())
