@@ -695,6 +695,7 @@ def _integrity_signal_metadata(
         or None,
         "attempts": integrity.get("attempts"),
         "self_match_ignored": bool(integrity.get("self_match_ignored")),
+        "degenerate_match_ignored": bool(integrity.get("degenerate_match_ignored")),
         "canonical_package_hash": package_hash,
     }
 
@@ -817,6 +818,17 @@ def _integrity_unavailable(integrity: object) -> bool:
         or "integrity_unavailable" in reason
         or "timed out" in reason
     )
+
+
+def _integrity_fail_open_pass(
+    integrity: dict[str, Any] | None, recommendation: str
+) -> bool:
+    """Fail-open is a development escape hatch: production refuses to boot
+    with RESEARKA_INTEGRITY_FAIL_CLOSED=0. When it is set, an unavailable or
+    degenerate integrity result is stamped available=False (auditable, never
+    silent) and recommended 'pass' — honor that recommendation instead of
+    raising."""
+    return bool(integrity) and _integrity_unavailable(integrity) and recommendation == "pass"
 
 
 def _integrity_publish_block(recommendation: str, integrity: dict[str, Any]) -> bool:
@@ -2095,7 +2107,11 @@ class WorkflowEngine:
             )
         if invalid_integrity:
             raise RuntimeError("system_unavailable:integrity_invalid_response")
-        if integrity and integrity.get("available") is False:
+        if (
+            integrity
+            and integrity.get("available") is False
+            and not _integrity_fail_open_pass(integrity, recommendation)
+        ):
             raise RuntimeError("system_unavailable:integrity_service")
         if recommendation in {Decision.REJECT.value, Decision.REVISE.value}:
             return self._terminal_intake_decision(
@@ -2499,7 +2515,10 @@ class WorkflowEngine:
         refreshed = _checked_integrity(_integrity_payload_from_submission(submission))
         recommendation = _integrity_recommendation(refreshed)
         invalid_integrity = _integrity_response_invalid(refreshed, recommendation)
-        if not refreshed or _integrity_unavailable(refreshed):
+        if not refreshed or (
+            _integrity_unavailable(refreshed)
+            and not _integrity_fail_open_pass(refreshed, recommendation)
+        ):
             raise RuntimeError("system_unavailable:integrity_service")
         if invalid_integrity:
             raise RuntimeError("system_unavailable:integrity_invalid_response")
@@ -2604,7 +2623,14 @@ class WorkflowEngine:
         recommendation = _integrity_recommendation(integrity)
         invalid_integrity = _integrity_response_invalid(integrity, recommendation)
         package_hash = str(publication.metadata.get("canonical_package_hash") or "")
-        if not integrity or _integrity_unavailable(integrity) or invalid_integrity:
+        if (
+            not integrity
+            or (
+                _integrity_unavailable(integrity)
+                and not _integrity_fail_open_pass(integrity, recommendation)
+            )
+            or invalid_integrity
+        ):
             repository.update_object_metadata(
                 publication.id,
                 _merge_publication_metadata(
@@ -2746,7 +2772,14 @@ class WorkflowEngine:
         )
         recommendation = _integrity_recommendation(integrity)
         invalid_integrity = _integrity_response_invalid(integrity, recommendation)
-        if not integrity or _integrity_unavailable(integrity) or invalid_integrity:
+        if (
+            not integrity
+            or (
+                _integrity_unavailable(integrity)
+                and not _integrity_fail_open_pass(integrity, recommendation)
+            )
+            or invalid_integrity
+        ):
             repository.update_object_metadata(
                 publication.id,
                 _merge_publication_metadata(

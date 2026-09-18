@@ -264,12 +264,36 @@ def test_production_requires_enabled_fail_closed_integrity(monkeypatch: pytest.M
         WorkflowEngine(provider=AcceptProvider())
 
 
-def test_integrity_unavailable_is_stamped_not_silent(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_integrity_unavailable_fail_open_proceeds_with_audit_stamp(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    monkeypatch.setenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "0")
+    monkeypatch.setattr(
+        "runtime_core.workflow.check_integrity",
+        lambda payload: {"available": False, "recommendation": "pass", "reason": "integrity_unavailable: x"},
+    )
+
+    result = WorkflowEngine(provider=AcceptProvider()).handle_job(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo
+    )
+    updated = repo.get_object(submission.id)
+
+    assert result == {"created_object_id": submission.id, "next_stage": Stage.REVIEW.value}
+    assert updated is not None
+    # The skipped gate is recorded on the submission — never a silent pass.
+    assert updated.metadata["integrity"]["available"] is False
+    assert updated.metadata["integrity"]["reason"] == "integrity_unavailable: x"
+    queued = repo.queued_jobs()
+    assert len(queued) == 1
+    assert queued[0].stage == Stage.REVIEW
+
+
+def test_integrity_unavailable_fail_closed_holds_submission(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = InMemoryRuntimeRepository()
     submission = _submission(repo)
     monkeypatch.setattr(
         "runtime_core.workflow.check_integrity",
-        lambda payload: {"available": False, "recommendation": "pass", "reason": "integrity_unavailable: x"},
+        lambda payload: {"available": False, "recommendation": "revise", "reason": "integrity_unavailable: x"},
     )
 
     with pytest.raises(RuntimeError, match="system_unavailable:integrity_service"):
@@ -279,9 +303,29 @@ def test_integrity_unavailable_is_stamped_not_silent(monkeypatch: pytest.MonkeyP
     updated = repo.get_object(submission.id)
 
     assert updated is not None
-    # The skipped gate is recorded on the submission — never a silent pass.
     assert updated.metadata["integrity"]["available"] is False
     assert repo.queued_jobs() == []
+
+
+def test_integrity_invalid_response_raises_even_fail_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    monkeypatch.setenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "0")
+    monkeypatch.setattr(
+        "runtime_core.workflow.check_integrity",
+        lambda payload: {"recommendation": "garbage-value", "duplication_score": 0.91},
+    )
+
+    with pytest.raises(RuntimeError, match="system_unavailable:integrity_invalid_response"):
+        WorkflowEngine(provider=AcceptProvider()).handle_job(
+            RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo
+        )
+    updated = repo.get_object(submission.id)
+
+    assert repo.queued_jobs() == []
+    assert updated is not None
+    assert updated.metadata["integrity"]["available"] is False
+    assert updated.metadata["integrity"]["reason"] == "integrity_invalid_response"
 
 
 @pytest.mark.parametrize("recommendation", [Decision.REJECT.value, Decision.REVISE.value])
@@ -621,3 +665,37 @@ def test_integrity_reject_naming_no_match_is_degenerate_not_a_hold(monkeypatch: 
     # A pass is untouched regardless of match set.
     passing = {"available": True, "recommendation": "pass", "matched_sources": []}
     assert _integrity_without_degenerate_match(passing) is passing
+
+
+def test_integrity_degenerate_match_fail_open_proceeds_through_intake(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pipeline path for the degenerate score: with FAIL_CLOSED=0 the
+    degenerate reject is stamped unavailable + 'pass' and intake honors it —
+    the submission proceeds with degenerate_match_ignored on the record."""
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    monkeypatch.setenv("RESEARKA_INTEGRITY_FAIL_CLOSED", "0")
+    monkeypatch.setattr(
+        "runtime_core.workflow.check_integrity",
+        lambda payload: {
+            "available": True,
+            "recommendation": Decision.REJECT.value,
+            "duplication_score": 1.0,
+            "matched_publication_id": None,
+            "matched_sources": [],
+        },
+    )
+
+    result = WorkflowEngine(provider=AcceptProvider()).handle_job(
+        RuntimeJob(target_object_id=submission.id, stage=Stage.INTAKE), repo
+    )
+    updated = repo.get_object(submission.id)
+
+    assert result == {"created_object_id": submission.id, "next_stage": Stage.REVIEW.value}
+    assert updated is not None
+    integrity = updated.metadata["integrity"]
+    assert integrity["available"] is False
+    assert integrity["reason"] == "integrity_degenerate_match"
+    assert integrity["degenerate_match_ignored"] is True
+    queued = repo.queued_jobs()
+    assert len(queued) == 1
+    assert queued[0].stage == Stage.REVIEW
