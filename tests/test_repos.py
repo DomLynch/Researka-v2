@@ -1,3 +1,4 @@
+import json
 import threading
 from datetime import datetime, timezone
 
@@ -680,3 +681,148 @@ def test_postgres_list_claim_cards_returns_empty_for_unknown_publication() -> No
     repo.reset()
 
     assert repo.list_claim_cards("pub-pg-with-no-claims") == []
+
+
+def test_inmemory_merge_object_metadata_patches_without_disturbing_existing() -> None:
+    repo = InMemoryRuntimeRepository()
+    obj = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Merge target",
+            metadata={"existing": 1, "shared": "old"},
+        )
+    )
+
+    updated = repo.merge_object_metadata(obj.id, {"shared": "new", "added": True})
+
+    assert updated is not None
+    assert updated.metadata == {"existing": 1, "shared": "new", "added": True}
+    assert repo.get_object(obj.id).metadata == updated.metadata  # type: ignore[union-attr]
+
+
+def test_inmemory_merge_object_metadata_returns_none_for_unknown_id() -> None:
+    repo = InMemoryRuntimeRepository()
+
+    assert repo.merge_object_metadata("missing-object", {"a": 1}) is None
+
+
+def test_inmemory_merge_object_metadata_and_enqueue_job_applies_both() -> None:
+    repo = InMemoryRuntimeRepository()
+    obj = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            title="Merge + enqueue",
+            metadata={"existing": 1},
+        )
+    )
+    job = RuntimeJob(target_object_id=obj.id, stage=Stage.OSF_DEPOSIT)
+
+    updated, queued = repo.merge_object_metadata_and_enqueue_job(
+        obj.id, {"publication_state": "PUBLISHING"}, job
+    )
+
+    assert updated.metadata == {"existing": 1, "publication_state": "PUBLISHING"}
+    assert repo.get_object(obj.id).metadata == updated.metadata  # type: ignore[union-attr]
+    assert queued.id == job.id
+    assert repo.get_job(job.id) is not None
+    assert repo.events[-1].event_type == EventType.JOB_QUEUED
+
+
+def test_postgres_merge_object_metadata_uses_jsonb_merge_sql(monkeypatch) -> None:
+    calls: list[tuple[str, tuple[object, ...]]] = []
+
+    class _Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def execute(self, query: str, params: tuple[object, ...]) -> None:
+            calls.append((query, params))
+
+        def fetchone(self) -> None:
+            return None
+
+    class _Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def cursor(self) -> _Cursor:
+            return _Cursor()
+
+        def commit(self) -> None:
+            return None
+
+    repo = PostgresRuntimeRepository.__new__(PostgresRuntimeRepository)
+    monkeypatch.setattr(repo, "_connect", lambda: _Connection())
+    patch = {"integrity": {"recommendation": "pass"}, "publication_state": "PUBLISHING"}
+
+    assert repo.merge_object_metadata("pub-1", patch) is None
+    query, params = calls[0]
+    assert "metadata || %s::jsonb" in query
+    assert "SET metadata = %s" not in query
+    assert params == (json.dumps(patch), "pub-1")
+
+
+def test_postgres_merge_object_metadata_and_enqueue_job_uses_jsonb_merge_sql(
+    monkeypatch,
+) -> None:
+    calls: list[tuple[str, tuple[object, ...]]] = []
+    object_row = {
+        "id": "pub-2",
+        "object_type": ObjectType.PUBLICATION.value,
+        "parent_object_id": None,
+        "title": "Merged",
+        "body_markdown": "",
+        "metadata": {"existing": 1, "added": True},
+        "created_at": datetime.now(timezone.utc),
+    }
+
+    class _Cursor:
+        rowcount = 1
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def execute(self, query: str, params: tuple[object, ...]) -> None:
+            calls.append((query, params))
+
+        def fetchone(self):
+            if "UPDATE research_objects" in calls[-1][0]:
+                return object_row
+            return None
+
+    class _Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def cursor(self) -> _Cursor:
+            return _Cursor()
+
+        def commit(self) -> None:
+            return None
+
+    repo = PostgresRuntimeRepository.__new__(PostgresRuntimeRepository)
+    monkeypatch.setattr(repo, "_connect", lambda: _Connection())
+    patch = {"added": True}
+    job = RuntimeJob(target_object_id="pub-2", stage=Stage.DW_DELIVERY)
+
+    updated, queued = repo.merge_object_metadata_and_enqueue_job("pub-2", patch, job)
+
+    merge_query, merge_params = calls[0]
+    assert "metadata || %s::jsonb" in merge_query
+    assert merge_params == (json.dumps(patch), "pub-2")
+    assert updated.metadata == {"existing": 1, "added": True}
+    assert queued.id == job.id
+    assert any("INSERT INTO runtime_jobs" in query for query, _ in calls)
+    assert any("INSERT INTO runtime_events" in query for query, _ in calls)

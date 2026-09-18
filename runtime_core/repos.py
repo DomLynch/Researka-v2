@@ -144,6 +144,15 @@ class RuntimeRepository(Protocol):
         metadata: dict,
         job: RuntimeJob,
     ) -> tuple[ResearchObject, RuntimeJob]: ...
+    def merge_object_metadata(
+        self, object_id: str, patch: dict
+    ) -> ResearchObject | None: ...
+    def merge_object_metadata_and_enqueue_job(
+        self,
+        object_id: str,
+        patch: dict,
+        job: RuntimeJob,
+    ) -> tuple[ResearchObject, RuntimeJob]: ...
     def list_objects(
         self,
         object_type: ObjectType | str | None = None,
@@ -308,6 +317,39 @@ class InMemoryRuntimeRepository:
             raise ValueError("object_not_found")
         event_count = len(self.events)
         updated = current.model_copy(update={"metadata": dict(metadata)})
+        self.objects[object_id] = updated
+        try:
+            return updated, self.enqueue_job(job)
+        except Exception:
+            self.objects[object_id] = current
+            del self.events[event_count:]
+            raise
+
+    def merge_object_metadata(
+        self, object_id: str, patch: dict
+    ) -> ResearchObject | None:
+        obj = self.objects.get(object_id)
+        if obj is None:
+            return None
+        updated = obj.model_copy(update={"metadata": {**obj.metadata, **patch}})
+        self.objects[object_id] = updated
+        return updated
+
+    def merge_object_metadata_and_enqueue_job(
+        self,
+        object_id: str,
+        patch: dict,
+        job: RuntimeJob,
+    ) -> tuple[ResearchObject, RuntimeJob]:
+        if job.target_object_id != object_id:
+            raise ValueError("job_target_must_match_object")
+        current = self.objects.get(object_id)
+        if current is None:
+            raise ValueError("object_not_found")
+        event_count = len(self.events)
+        updated = current.model_copy(
+            update={"metadata": {**current.metadata, **patch}}
+        )
         self.objects[object_id] = updated
         try:
             return updated, self.enqueue_job(job)
@@ -1049,6 +1091,25 @@ class PostgresRuntimeRepository:
             conn.commit()
             return self._object_from_row(row)
 
+    def merge_object_metadata(
+        self, object_id: str, patch: dict
+    ) -> ResearchObject | None:
+        # jsonb || is an atomic top-level merge inside a single UPDATE, so
+        # disjoint keys written by concurrent writers both survive.
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE research_objects
+                SET metadata = metadata || %s::jsonb
+                WHERE id = %s
+                RETURNING *
+                """,
+                (json.dumps(patch), object_id),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return self._object_from_row(row)
+
     def update_objects_metadata(self, updates: dict[str, dict]) -> list[ResearchObject]:
         changed: list[ResearchObject] = []
         with self._connect() as conn, conn.cursor() as cur:
@@ -1082,6 +1143,77 @@ class PostgresRuntimeRepository:
             cur.execute(
                 "UPDATE research_objects SET metadata = %s WHERE id = %s RETURNING *",
                 (json.dumps(metadata), object_id),
+            )
+            updated = self._object_from_row(cur.fetchone())
+            if updated is None:
+                raise ValueError("object_not_found")
+            cur.execute(
+                """
+                SELECT * FROM runtime_jobs
+                WHERE target_object_id = %s AND stage = %s
+                  AND status IN ('queued', 'leased', 'completed')
+                ORDER BY created_at ASC LIMIT 1
+                """,
+                (job.target_object_id, job.stage.value),
+            )
+            existing = self._job_from_row(cur.fetchone())
+            if existing is None:
+                cur.execute(
+                    """
+                    INSERT INTO runtime_jobs
+                        (id, target_object_id, stage, status, payload, lease_expires_at, lease_token, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (target_object_id, stage)
+                        WHERE status IN ('queued', 'leased') DO NOTHING
+                    """,
+                    (
+                        job.id,
+                        job.target_object_id,
+                        job.stage.value,
+                        job.status.value,
+                        json.dumps(job.payload),
+                        job.lease_expires_at,
+                        job.lease_token,
+                        job.created_at,
+                    ),
+                )
+                if cur.rowcount:
+                    self._insert_event(cur, event)
+                    existing = job
+                else:
+                    cur.execute(
+                        """
+                        SELECT * FROM runtime_jobs
+                        WHERE target_object_id = %s AND stage = %s
+                          AND status IN ('queued', 'leased')
+                        ORDER BY created_at ASC LIMIT 1
+                        """,
+                        (job.target_object_id, job.stage.value),
+                    )
+                    existing = self._job_from_row(cur.fetchone())
+            if existing is None:
+                raise RuntimeError("job_enqueue_failed")
+            conn.commit()
+            return updated, existing
+
+    def merge_object_metadata_and_enqueue_job(
+        self,
+        object_id: str,
+        patch: dict,
+        job: RuntimeJob,
+    ) -> tuple[ResearchObject, RuntimeJob]:
+        if job.target_object_id != object_id:
+            raise ValueError("job_target_must_match_object")
+        event = RuntimeEvent(
+            event_type=EventType.JOB_QUEUED,
+            target_object_id=job.target_object_id,
+            job_id=job.id,
+            payload={"stage": job.stage.value, **job.payload},
+        )
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE research_objects SET metadata = metadata || %s::jsonb WHERE id = %s RETURNING *",
+                (json.dumps(patch), object_id),
             )
             updated = self._object_from_row(cur.fetchone())
             if updated is None:

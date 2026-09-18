@@ -699,3 +699,46 @@ def test_integrity_degenerate_match_fail_open_proceeds_through_intake(monkeypatc
     queued = repo.queued_jobs()
     assert len(queued) == 1
     assert queued[0].stage == Stage.REVIEW
+
+
+def test_publication_integrity_refresh_preserves_concurrent_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: a worker writing publication_state concurrently with the
+    API-driven integrity refresh must not lose either key."""
+    repo = InMemoryRuntimeRepository()
+    submission = _submission(repo)
+    publication = repo.create_object(
+        ResearchObject(
+            object_type=ObjectType.PUBLICATION,
+            parent_object_id=submission.id,
+            title=submission.title,
+            metadata={"source_submission_id": submission.id},
+        )
+    )
+
+    monkeypatch.setattr(
+        "runtime_core.workflow.check_integrity",
+        lambda payload: {
+            "available": True,
+            "recommendation": "pass",
+            "similarity_score": 0.01,
+        },
+    )
+
+    # Concurrent writer lands after refresh_publication_integrity read its
+    # (stale) copy of the publication.
+    stored = repo.get_object(publication.id)
+    assert stored is not None
+    repo.update_object_metadata(
+        publication.id, {**stored.metadata, "publication_state": "PUBLISHING"}
+    )
+
+    refreshed = refresh_publication_integrity(repo, publication)
+
+    persisted = repo.get_object(publication.id)
+    assert persisted is not None
+    assert persisted.metadata["integrity"]["recommendation"] == "pass"
+    assert persisted.metadata["publication_state"] == "PUBLISHING"
+    assert refreshed.metadata["integrity"]["recommendation"] == "pass"
+    assert refreshed.metadata["publication_state"] == "PUBLISHING"

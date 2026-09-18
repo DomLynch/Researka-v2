@@ -613,6 +613,17 @@ def _merge_publication_metadata(existing: dict, update: dict) -> dict:
     return metadata
 
 
+def _publication_metadata_patch(update: dict) -> dict:
+    """Patch for repository.merge_object_metadata*: dedupe markers are pinned
+    from the stored object, so they are excluded defensively to avoid
+    clobbering a marker set by a concurrent writer."""
+    return {
+        key: value
+        for key, value in update.items()
+        if key not in PUBLICATION_DEDUPE_METADATA_KEYS
+    }
+
+
 def _publication_dedupe_markers(metadata: dict) -> set[str]:
     return {
         str(value).strip()
@@ -798,12 +809,9 @@ def refresh_publication_integrity(
     integrity = _integrity_without_self_match(integrity, publication.id)
     recommendation = _integrity_recommendation(integrity)
     return (
-        repository.update_object_metadata(
+        repository.merge_object_metadata(
             publication.id,
-            {
-                **publication.metadata,
-                "integrity": _integrity_signal_metadata(integrity, recommendation),
-            },
+            {"integrity": _integrity_signal_metadata(integrity, recommendation)},
         )
         or publication
     )
@@ -950,11 +958,9 @@ def _resume_publication_delivery(
         stage = Stage.DW_DELIVERY
     else:
         stage = Stage.PUBLICATION_FINALIZE
-    publication, next_job = repository.update_object_metadata_and_enqueue_job(
+    publication, next_job = repository.merge_object_metadata_and_enqueue_job(
         publication.id,
-        _merge_publication_metadata(
-            publication.metadata, {"publication_state": "PUBLISHING"}
-        ),
+        _publication_metadata_patch({"publication_state": "PUBLISHING"}),
         RuntimeJob(target_object_id=publication.id, stage=stage),
     )
     return {
@@ -973,11 +979,9 @@ def release_quarantined_publication(
     if publication.metadata.get("publication_state") != "ACCEPTED_QUARANTINED":
         raise ValueError("publication_not_quarantined")
     _publication_lineage(repository, publication)
-    updated = repository.update_object_metadata(
+    updated = repository.merge_object_metadata(
         publication.id,
-        _merge_publication_metadata(
-            publication.metadata, {"requested_public_visibility": "listed"}
-        ),
+        _publication_metadata_patch({"requested_public_visibility": "listed"}),
     )
     if updated is None:
         raise RuntimeError("publication_release_update_failed")
@@ -1010,14 +1014,13 @@ def recover_publication_delivery(
         if recoveries >= max_recoveries:
             return None
         _publication_lineage(repository, publication)
-        updated = repository.update_object_metadata(
+        updated = repository.merge_object_metadata(
             publication.id,
-            _merge_publication_metadata(
-                publication.metadata,
+            _publication_metadata_patch(
                 {
                     "delivery_recovery_count": recoveries + 1,
                     "delivery_recovered_at": datetime.now(timezone.utc).isoformat(),
-                },
+                }
             ),
         )
         if updated is None:
@@ -2090,10 +2093,9 @@ class WorkflowEngine:
             }
         if integrity:
             submission = (
-                repository.update_object_metadata(
+                repository.merge_object_metadata(
                     submission.id,
                     {
-                        **submission.metadata,
                         "integrity": _integrity_signal_metadata(
                             integrity,
                             recommendation,
@@ -2523,10 +2525,9 @@ class WorkflowEngine:
         if invalid_integrity:
             raise RuntimeError("system_unavailable:integrity_invalid_response")
         submission = (
-            repository.update_object_metadata(
+            repository.merge_object_metadata(
                 submission.id,
                 {
-                    **submission.metadata,
                     "integrity": _integrity_signal_metadata(
                         refreshed,
                         recommendation,
@@ -2631,19 +2632,17 @@ class WorkflowEngine:
             )
             or invalid_integrity
         ):
-            repository.update_object_metadata(
+            repository.merge_object_metadata(
                 publication.id,
-                _merge_publication_metadata(
-                    publication.metadata,
-                    {"publication_state": "PUBLISH_BLOCKED_EXTERNAL"},
+                _publication_metadata_patch(
+                    {"publication_state": "PUBLISH_BLOCKED_EXTERNAL"}
                 ),
             )
             raise RuntimeError("system_unavailable:integrity")
         if _integrity_publish_block(recommendation, integrity):
-            repository.update_object_metadata(
+            repository.merge_object_metadata(
                 publication.id,
-                _merge_publication_metadata(
-                    publication.metadata,
+                _publication_metadata_patch(
                     {
                         "publication_state": "PUBLISH_BLOCKED_INTEGRITY",
                         "integrity": _integrity_signal_metadata(
@@ -2651,22 +2650,21 @@ class WorkflowEngine:
                             recommendation,
                             package_hash=package_hash,
                         ),
-                    },
+                    }
                 ),
             )
             raise ValueError(f"publish_blocked_by_integrity:{recommendation}")
         publication = (
-            repository.update_object_metadata(
+            repository.merge_object_metadata(
                 publication.id,
-                _merge_publication_metadata(
-                    publication.metadata,
+                _publication_metadata_patch(
                     {
                         "integrity": _integrity_signal_metadata(
                             integrity,
                             recommendation,
                             package_hash=package_hash,
                         )
-                    },
+                    }
                 ),
             )
             or publication
@@ -2681,24 +2679,22 @@ class WorkflowEngine:
             ):
                 raise RuntimeError("osf_verified_deposit_incomplete")
         except Exception as exc:
-            repository.update_object_metadata(
+            repository.merge_object_metadata(
                 publication.id,
-                _merge_publication_metadata(
-                    publication.metadata,
+                _publication_metadata_patch(
                     {
                         "publication_state": "PUBLISH_BLOCKED_EXTERNAL",
                         "osf_status": "failed",
                         "doi_status": "failed",
                         "osf_error": str(exc)[:240],
-                    },
+                    }
                 ),
             )
             raise RuntimeError(f"system_unavailable:osf:{exc}") from exc
-        metadata = _merge_publication_metadata(
-            publication.metadata,
-            {**osf_metadata, "publication_state": "PUBLISHING", "osf_error": None},
+        metadata = _publication_metadata_patch(
+            {**osf_metadata, "publication_state": "PUBLISHING", "osf_error": None}
         )
-        publication, next_job = repository.update_object_metadata_and_enqueue_job(
+        publication, next_job = repository.merge_object_metadata_and_enqueue_job(
             publication.id,
             metadata,
             RuntimeJob(target_object_id=publication.id, stage=Stage.DW_DELIVERY),
@@ -2728,23 +2724,21 @@ class WorkflowEngine:
                     str(dw_metadata.get("dw_error") or "derivation_delivery_incomplete")
                 )
         except Exception as exc:
-            repository.update_object_metadata(
+            repository.merge_object_metadata(
                 publication.id,
-                _merge_publication_metadata(
-                    publication.metadata,
+                _publication_metadata_patch(
                     {
                         "publication_state": "PUBLISH_BLOCKED_EXTERNAL",
                         "dw_status": "failed",
                         "dw_error": str(exc)[:240],
-                    },
+                    }
                 ),
             )
             raise RuntimeError(f"system_unavailable:derivation_web:{exc}") from exc
-        metadata = _merge_publication_metadata(
-            publication.metadata,
-            {**dw_metadata, "publication_state": "PUBLISHING", "dw_error": None},
+        metadata = _publication_metadata_patch(
+            {**dw_metadata, "publication_state": "PUBLISHING", "dw_error": None}
         )
-        publication, next_job = repository.update_object_metadata_and_enqueue_job(
+        publication, next_job = repository.merge_object_metadata_and_enqueue_job(
             publication.id,
             metadata,
             RuntimeJob(
@@ -2780,19 +2774,17 @@ class WorkflowEngine:
             )
             or invalid_integrity
         ):
-            repository.update_object_metadata(
+            repository.merge_object_metadata(
                 publication.id,
-                _merge_publication_metadata(
-                    publication.metadata,
-                    {"publication_state": "PUBLISH_BLOCKED_EXTERNAL"},
+                _publication_metadata_patch(
+                    {"publication_state": "PUBLISH_BLOCKED_EXTERNAL"}
                 ),
             )
             raise RuntimeError("system_unavailable:integrity")
         if _integrity_publish_block(recommendation, integrity):
-            repository.update_object_metadata(
+            repository.merge_object_metadata(
                 publication.id,
-                _merge_publication_metadata(
-                    publication.metadata,
+                _publication_metadata_patch(
                     {
                         "publication_state": "PUBLISH_BLOCKED_INTEGRITY",
                         "integrity": _integrity_signal_metadata(
@@ -2802,7 +2794,7 @@ class WorkflowEngine:
                                 publication.metadata.get("canonical_package_hash") or ""
                             ),
                         ),
-                    },
+                    }
                 ),
             )
             raise ValueError(f"publish_blocked_by_integrity:{recommendation}")
