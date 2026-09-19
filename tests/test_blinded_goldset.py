@@ -551,3 +551,23 @@ def test_contract_cannot_self_certify_small_or_unproven_corpus() -> None:
                 labels_revealed_at=datetime.now(timezone.utc),
             )
         )
+
+
+def test_incompatible_historical_payload_is_excluded_only_with_audit_counter(tmp_path):
+    from collections import Counter
+    from pydantic import ValidationError
+    original = _candidate(1)["submission"]
+    row = {"id": "legacy", "title": original["title"], "body_markdown": original["body_markdown"],
+           "metadata": {**original, "source_bundle": original["source_bundle"] * 34}, "decision": "revise"}
+    with pytest.raises(ValidationError, match="source_bundle_max_100"):
+        candidate_from_row(row)
+    exclusions = Counter()
+    assert candidate_from_row(row, exclusions=exclusions) is None
+    assert exclusions == {"incompatible_submission_contract": 1}
+    assert len(row["metadata"]["source_bundle"]) == 102
+    receipt = freeze_candidates([_candidate(i) for i in range(150)], out_dir=tmp_path / "private",
+        receipt_path=tmp_path / "receipt.json", size=120, seed="audited", judge_release=_judge_release(),
+        exclusions=exclusions)
+    assert receipt["excluded_invalid_payloads"] == dict(exclusions)
+    manifest = json.loads((tmp_path / "private/private_manifest.json").read_text())
+    assert manifest["sampling_rules"]["excluded_invalid_payloads"] == dict(exclusions)

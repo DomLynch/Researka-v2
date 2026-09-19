@@ -11,6 +11,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from pydantic import ValidationError
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from contracts import (
@@ -199,7 +201,7 @@ def _contains_synthetic_marker(metadata: dict) -> bool:
     return False
 
 
-def candidate_from_row(row: dict) -> dict | None:
+def candidate_from_row(row: dict, *, exclusions: Counter[str] | None = None) -> dict | None:
     metadata = _metadata(row.get("metadata"))
     article_type = str(metadata.get("article_type") or "").strip()
     domain_slug = str(metadata.get("domain_slug") or "general").strip().lower()
@@ -238,7 +240,16 @@ def candidate_from_row(row: dict) -> dict | None:
             identity_text,
         )
     )
-    blinded = SubmissionPayload.model_validate(_redact(payload, identities)).model_dump(mode="json", exclude_none=True)
+    try:
+        blinded = SubmissionPayload.model_validate(_redact(payload, identities)).model_dump(mode="json", exclude_none=True)
+    except ValidationError:
+        # Historical payloads outside today's contract are ineligible, never
+        # truncated or silently rewritten to fit the adjudication corpus.
+        if exclusions is not None:
+            exclusions["incompatible_submission_contract"] += 1
+        else:
+            raise
+        return None
     content = " ".join(
         [
             str(blinded.get("abstract") or ""),
@@ -261,13 +272,13 @@ def candidate_from_row(row: dict) -> dict | None:
     }
 
 
-def fetch_candidates(dsn: str) -> list[dict]:
+def fetch_candidates(dsn: str, *, exclusions: Counter[str] | None = None) -> list[dict]:
     import psycopg
     from psycopg.rows import dict_row
 
     with psycopg.connect(dsn, row_factory=dict_row) as conn, conn.cursor() as cursor:
         cursor.execute(_CANDIDATE_SQL)
-        candidates = [candidate_from_row(dict(row)) for row in cursor.fetchall()]
+        candidates = [candidate_from_row(dict(row), exclusions=exclusions) for row in cursor.fetchall()]
     unique: dict[str, dict] = {}
     for candidate in candidates:
         if candidate is not None:
@@ -334,6 +345,7 @@ def freeze_candidates(
     size: int,
     seed: str,
     judge_release: dict,
+    exclusions: Counter[str] | None = None,
 ) -> dict:
     target_release = _judge_release(judge_release)
     selected = select_candidates(candidates, size=size, seed=seed)
@@ -385,6 +397,7 @@ def freeze_candidates(
             "source": "production submissions with final decisions",
             "historical_decision_quota": "balanced and hidden from adjudicators",
             "minimum_sources": 3,
+            "excluded_invalid_payloads": dict(exclusions or {}),
             "excluded_domains": sorted(EXCLUDED_DOMAINS),
             "synthetic_agent_markers": list(SYNTHETIC_AGENT_MARKERS),
         },
@@ -423,6 +436,7 @@ def freeze_candidates(
         "protocol_version": PROTOCOL_VERSION,
         "created_at": created_at,
         "case_count": len(cases),
+        "excluded_invalid_payloads": dict(exclusions or {}),
         "sampling_manifest_sha256": manifest_sha,
         "target_judge_release_id": target_release["id"],
         "blinded_packet_sha256": [_file_sha256(path) for path in packet_paths],
@@ -713,8 +727,10 @@ def main() -> None:
         dsn = os.environ.get("RESEARKA_V2_POSTGRES_DSN")
         if not dsn:
             raise SystemExit("RESEARKA_V2_POSTGRES_DSN is required")
+        exclusions: Counter[str] = Counter()
         receipt = freeze_candidates(
-            fetch_candidates(dsn),
+            fetch_candidates(dsn, exclusions=exclusions),
+            exclusions=exclusions,
             out_dir=args.out_dir,
             receipt_path=args.public_receipt,
             size=args.size,

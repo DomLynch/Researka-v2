@@ -3,26 +3,22 @@
 ## Current Sprint — 2026-09-19
 Focus: integrate the verified Claude/Kimi Core improvements and repair release verification before claiming unattended publishing readiness.
 
-### Verified deployment — first September 19 release
-- MacBook, GitHub main and both VPS checkouts matched `b38d48c9a59a4d76da77e83ae3db225947baf45c`, clean, at 08:53:55 UTC September 19. API/worker/watchdog active; public `/version` and `/health` HTTP 200. Receipt: `../Researka-Review-2026-09-19/core-release-b38d48c.json`.
-- GitHub CI run 35433083598 passed, including the full suite with disposable Postgres 16.
-- Integrated changes: bounded/health-checked connection pool and shutdown closure (`69bbfdf`, `f1c79b5`); structured findings and non-null outcome (`c5f86cd`); frozen producer imports (`e507d53`); approved reviewer-model selection (`1efa379`); degenerate integrity handling and development fail-open (`5a035d7`, `a699fe1`); atomic metadata patches and TEXT-column cast repair (`4ccde59`, `28f05be`). All are ancestors of the current baseline.
-- Production integrity remains fail-closed. All 9,717 production metadata values were valid JSON objects. Sol high and Terra medium each passed a small transport smoke; this is not a full manuscript review.
+### Verified releases
+- Runtime release `164ec11656e328e1f797cb6ce74b1b7961499799` verified September 19 09:06:37 UTC: MacBook/GitHub/both VPS trees matched and were clean; API, worker and watchdog active. Public health/version HTTP 200, version SHA matched. GitHub CI 35433597968 passed with Postgres 16. Receipt: `../Researka-Review-2026-09-19/core-release-164ec11.json`.
+- Claude/Kimi improvements remain integrated: pooled connections/shutdown, structured findings and outcome, producer import boundaries, approved reviewer models, auditable development fail-open, atomic metadata patches with explicit TEXT/jsonb casts.
+- September 19 corrections repaired type/complexity/duplication regressions, lease-event chronology and CI database coverage. Final publication now merges only owned metadata keys across publication/review/decision in one atomic transaction, preserving concurrent writes.
+- Local full suite for runtime changes: 1108 passed against disposable Postgres 17.9; quality, ruff and mypy109 files passed. CI independently verifies Postgres16. No review thresholds or production fail-closed policy changed.
 
-### Integration follow-up (deployed in b38d48c)
-- Corrected the eight mypy errors with typed test doubles and runtime type/None assertions.
-- Extracted API repository construction; retained ownership-aware shutdown and the production database requirement, without increasing quality baselines.
-- Consolidated metadata update/merge plus enqueue into one transaction implementation, retaining the explicit jsonb casts and parse-before-commit behavior.
-- Corrected lease events that were backdated ahead of reclaim events in both repositories; Postgres uses insertion ID to break equal-timestamp ties.
-- Added real transaction rollback regressions, visible skips when Postgres is absent, pool cleanup in the database fixture, and a disposable Postgres 16 service for CI's full suite.
-- See `FAILURES/2026-09-19-release-verification-gaps.md` for causes and verification. The first release passed GitHub CI and was deployed as recorded above.
+### Calibration preparation follow-up
+- A fresh production sampling attempt exposed a historical payload that violates today's source-bundle cap. The sampler now excludes contract-invalid historical rows only when an explicit audit counter is supplied; that count is included in the hashed private manifest and public freeze receipt. It never truncates or rewrites the source bundle. Default direct validation remains strict. The regression and calibration tests pass (16 tests).
+- Independent certification remains blocked: both existing 120-case packets have zero completed labels; no genuine empirical-study case in the frozen corpus; no current evaluation/human signoff. See `calibration/READINESS-2026-09-19.md`. Do not treat the stale working-set score as current judge accuracy.
 
-### Publishing status and remaining work
-- No new Core submission since September 13. Latest 20 submissions: 13 revise, 7 reject. Latest resistance-training decision `b6897b61` still persisted as revise / NOT_PUBLISHED; this was not rerun during the audit.
-- Publication-finalize now merges owned keys across all three objects in one transaction. A reproduced lost-update regression now passes in memory and real Postgres; missing-object rollback and replacement compatibility also pass. This second fix is locally verified and awaits its own commit/CI/deployment receipt.
-- V3's active VPS code (`75f91376`) trails its inspected local head (`b1c83a9d`). Wire Core outcome/material_findings into V3 and resolve its review-input budget / safe preflight repair path. Today's runs reported writer quota failures and no eligible paper; current V3 writer capacity was not independently smoke-tested.
-- Independent calibration is uncertified: public receipt valid=false, no human signoff or judge-release binding, 30 cases versus minimum 100. Do not use its stale working-set score as the current reviewer's accuracy.
-- Verify remains separate; no website, V3, review policy or production state was changed in this follow-up.
+### Producer and publishing status
+- V3's release owner deployed `e916a908` with clean Mac/GitHub/both-VPS parity and green CI, and started the normal fresh lane September19 13:14 Dubai. The writer began `metformin_measurement_methods`. This is active writing, not proof of submission or publication.
+- V3 outcome/material-findings integration `68d03d3a` is committed separately. The input-budget follow-up is being verified in an isolated V3 worktree and is not yet deployed; coordinate with the V3 task before updating its active writer checkout.
+- The separate preflight cleaner `4fd711e` is deployed: it no longer inserts spaces inside identifiers such as p.V42L. Twenty-nine tests, types/lint and deployed exact-payload replay pass. V3 still requires re-review of genuinely changed packages.
+- Latest audited historical Core decision `b6897b61` remains revise/NOT_PUBLISHED, 21/30 claim matches versus 24 required. No old decision was overwritten or bypassed.
+- Historical Sentry CORE-2/CORE-3 remain unresolved: redacted database exceptions on September13/17 releases. No new Core issue was returned for the period after runtime release164ec11 restarted at09:05UTC; this does not prove historical causes fixed.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.

@@ -1,5 +1,10 @@
 # DECISION JOURNAL
 
+## 2026-09-19 — Audit incompatible historical calibration candidates
+**Decision:** Sampling may exclude historical payloads that fail the current SubmissionPayload contract only with an explicit exclusion counter recorded in the private manifest and public freeze receipt. Without that audit channel, validation continues to raise.
+**Why:** One historical oversized source bundle stopped preparation of the entire independent corpus. Truncating evidence or weakening the current contract would change what is being calibrated.
+**Validation:** A real contract-validation regression preserves all102 original sources, checks the exclusion count and both receipt copies. Qualified labels, empirical coverage, frozen release evaluation and human signoff remain mandatory.
+
 ## 2026-09-19 — Merge final visibility changes atomically
 **Decision:** Extend the existing multi-object write with an opt-in merge mode; publish only owned keys for publication, review and decision in one transaction. Lock rows in stable ID order.
 **Why:** Whole snapshots erased concurrent delivery/refresh metadata written after lineage reads. A regression reproduced this loss before the correction.
