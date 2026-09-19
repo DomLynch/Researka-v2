@@ -64,7 +64,10 @@ def postgres_repo():
         pytest.skip("Postgres runtime parity requires psycopg and TEST_POSTGRES_DSN")
     repo = PostgresRuntimeRepository(postgres_dsn_from_env())
     repo.reset()
-    return repo
+    try:
+        yield repo
+    finally:
+        repo.close()
 
 
 @pytest.fixture

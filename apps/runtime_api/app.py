@@ -1338,17 +1338,20 @@ def _submission_decision_response(
     return response
 
 
+def _app_repository(repository: RuntimeRepository | None) -> RuntimeRepository:
+    if repository is not None:
+        return repository
+    if dsn := postgres_dsn_from_env():
+        return PostgresRuntimeRepository(dsn)
+    if os.getenv("RESEARKA_V2_ENV", "development").strip().lower() == "production":
+        raise RuntimeError("researka_v2_postgres_dsn_required_in_production")
+    return InMemoryRuntimeRepository()
+
+
 @report_api_startup
 def create_app(repository: RuntimeRepository | None = None) -> FastAPI:
     warn_if_osf_default_owner_missing()
-    if repository is not None:
-        repo = repository
-    elif dsn := postgres_dsn_from_env():
-        repo = PostgresRuntimeRepository(dsn)
-    else:
-        if os.getenv("RESEARKA_V2_ENV", "development").strip().lower() == "production":
-            raise RuntimeError("researka_v2_postgres_dsn_required_in_production")
-        repo = InMemoryRuntimeRepository()
+    repo = _app_repository(repository)
     app = FastAPI(title="Researka v2 Runtime API", middleware=[Middleware(ErrorReportingMiddleware)])
     app.state.repository = repo
     app.state.engine = WorkflowEngine()

@@ -471,7 +471,6 @@ class InMemoryRuntimeRepository:
                 job_id=job.id,
                 worker_id=worker_id,
                 payload={"stage": job.stage.value, "lease_token": job.lease_token},
-                ts=now,
             )
         )
         return job
@@ -1136,76 +1135,23 @@ class PostgresRuntimeRepository:
         metadata: dict,
         job: RuntimeJob,
     ) -> tuple[ResearchObject, RuntimeJob]:
-        if job.target_object_id != object_id:
-            raise ValueError("job_target_must_match_object")
-        event = RuntimeEvent(
-            event_type=EventType.JOB_QUEUED,
-            target_object_id=job.target_object_id,
-            job_id=job.id,
-            payload={"stage": job.stage.value, **job.payload},
-        )
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(
-                "UPDATE research_objects SET metadata = %s WHERE id = %s RETURNING *",
-                (json.dumps(metadata), object_id),
-            )
-            updated = self._object_from_row(cur.fetchone())
-            if updated is None:
-                raise ValueError("object_not_found")
-            cur.execute(
-                """
-                SELECT * FROM runtime_jobs
-                WHERE target_object_id = %s AND stage = %s
-                  AND status IN ('queued', 'leased', 'completed')
-                ORDER BY created_at ASC LIMIT 1
-                """,
-                (job.target_object_id, job.stage.value),
-            )
-            existing = self._job_from_row(cur.fetchone())
-            if existing is None:
-                cur.execute(
-                    """
-                    INSERT INTO runtime_jobs
-                        (id, target_object_id, stage, status, payload, lease_expires_at, lease_token, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (target_object_id, stage)
-                        WHERE status IN ('queued', 'leased') DO NOTHING
-                    """,
-                    (
-                        job.id,
-                        job.target_object_id,
-                        job.stage.value,
-                        job.status.value,
-                        json.dumps(job.payload),
-                        job.lease_expires_at,
-                        job.lease_token,
-                        job.created_at,
-                    ),
-                )
-                if cur.rowcount:
-                    self._insert_event(cur, event)
-                    existing = job
-                else:
-                    cur.execute(
-                        """
-                        SELECT * FROM runtime_jobs
-                        WHERE target_object_id = %s AND stage = %s
-                          AND status IN ('queued', 'leased')
-                        ORDER BY created_at ASC LIMIT 1
-                        """,
-                        (job.target_object_id, job.stage.value),
-                    )
-                    existing = self._job_from_row(cur.fetchone())
-            if existing is None:
-                raise RuntimeError("job_enqueue_failed")
-            conn.commit()
-            return updated, existing
+        return self._write_metadata_and_enqueue_job(object_id, metadata, job, merge=False)
 
     def merge_object_metadata_and_enqueue_job(
         self,
         object_id: str,
         patch: dict,
         job: RuntimeJob,
+    ) -> tuple[ResearchObject, RuntimeJob]:
+        return self._write_metadata_and_enqueue_job(object_id, patch, job, merge=True)
+
+    def _write_metadata_and_enqueue_job(
+        self,
+        object_id: str,
+        metadata: dict,
+        job: RuntimeJob,
+        *,
+        merge: bool,
     ) -> tuple[ResearchObject, RuntimeJob]:
         if job.target_object_id != object_id:
             raise ValueError("job_target_must_match_object")
@@ -1215,11 +1161,11 @@ class PostgresRuntimeRepository:
             job_id=job.id,
             payload={"stage": job.stage.value, **job.payload},
         )
+        expression = "metadata::jsonb || %s::jsonb" if merge else "%s"
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
-                # TEXT column: cast the stored side or || concatenates strings.
-                "UPDATE research_objects SET metadata = metadata::jsonb || %s::jsonb WHERE id = %s RETURNING *",
-                (json.dumps(patch), object_id),
+                f"UPDATE research_objects SET metadata = {expression} WHERE id = %s RETURNING *",
+                (json.dumps(metadata), object_id),
             )
             updated = self._object_from_row(cur.fetchone())
             if updated is None:
@@ -1496,7 +1442,6 @@ class PostgresRuntimeRepository:
                     job_id=job.id,
                     worker_id=worker_id,
                     payload={"stage": job.stage.value, "lease_token": job.lease_token},
-                    ts=now,
                 ),
             )
             conn.commit()
@@ -1597,13 +1542,13 @@ class PostgresRuntimeRepository:
 
     def list_events(self) -> list[RuntimeEvent]:
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT * FROM runtime_events ORDER BY ts ASC")
+            cur.execute("SELECT * FROM runtime_events ORDER BY ts ASC, id ASC")
             return [self._event_from_row(row) for row in cur.fetchall()]
 
     def events_for_target(self, target_object_id: str) -> list[RuntimeEvent]:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
-                "SELECT * FROM runtime_events WHERE target_object_id = %s ORDER BY ts ASC",
+                "SELECT * FROM runtime_events WHERE target_object_id = %s ORDER BY ts ASC, id ASC",
                 (target_object_id,),
             )
             return [self._event_from_row(row) for row in cur.fetchall()]

@@ -6,6 +6,20 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: researka_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d researka_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,5 +35,7 @@ jobs:
         run: uv sync --locked --extra dev
       - name: Application tests
         run: uv run --no-sync python -m pytest -q
+        env:
+          TEST_POSTGRES_DSN: postgresql://postgres:postgres@localhost:5432/researka_test
       - name: Application and test type checks
         run: uv run --no-sync python -m mypy .

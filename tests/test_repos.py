@@ -86,7 +86,7 @@ def test_postgres_connect_has_bounded_timeout(monkeypatch) -> None:
     assert pool["check"] is _FakePool.check_connection
 
 
-def test_postgres_close_closes_pool_exactly_once() -> None:
+def test_postgres_close_closes_pool_exactly_once(monkeypatch) -> None:
     class _FakePool:
         def __init__(self) -> None:
             self.close_calls = 0
@@ -95,13 +95,14 @@ def test_postgres_close_closes_pool_exactly_once() -> None:
             self.close_calls += 1
 
     repo = PostgresRuntimeRepository.__new__(PostgresRuntimeRepository)
-    repo._pool = _FakePool()
+    pool = _FakePool()
+    monkeypatch.setattr(repo, "_pool", pool, raising=False)
     repo._closed = False
 
     repo.close()
     repo.close()
 
-    assert repo._pool.close_calls == 1
+    assert pool.close_calls == 1
 
 
 def test_inmemory_close_is_a_no_op() -> None:
@@ -272,6 +273,9 @@ def test_inmemory_claim_sets_lease_and_reclaims_expired_job() -> None:
         event.payload.get("lease_reclaimed") is True for event in repo.list_events()
     )
     assert repo.list_events()[-1].event_type == EventType.JOB_LEASED
+    assert [event.event_type for event in repo.events_for_target(job.target_object_id)][-2:] == [
+        EventType.JOB_QUEUED, EventType.JOB_LEASED,
+    ]
 
 
 def test_inmemory_fencing_rejects_stale_worker_after_reclaim() -> None:
@@ -503,7 +507,7 @@ def test_osf_token_metadata_missing_encryption_key_fails(monkeypatch) -> None:
 
 def test_postgres_claim_sets_lease_and_reclaims_expired_job() -> None:
     if not postgres_runtime_available():
-        return
+        pytest.skip("Postgres integration requires psycopg and TEST_POSTGRES_DSN")
     dsn = postgres_dsn_from_env()
     assert dsn is not None
     repo = PostgresRuntimeRepository(dsn, lease_ttl_seconds=-1)
@@ -520,11 +524,14 @@ def test_postgres_claim_sets_lease_and_reclaims_expired_job() -> None:
         event.payload.get("lease_reclaimed") is True for event in repo.list_events()
     )
     assert repo.list_events()[-1].event_type == EventType.JOB_LEASED
+    assert [event.event_type for event in repo.events_for_target(job.target_object_id)][-2:] == [
+        EventType.JOB_QUEUED, EventType.JOB_LEASED,
+    ]
 
 
 def test_postgres_atomic_create_rolls_back_if_job_insert_fails() -> None:
     if not postgres_runtime_available():
-        return
+        pytest.skip("Postgres integration requires psycopg and TEST_POSTGRES_DSN")
     dsn = postgres_dsn_from_env()
     assert dsn is not None
     repo = PostgresRuntimeRepository(dsn)
@@ -544,7 +551,7 @@ def test_postgres_atomic_create_rolls_back_if_job_insert_fails() -> None:
 
 def test_postgres_fail_job_persists_failure_class() -> None:
     if not postgres_runtime_available():
-        return
+        pytest.skip("Postgres integration requires psycopg and TEST_POSTGRES_DSN")
     dsn = postgres_dsn_from_env()
     assert dsn is not None
     repo = PostgresRuntimeRepository(dsn)
@@ -566,7 +573,7 @@ def test_postgres_fail_job_persists_failure_class() -> None:
 
 def test_postgres_single_job_cannot_be_double_claimed() -> None:
     if not postgres_runtime_available():
-        return
+        pytest.skip("Postgres integration requires psycopg and TEST_POSTGRES_DSN")
     dsn = postgres_dsn_from_env()
     assert dsn is not None
     setup_repo = PostgresRuntimeRepository(dsn)
@@ -644,7 +651,7 @@ def test_inmemory_list_claim_cards_returns_empty_for_unknown_publication() -> No
 
 def test_postgres_claim_card_roundtrip_orders_by_created_at() -> None:
     if not postgres_runtime_available():
-        return
+        pytest.skip("Postgres integration requires psycopg and TEST_POSTGRES_DSN")
     dsn = postgres_dsn_from_env()
     assert dsn is not None
     repo = PostgresRuntimeRepository(dsn)
@@ -674,7 +681,7 @@ def test_postgres_claim_card_roundtrip_orders_by_created_at() -> None:
 
 def test_postgres_list_claim_cards_returns_empty_for_unknown_publication() -> None:
     if not postgres_runtime_available():
-        return
+        pytest.skip("Postgres integration requires psycopg and TEST_POSTGRES_DSN")
     dsn = postgres_dsn_from_env()
     assert dsn is not None
     repo = PostgresRuntimeRepository(dsn)
@@ -833,7 +840,7 @@ def test_postgres_merge_object_metadata_against_real_database() -> None:
     Fake-cursor tests locked in a `metadata ||` query that Postgres resolves as
     text concatenation on this schema — only a live database catches that."""
     if not postgres_runtime_available():
-        return
+        pytest.skip("Postgres integration requires psycopg and TEST_POSTGRES_DSN")
     dsn = postgres_dsn_from_env()
     assert dsn is not None
     repo = PostgresRuntimeRepository(dsn)
@@ -868,5 +875,27 @@ def test_postgres_merge_object_metadata_against_real_database() -> None:
     assert updated.metadata["review_requested"] is True
     assert updated.metadata["integrity"] == {"recommendation": "pass"}
     assert queued.id == job.id
-    assert repo.get_object(obj.id).metadata["review_requested"] is True
+    stored = repo.get_object(obj.id)
+    assert stored is not None and stored.metadata["review_requested"] is True
     assert repo.merge_object_metadata("missing-object", {"x": 1}) is None
+
+
+@pytest.mark.parametrize("merge", [False, True])
+def test_postgres_metadata_enqueue_rolls_back_on_job_id_collision(
+    postgres_repo: PostgresRuntimeRepository, merge: bool,
+) -> None:
+    repo = postgres_repo
+    obj = repo.create_object(
+        ResearchObject(object_type=ObjectType.SUBMISSION, title="Atomic metadata", metadata={"keep": 1})
+    )
+    existing = repo.enqueue_job(RuntimeJob(target_object_id="other-object", stage=Stage.REVIEW))
+    conflicting = RuntimeJob(id=existing.id, target_object_id=obj.id, stage=Stage.REVIEW)
+    write = repo.merge_object_metadata_and_enqueue_job if merge else repo.update_object_metadata_and_enqueue_job
+
+    with pytest.raises(repo._psycopg.errors.UniqueViolation):
+        write(obj.id, {"new": 2}, conflicting)
+
+    stored = repo.get_object(obj.id)
+    assert stored is not None and stored.metadata == {"keep": 1}
+    assert repo.get_job(existing.id) == existing
+    assert repo.events_for_target(obj.id) == []

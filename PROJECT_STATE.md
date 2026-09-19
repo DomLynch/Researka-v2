@@ -1,10 +1,28 @@
 # PROJECT_STATE.md - Researka v2
 
-## Current Sprint
-Week of: 2026-09-06
-Focus: Researka Verify as the public product while the agent-publication gatekeeper continues in the background.
-Latest: Core reviewer migration to ChatGPT-authenticated Codex: Sol high plus Terra medium, with GLM 5.3 Flash only on a reviewer failure. Verify remains separate and does not call these models.
-Next: measure Verify usage before adding more repositories or bounded semantic support; complete independent judge calibration separately.
+## Current Sprint — 2026-09-19
+Focus: integrate the verified Claude/Kimi Core improvements and repair release verification before claiming unattended publishing readiness.
+
+### Verified deployed baseline
+- Local HEAD, GitHub main and active VPS `/opt/researka-v2`: `28f05bed9d49a0000d421030f48d81fdb4d5d473` at the September 19 audit. API/worker/watchdog active; public `/version` and `/health` HTTP 200.
+- Secondary VPS `/root/Researka-v2` remains clean at `b8aaab8`; do not call both VPS checkouts synchronized.
+- Integrated changes: bounded/health-checked connection pool and shutdown closure (`69bbfdf`, `f1c79b5`); structured findings and non-null outcome (`c5f86cd`); frozen producer imports (`e507d53`); approved reviewer-model selection (`1efa379`); degenerate integrity handling and development fail-open (`5a035d7`, `a699fe1`); atomic metadata patches and TEXT-column cast repair (`4ccde59`, `28f05be`). All are ancestors of the current baseline.
+- Production integrity remains fail-closed. All 9,717 production metadata values were valid JSON objects. Sol high and Terra medium each passed a small transport smoke; this is not a full manuscript review.
+
+### Local integration follow-up (not deployed)
+- Corrected the eight mypy errors with typed test doubles and runtime type/None assertions.
+- Extracted API repository construction; retained ownership-aware shutdown and the production database requirement, without increasing quality baselines.
+- Consolidated metadata update/merge plus enqueue into one transaction implementation, retaining the explicit jsonb casts and parse-before-commit behavior.
+- Corrected lease events that were backdated ahead of reclaim events in both repositories; Postgres uses insertion ID to break equal-timestamp ties.
+- Added real transaction rollback regressions, visible skips when Postgres is absent, pool cleanup in the database fixture, and a disposable Postgres 16 service for CI's full suite.
+- See `FAILURES/2026-09-19-release-verification-gaps.md` for causes and verification. GitHub CI and production remain on the pre-follow-up baseline until this change is committed/pushed/deployed.
+
+### Publishing status and remaining work
+- No new Core submission since September 13. Latest 20 submissions: 13 revise, 7 reject. Latest resistance-training decision `b6897b61` still persisted as revise / NOT_PUBLISHED; this was not rerun during the audit.
+- Publication-finalize still full-replaces metadata across three objects: finish transactional multi-object merge and concurrency regression before treating metadata writes as universally race-safe.
+- V3's active VPS code (`75f91376`) trails its inspected local head (`b1c83a9d`). Wire Core outcome/material_findings into V3 and resolve its review-input budget / safe preflight repair path. Today's runs reported writer quota failures and no eligible paper; current V3 writer capacity was not independently smoke-tested.
+- Independent calibration is uncertified: public receipt valid=false, no human signoff or judge-release binding, 30 cases versus minimum 100. Do not use its stale working-set score as the current reviewer's accuracy.
+- Verify remains separate; no website, V3, review policy or production state was changed in this follow-up.
 
 ## Goal
 Build a clean Python runtime that can replace the current hot-path publishing logic without dragging frontend or legacy product baggage into the rebuild.
@@ -71,7 +89,7 @@ Build a clean Python runtime that can replace the current hot-path publishing lo
 - Core: `runtime_core/` — workflow, gates, compiler, providers, repos, ops, prompts
 - Contracts: `contracts/` — schemas, enums, payloads
 - API: `apps/runtime_api/app.py` — FastAPI endpoints
-- Tests: 729 passing, 1 skipped (local full suite on 2026-09-06)
+- Tests: 1102 passed with real disposable PostgreSQL 17.9 (September 19 local follow-up); make quality, mypy and ruff pass. See `FAILURES/2026-09-19-release-verification-gaps.md`. Not yet a deployed or GitHub-CI-verified release.
 
 ## VPS Deployment
 - Checkout: `/opt/researka-v2` under the dedicated `researka` service account after this release

@@ -4926,7 +4926,7 @@ def test_codex_panel_models_are_env_selectable_only_among_quorum_approved(
     """The three Codex-path models set the publication bar. They may be chosen
     via env, but only from MODEL_QUORUM_PROVIDERS — otherwise the accept quorum
     would silently count zero at review time. Unregistered names fail at boot."""
-    from runtime_core.reviewer_panel import reviewer_from_env
+    from runtime_core.reviewer_panel import ReviewerPanel, reviewer_from_env
 
     monkeypatch.setenv("RESEARKA_V2_PROVIDER", "judge_panel")
     monkeypatch.setenv("RESEARKA_V2_REVIEWER_PRIMARY_PROVIDER", "codex")
@@ -4936,6 +4936,8 @@ def test_codex_panel_models_are_env_selectable_only_among_quorum_approved(
     for var in ("RESEARKA_V2_CODEX_PRIMARY_MODEL", "RESEARKA_V2_CODEX_SPARRING_MODEL", "RESEARKA_V2_QUORUM_FALLBACK_MODEL"):
         monkeypatch.delenv(var, raising=False)
     panel = reviewer_from_env()
+    assert isinstance(panel, ReviewerPanel)
+    assert panel.fallback is not None
     assert panel.primary.model == "gpt-5.6-sol"
     assert panel.sparring.model == "gpt-5.6-terra"
     assert panel.fallback.model == "z-ai/glm-5.3-flash"
@@ -4944,6 +4946,7 @@ def test_codex_panel_models_are_env_selectable_only_among_quorum_approved(
     monkeypatch.setenv("RESEARKA_V2_CODEX_PRIMARY_MODEL", "gpt-5.6-terra")
     monkeypatch.setenv("RESEARKA_V2_CODEX_SPARRING_MODEL", "gpt-5.6-sol")
     swapped = reviewer_from_env()
+    assert isinstance(swapped, ReviewerPanel)
     assert (swapped.primary.model, swapped.sparring.model) == ("gpt-5.6-terra", "gpt-5.6-sol")
 
     # An unregistered model must fail loudly at construction, never at review time.

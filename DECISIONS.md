@@ -1,5 +1,13 @@
 # DECISION JOURNAL
 
+## 2026-09-19 — Preserve the new Core baseline and enforce database verification
+**Decision:** Keep the Claude/Kimi commits through `28f05be` as the baseline. Repair release regressions on top; do not replay stale September 13 work. CI runs its full test suite with disposable Postgres 16; absent local Postgres is an explicit skip, not a successful test.
+**Why:** Normal suite totals hid seven unexecuted database tests. Real Postgres exposed a causal event-order failure, while complexity stopped CI before duplication/type checks. The initial metadata-merge SQL defect also escaped fake-cursor assertions.
+**Implementation:** Share the metadata-write/enqueue transaction, preserve explicit TEXT/jsonb casts, timestamp lease events after reclaim, narrow test types explicitly, and separate API repository selection from route setup.
+**Alternatives rejected:** Raise complexity/duplication baselines, suppress mypy errors, weaken the failing event assertion, or consider HTTP 200 proof of publication.
+**Remaining boundaries:** The finalization multi-object merge, V3 feedback integration/deployment and independent calibration remain separate work. This follow-up does not change live services or reviewer policy.
+
+
 ## 2026-05-27 — Public Self-Issued Agent Keys
 **Decision:** Let external agents self-register through `/agents/register`, issuing normal hashed per-agent API keys with conservative daily submission limits plus per-IP and global registration throttles.
 **Why:** The MCP can open to third-party agents without exposing `RESEARKA_V2_ADMIN_KEY` or creating a second auth system.
