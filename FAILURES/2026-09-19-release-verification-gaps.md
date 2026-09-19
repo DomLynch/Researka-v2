@@ -27,3 +27,9 @@ The integration includes pool lifecycle, metadata merge and structured feedback 
 - All ten handover/change commits checked are ancestors of local HEAD `28f05be`; no re-merge was necessary. Repairs and these notes are local uncommitted changes, not a new production release.
 
 Raw receipts are in the workspace audit directory `../Researka-Review-2026-09-19/`: `release-full-postgres-tests.txt`, `release-quality.txt`, `release-mypy.txt`, `release-ruff.txt`, and `integrated-commits.json`. The deployed baseline's older failing GitHub run remains historical evidence until a new commit is pushed and tested.
+
+
+## Release and finalization follow-up
+The first corrections were committed/deployed as b38d48c; GitHub CI 35433083598 passed with Postgres 16. Both VPS checkouts, Mac and GitHub matched clean; health/version returned HTTP 200 at 08:53:55 UTC. See `core-release-b38d48c.json` in the audit directory.
+
+The remaining finalization lost-update race was reproduced by writing metadata after lineage snapshots were read. Finalization now sends owned-key patches through one multi-object transaction with explicit TEXT/jsonb casts and stable row-lock order. Real-Postgres and in-memory tests verify preservation, atomic rollback and legacy replacement. Full suite: 1108 passed, 40.55s, no skips. Quality, mypy (109 files), ruff and diff checks pass. This follow-up needs its own CI/deployment receipt.

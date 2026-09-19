@@ -881,6 +881,30 @@ def test_postgres_merge_object_metadata_against_real_database() -> None:
 
 
 @pytest.mark.parametrize("merge", [False, True])
+@pytest.mark.parametrize("repo_fixture", ["inmemory_repo", "postgres_repo"])
+def test_bulk_metadata_write_is_atomic_on_missing_object(
+    request: pytest.FixtureRequest, repo_fixture: str, merge: bool,
+) -> None:
+    repo = request.getfixturevalue(repo_fixture)
+    obj = repo.create_object(ResearchObject(
+        id="a-present", object_type=ObjectType.PUBLICATION, title="Atomic visibility",
+        metadata={"public_visibility": "hidden", "receipt": "keep"},
+    ))
+    with pytest.raises(ValueError, match="object_not_found"):
+        repo.update_objects_metadata({
+            obj.id: {"public_visibility": "listed"},
+            "z-missing": {"public_visibility": "listed"},
+        }, merge=merge)
+
+    assert repo.get_object(obj.id).metadata == obj.metadata
+    repo.update_objects_metadata({obj.id: {"public_visibility": "listed"}}, merge=merge)
+    assert repo.get_object(obj.id).metadata == (
+        {"public_visibility": "listed", "receipt": "keep"} if merge
+        else {"public_visibility": "listed"}
+    )
+
+
+@pytest.mark.parametrize("merge", [False, True])
 def test_postgres_metadata_enqueue_rolls_back_on_job_id_collision(
     postgres_repo: PostgresRuntimeRepository, merge: bool,
 ) -> None:

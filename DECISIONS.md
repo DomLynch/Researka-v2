@@ -1,5 +1,11 @@
 # DECISION JOURNAL
 
+## 2026-09-19 — Merge final visibility changes atomically
+**Decision:** Extend the existing multi-object write with an opt-in merge mode; publish only owned keys for publication, review and decision in one transaction. Lock rows in stable ID order.
+**Why:** Whole snapshots erased concurrent delivery/refresh metadata written after lineage reads. A regression reproduced this loss before the correction.
+**Validation:** 1108 tests pass with real PostgreSQL, including interleaved writes during finalization and rollback if any target is missing. Replacement remains the default; no review or visibility thresholds change.
+**Rejected:** Sequential independent merges (partial visibility), full replacement (lost updates), or a new repository abstraction.
+
 ## 2026-09-19 — Preserve the new Core baseline and enforce database verification
 **Decision:** Keep the Claude/Kimi commits through `28f05be` as the baseline. Repair release regressions on top; do not replay stale September 13 work. CI runs its full test suite with disposable Postgres 16; absent local Postgres is an explicit skip, not a successful test.
 **Why:** Normal suite totals hid seven unexecuted database tests. Real Postgres exposed a causal event-order failure, while complexity stopped CI before duplication/type checks. The initial metadata-merge SQL defect also escaped fake-cursor assertions.

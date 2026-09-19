@@ -605,14 +605,6 @@ def _alpha_exception_trusted(submission: ResearchObject) -> bool:
     )
 
 
-def _merge_publication_metadata(existing: dict, update: dict) -> dict:
-    metadata = {**existing, **update}
-    for key in PUBLICATION_DEDUPE_METADATA_KEYS:
-        if existing.get(key):
-            metadata[key] = existing[key]
-    return metadata
-
-
 def _publication_metadata_patch(update: dict) -> dict:
     """Patch for repository.merge_object_metadata*: dedupe markers are pinned
     from the stored object, so they are excluded defensively to avoid
@@ -2802,8 +2794,7 @@ class WorkflowEngine:
         published_at = datetime.now(timezone.utc).isoformat()
         repository.update_objects_metadata(
             {
-                publication.id: _merge_publication_metadata(
-                    publication.metadata,
+                publication.id: _publication_metadata_patch(
                     {
                         "publication_state": "PUBLISHED",
                         "public_visibility": "listed",
@@ -2817,12 +2808,12 @@ class WorkflowEngine:
                         ),
                     },
                 ),
-                review.id: {**review.metadata, "public_visibility": "listed"},
+                review.id: {"public_visibility": "listed"},
                 decision.id: {
-                    **decision.metadata,
                     "public_visibility": "listed",
                     "publication_state": "PUBLISHED",
                 },
-            }
+            },
+            merge=True,
         )
         return {"publication_id": publication.id, "published": True}

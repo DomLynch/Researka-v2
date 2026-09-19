@@ -155,6 +155,31 @@ def _assert_publish_happy_path(
     }
 
 
+@pytest.mark.parametrize("client_fixture", ["client", "postgres_client"])
+def test_finalization_preserves_metadata_written_after_lineage_read(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, client_fixture: str,
+) -> None:
+    client = request.getfixturevalue(client_fixture)
+    repository = _repository(client)
+    touched: list[str] = []
+
+    def concurrent_writer(_payload: object) -> None:
+        # Finalization has already read its three metadata snapshots here.
+        for kind in (ObjectType.PUBLICATION, ObjectType.REVIEW, ObjectType.DECISION):
+            obj = repository.list_objects(kind)[0]
+            repository.merge_object_metadata(obj.id, {"concurrent_receipt": kind.value})
+            touched.append(obj.id)
+
+    monkeypatch.setattr("runtime_core.workflow.index_integrity", concurrent_writer)
+    _assert_publish_happy_path(client, monkeypatch)
+
+    assert len(touched) == 3
+    for object_id in touched:
+        stored = repository.get_object(object_id)
+        assert stored.metadata["concurrent_receipt"] == stored.object_type
+        assert stored.metadata["public_visibility"] == "listed"
+
+
 def test_public_review_record_preserves_submission_domain_metadata(client: TestClient) -> None:
     repository = _repository(client)
     submission = repository.create_object(

@@ -136,7 +136,7 @@ class RuntimeRepository(Protocol):
         self, object_id: str, metadata: dict
     ) -> ResearchObject | None: ...
     def update_objects_metadata(
-        self, updates: dict[str, dict]
+        self, updates: dict[str, dict], *, merge: bool = False
     ) -> list[ResearchObject]: ...
     def update_object_metadata_and_enqueue_job(
         self,
@@ -293,11 +293,15 @@ class InMemoryRuntimeRepository:
         self.objects[object_id] = updated
         return updated
 
-    def update_objects_metadata(self, updates: dict[str, dict]) -> list[ResearchObject]:
+    def update_objects_metadata(
+        self, updates: dict[str, dict], *, merge: bool = False
+    ) -> list[ResearchObject]:
         if any(object_id not in self.objects for object_id in updates):
             raise ValueError("object_not_found")
         changed = [
-            self.objects[object_id].model_copy(update={"metadata": dict(metadata)})
+            self.objects[object_id].model_copy(update={
+                "metadata": {**(self.objects[object_id].metadata if merge else {}), **metadata}
+            })
             for object_id, metadata in updates.items()
         ]
         for obj in changed:
@@ -1114,12 +1118,15 @@ class PostgresRuntimeRepository:
             conn.commit()
             return obj
 
-    def update_objects_metadata(self, updates: dict[str, dict]) -> list[ResearchObject]:
+    def update_objects_metadata(
+        self, updates: dict[str, dict], *, merge: bool = False
+    ) -> list[ResearchObject]:
         changed: list[ResearchObject] = []
+        expression = "metadata::jsonb || %s::jsonb" if merge else "%s"
         with self._connect() as conn, conn.cursor() as cur:
-            for object_id, metadata in updates.items():
+            for object_id, metadata in sorted(updates.items()):
                 cur.execute(
-                    "UPDATE research_objects SET metadata = %s WHERE id = %s RETURNING *",
+                    f"UPDATE research_objects SET metadata = {expression} WHERE id = %s RETURNING *",
                     (json.dumps(metadata), object_id),
                 )
                 obj = self._object_from_row(cur.fetchone())
