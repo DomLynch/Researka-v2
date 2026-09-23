@@ -27,7 +27,7 @@ from tests.support import accepted_publish_job
 from tests.test_runtime_core import _calibration_submission, _review_payload
 
 
-SOL, TERRA, GLM = MODEL_QUORUM_PROVIDERS
+SOL, TERRA, GLM = "gpt-6-sol", "gpt-5.6-terra", "z-ai/glm-5.3-flash"
 SECRET = "synthetic-model-quorum-test-key"
 PACKAGE_HASH = "sha256:" + "a" * 64
 
@@ -88,6 +88,11 @@ def test_model_diverse_quorum_requires_valid_content_bound_signature(models) -> 
     assert not accept_quorum_satisfied(metadata)
     assert metadata["accept_quorum_count"] == 2
     assert metadata["accept_quorum_providers"] == sorted({MODEL_QUORUM_PROVIDERS[model] for model in models})
+
+
+def test_legacy_sol_receipt_remains_verifiable() -> None:
+    metadata, context = _signed(("gpt-5.6-sol", TERRA))
+    assert model_quorum_attestation_valid(metadata, **context)
 
 
 @pytest.mark.parametrize("field,value", [
@@ -198,7 +203,7 @@ def _reviewed() -> tuple[InMemoryRuntimeRepository, ResearchObject, dict]:
 def test_workflow_recomputes_claimed_counts_hash_and_signature() -> None:
     _, submission, metadata = _reviewed()
     assert metadata["accept_quorum_count"] == 2
-    assert metadata["accept_quorum_models"] == [SOL, TERRA]
+    assert metadata["accept_quorum_models"] == sorted((SOL, TERRA))
     assert metadata["reviewed_package_hash"] == _canonical_submission_hash(submission)
     assert accept_quorum_satisfied(metadata, submission_id=submission.id, reviewed_package_hash=_canonical_submission_hash(submission), secret=SECRET)
 

@@ -4938,16 +4938,16 @@ def test_codex_panel_models_are_env_selectable_only_among_quorum_approved(
     panel = reviewer_from_env()
     assert isinstance(panel, ReviewerPanel)
     assert panel.fallback is not None
-    assert panel.primary.model == "gpt-5.6-sol"
+    assert panel.primary.model == "gpt-6-sol"
     assert panel.sparring.model == "gpt-5.6-terra"
     assert panel.fallback.model == "z-ai/glm-5.3-flash"
 
     # Swapping primary and sparring (both registered) is a legitimate override.
     monkeypatch.setenv("RESEARKA_V2_CODEX_PRIMARY_MODEL", "gpt-5.6-terra")
-    monkeypatch.setenv("RESEARKA_V2_CODEX_SPARRING_MODEL", "gpt-5.6-sol")
+    monkeypatch.setenv("RESEARKA_V2_CODEX_SPARRING_MODEL", "gpt-6-sol")
     swapped = reviewer_from_env()
     assert isinstance(swapped, ReviewerPanel)
-    assert (swapped.primary.model, swapped.sparring.model) == ("gpt-5.6-terra", "gpt-5.6-sol")
+    assert (swapped.primary.model, swapped.sparring.model) == ("gpt-5.6-terra", "gpt-6-sol")
 
     # An unregistered model must fail loudly at construction, never at review time.
     monkeypatch.setenv("RESEARKA_V2_CODEX_PRIMARY_MODEL", "gpt-5.7-nova")

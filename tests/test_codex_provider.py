@@ -146,7 +146,7 @@ def test_real_subprocess_argv_environment_and_receipt(fake_cli, monkeypatch, tmp
     result = CodexProvider().complete(_request())
     assert result.ok and result.response is not None
     assert result.response.provider == "codex"
-    assert result.response.model == "gpt-5.6-sol"
+    assert result.response.model == "gpt-6-sol"
     assert result.response.usage.model_dump() == {"input_tokens": 12, "output_tokens": 8, "cost_usd": 0.0}
     assert result.response.metadata == {"reasoning_effort": "high", "transport": "codex_cli",
                                         "billing": "codex_subscription", "api_spend_usd": 0.0,
@@ -164,7 +164,7 @@ def test_real_subprocess_argv_environment_and_receipt(fake_cli, monkeypatch, tmp
     assert not Path(receipt["instructions_path"]).exists()
     argv = receipt["argv"]
     assert argv[:10] == ["exec", "--ignore-user-config", "--ignore-rules", "--ephemeral",
-                         "--skip-git-repo-check", "--sandbox", "read-only", "--model", "gpt-5.6-sol", "-c"]
+                         "--skip-git-repo-check", "--sandbox", "read-only", "--model", "gpt-6-sol", "-c"]
     assert argv[-2:] == ["--json", "-"]
     settings = {value.split("=", 1)[0]: json.loads(value.split("=", 1)[1])
                 for i, value in enumerate(argv) if i and argv[i-1] == "-c"}

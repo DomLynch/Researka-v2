@@ -9,6 +9,7 @@ from pathlib import Path
 
 MODEL_QUORUM_POLICY = "two_models_v1"
 MODEL_QUORUM_PROVIDERS = {
+    "gpt-6-sol": "codex",
     "gpt-5.6-sol": "codex",
     "gpt-5.6-terra": "codex",
     "z-ai/glm-5.3-flash": "openrouter",

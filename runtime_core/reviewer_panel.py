@@ -752,7 +752,7 @@ def reviewer_from_env() -> LanguageModelProvider:
             # selectable, but only among MODEL_QUORUM_PROVIDERS: an unregistered
             # name fails here at boot instead of silently zeroing the accept
             # quorum at review time.
-            primary_model = _quorum_approved(os.getenv("RESEARKA_V2_CODEX_PRIMARY_MODEL", "gpt-5.6-sol"))
+            primary_model = _quorum_approved(os.getenv("RESEARKA_V2_CODEX_PRIMARY_MODEL", "gpt-6-sol"))
             sparring_model = _quorum_approved(os.getenv("RESEARKA_V2_CODEX_SPARRING_MODEL", "gpt-5.6-terra"))
             backup_model = _quorum_approved(os.getenv("RESEARKA_V2_QUORUM_FALLBACK_MODEL", "z-ai/glm-5.3-flash"))
             backup = OpenRouterProvider(model=backup_model, base_url=or_base_url)

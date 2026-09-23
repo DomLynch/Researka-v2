@@ -15,7 +15,7 @@ def panel(primary="accept", secondary="accept", backup="accept"):
     slots = [
         _ReviewPayloadProvider(model, _review_payload(vote), provider=provider)
         for model, provider, vote in (
-            ("gpt-5.6-sol", "codex", primary),
+            ("gpt-6-sol", "codex", primary),
             ("gpt-5.6-terra", "codex", secondary),
             ("z-ai/glm-5.3-flash", "openrouter", backup),
         )
@@ -33,7 +33,7 @@ def test_default_is_two_subscription_models_and_glm_backup(monkeypatch):
     monkeypatch.setenv("RESEARKA_V2_REVIEW_ATTESTATION_SECRET", "test-key")
     subject = reviewer_from_env()
     assert isinstance(subject, ReviewerPanel)
-    assert (subject.primary.model, subject.primary.reasoning_effort) == ("gpt-5.6-sol", "high")
+    assert (subject.primary.model, subject.primary.reasoning_effort) == ("gpt-6-sol", "high")
     assert (subject.sparring.model, subject.sparring.reasoning_effort) == ("gpt-5.6-terra", "medium")
     assert subject.fallback.model == "z-ai/glm-5.3-flash"
     assert not subject.allow_sparring_billing_skip
@@ -94,7 +94,7 @@ def test_disagreement_never_calls_paid_backup(other):
     assert not result.ok or json.loads(result.response.text)["recommendation"] != "accept"
 
 
-@pytest.mark.parametrize("model", ["gpt-5.6-sol", "unapproved-model"])
+@pytest.mark.parametrize("model", ["gpt-6-sol", "unapproved-model"])
 def test_duplicate_or_unknown_model_cannot_supply_quorum(model):
     subject = panel()
     subject.sparring.model = model
