@@ -163,11 +163,11 @@ class CodexProvider:
     def __init__(
         self,
         *,
-        model: str = "gpt-5.6-sol",
+        model: str = "gpt-6-sol",
         reasoning_effort: str = "high",
         timeout_sec: float = 600,
     ) -> None:
-        if model not in {"gpt-5.6-sol", "gpt-5.6-terra"}:
+        if model not in {"gpt-6-sol", "gpt-5.6-sol", "gpt-5.6-terra"}:
             raise ValueError("codex_model_not_allowed")
         if reasoning_effort not in {"medium", "high"}:
             raise ValueError("codex_reasoning_effort_not_allowed")
